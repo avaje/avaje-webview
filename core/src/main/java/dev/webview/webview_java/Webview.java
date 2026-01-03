@@ -33,6 +33,8 @@ import org.jetbrains.annotations.Nullable;
 import java.awt.*;
 import java.io.Closeable;
 
+import static dev.webview.webview_java.WebviewNative.*;
+
 public class Webview implements Closeable, Runnable {
 
     @Deprecated
