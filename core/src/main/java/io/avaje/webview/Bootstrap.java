@@ -1,7 +1,7 @@
-package dev.webview.webview_java;
+package io.avaje.webview;
 
-import dev.webview.webview_java.platform.LinuxLibC;
-import dev.webview.webview_java.platform.Platform;
+import io.avaje.webview.platform.LinuxLibC;
+import io.avaje.webview.platform.Platform;
 import com.sun.jna.Library;
 import com.sun.jna.Native;
 import org.jspecify.annotations.NonNull;

@@ -1,4 +1,4 @@
-package dev.webview.webview_java;
+package io.avaje.webview;
 
 import com.sun.jna.Library;
 import com.sun.jna.Native;

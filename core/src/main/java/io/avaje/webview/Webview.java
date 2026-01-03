@@ -21,9 +21,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package dev.webview.webview_java;
+package io.avaje.webview;
 
-import dev.webview.webview_java.platform.Platform;
+import io.avaje.webview.platform.Platform;
 import com.sun.jna.Native;
 import com.sun.jna.ptr.PointerByReference;
 import org.jspecify.annotations.NonNull;
@@ -32,7 +32,7 @@ import org.jspecify.annotations.Nullable;
 import java.awt.*;
 import java.io.Closeable;
 
-import static dev.webview.webview_java.WebviewNative.*;
+import static io.avaje.webview.WebviewNative.*;
 
 public class Webview implements Closeable, Runnable {
 

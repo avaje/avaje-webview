@@ -1,4 +1,4 @@
-package dev.webview.webview_java;
+package io.avaje.webview;
 
 import java.awt.*;
 import java.io.Closeable;

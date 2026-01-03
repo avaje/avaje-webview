@@ -1,4 +1,4 @@
-package dev.webview.webview_java.platform;
+package io.avaje.webview.platform;
 
 import org.jspecify.annotations.NonNull;
 

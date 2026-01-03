@@ -21,7 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package dev.webview.webview_java;
+package io.avaje.webview;
 
 import org.jspecify.annotations.NonNull;
 
