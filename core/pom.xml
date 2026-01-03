@@ -4,19 +4,27 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
-        <groupId>io.avaje</groupId>
-        <artifactId>avaje-webview-parent</artifactId>
-        <version>0.1</version>
+        <groupId>org.avaje</groupId>
+        <artifactId>java11-oss</artifactId>
+        <version>5.1</version>
+        <relativePath/>
     </parent>
 
+    <groupId>io.avaje.experimental</groupId>
     <artifactId>avaje-webview</artifactId>
+    <version>0.1</version>
+
+    <name>avaje-webview</name>
+    <description>Experimental fork of webview_java</description>
+
+    <scm>
+        <developerConnection>scm:git:git@github.com:avaje/avaje-webview.git</developerConnection>
+    </scm>
 
     <properties>
-        <maven.compiler.source>25</maven.compiler.source>
-        <maven.compiler.target>25</maven.compiler.target>
+        <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
-
 
     <dependencies>
         <dependency>
@@ -35,12 +43,5 @@
             <version>1.0.0</version>
         </dependency>
     </dependencies>
-
-    <repositories>
-        <repository>
-            <id>casterlabs-maven</id>
-            <url>https://repo.casterlabs.co/maven</url>
-        </repository>
-    </repositories>
 
 </project>
