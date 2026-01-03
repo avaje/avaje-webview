@@ -34,7 +34,7 @@ public final class WebviewBuilder {
 
     private static WebviewNative NATIVE_LIB;
 
-    private boolean useTempDirectory;
+    private boolean extractToTemp;
     private String title;
     private boolean debug;
     private PointerByReference windowPointer;
@@ -52,8 +52,8 @@ public final class WebviewBuilder {
         return new WebviewBuilder();
     }
 
-    public WebviewBuilder useTempDirectory(boolean useTempDirectory) {
-        this.useTempDirectory = useTempDirectory;
+    public WebviewBuilder extractToTemp(boolean extractToTemp) {
+        this.extractToTemp = extractToTemp;
         return this;
     }
 
@@ -164,7 +164,7 @@ public final class WebviewBuilder {
 
     private File createTarget(String lib) {
         var name = new File(lib).getName();
-        if (useTempDirectory) {
+        if (extractToTemp) {
             try {
                 return File.createTempFile("webview-", "-" + name);
             } catch (IOException e) {
