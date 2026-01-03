@@ -1,79 +1,32 @@
 package io.avaje.webview;
 
-import io.avaje.webview.platform.LinuxLibC;
-import io.avaje.webview.platform.Platform;
 import com.sun.jna.Library;
 import com.sun.jna.Native;
+import io.avaje.webview.platform.LinuxLibC;
+import io.avaje.webview.platform.Platform;
 import org.jspecify.annotations.NonNull;
 
 import java.io.*;
 import java.nio.file.Files;
 import java.util.Collections;
+import java.util.List;
 
 final class Bootstrap {
 
     static WebviewNative runSetup() {
-
-        String[] libraries = null;
-        try {
-            String prefix = "/io/avaje/webview/natives/";
-            switch (Platform.osDistribution) {
-                case LINUX: {
-                    if (LinuxLibC.isGNU()) {
-                        libraries = new String[]{
-                                prefix + Platform.archTarget + "/linux/gnu/libwebview.so"
-                        };
-                    } else {
-                        libraries = new String[]{
-                                prefix + Platform.archTarget + "/linux/musl/libwebview.so"
-                        };
-                    }
-                    break;
-                }
-
-                case MACOS: {
-                    libraries = new String[]{
-                            prefix + Platform.archTarget + "/macos/libwebview.dylib"
-                    };
-                    break;
-                }
-
-                case WINDOWS_NT: {
-                    libraries = new String[]{
-//                        prefix + Platform.archTarget + "/windows_nt/WebView2Loader.dll",
-                            prefix + Platform.archTarget + "/windows_nt/webview.dll"
-                    };
-                    break;
-                }
-
-                default: {
-                    throw new IllegalStateException("Unsupported platform: " + Platform.osDistribution + ":" + Platform.archTarget);
-                }
-            }
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-
         // Extract all of the libs.
-        for (String lib : libraries) {
+        for (String lib : platformLibraries()) {
             File target = new File(new File(lib).getName());
             if (target.exists()) {
                 target.delete();
             }
             target.deleteOnExit();
 
-            // Copy it to a file.
-            try (InputStream in = WebviewNative.class.getResourceAsStream(lib.toLowerCase())) {
-                byte[] bytes = toBytes(in);
-                Files.write(target.toPath(), bytes);
-            } catch (Exception e) {
-                if (e.getMessage().contains("used by another")) continue; // Ignore.
-
-                System.err.println("Unable to extract native: " + lib);
-                throw new RuntimeException(e);
+            if (extractToFile(lib, target)) {
+                // Load it. This is so Native will be able to link it.
+                System.out.println("LOADED " + target.getAbsolutePath());
+                System.load(target.getAbsolutePath());
             }
-
-            System.load(target.getAbsolutePath()); // Load it. This is so Native will be able to link it.
         }
 
         System.setProperty("jna.library.path", ".");
@@ -83,6 +36,45 @@ final class Bootstrap {
                 WebviewNative.class,
                 Collections.singletonMap(Library.OPTION_STRING_ENCODING, "UTF-8")
         );
+    }
+
+    private static List<String> platformLibraries() {
+        try {
+            String prefix = "/io/avaje/webview/natives/";
+            switch (Platform.osDistribution) {
+                case LINUX -> {
+                    if (LinuxLibC.isGNU()) {
+                        return List.of(prefix + Platform.archTarget + "/linux/gnu/libwebview.so");
+                    } else {
+                        return List.of(prefix + Platform.archTarget + "/linux/musl/libwebview.so");
+                    }
+                }
+                case MACOS -> {
+                    return List.of(prefix + Platform.archTarget + "/macos/libwebview.dylib");
+                }
+                case WINDOWS_NT -> {
+                    return List.of(prefix + Platform.archTarget + "/windows_nt/webview.dll");
+                }
+                default ->
+                        throw new IllegalStateException("Unsupported platform: " + Platform.osDistribution + ":" + Platform.archTarget);
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    private static boolean extractToFile(String lib, File target) {
+        try (InputStream in = WebviewNative.class.getResourceAsStream(lib.toLowerCase())) {
+            byte[] bytes = toBytes(in);
+            Files.write(target.toPath(), bytes);
+            return true;
+        } catch (Exception e) {
+            if (!e.getMessage().contains("used by another")) {
+                System.err.println("Unable to extract native: " + lib);
+                throw new RuntimeException(e);
+            }
+            return false;
+        }
     }
 
     private static byte[] toBytes(@NonNull InputStream source) throws IOException {
@@ -102,9 +94,8 @@ final class Bootstrap {
             throw new NullPointerException("dest is marked non-null but is null");
         } else {
             byte[] buffer = new byte[bufferSize];
-            int read = 0;
-
-            while((read = source.read(buffer)) != -1) {
+            int read;
+            while ((read = source.read(buffer)) != -1) {
                 dest.write(buffer, 0, read);
             }
 
