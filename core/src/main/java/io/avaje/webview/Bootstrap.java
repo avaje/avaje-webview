@@ -16,15 +16,16 @@ final class Bootstrap {
 
         String[] libraries = null;
         try {
+            String prefix = "/io/avaje/webview/natives/";
             switch (Platform.osDistribution) {
                 case LINUX: {
                     if (LinuxLibC.isGNU()) {
                         libraries = new String[]{
-                                "/dev/webview/webview_java/natives/" + Platform.archTarget + "/linux/gnu/libwebview.so"
+                                prefix + Platform.archTarget + "/linux/gnu/libwebview.so"
                         };
                     } else {
                         libraries = new String[]{
-                                "/dev/webview/webview_java/natives/" + Platform.archTarget + "/linux/musl/libwebview.so"
+                                prefix + Platform.archTarget + "/linux/musl/libwebview.so"
                         };
                     }
                     break;
@@ -32,15 +33,15 @@ final class Bootstrap {
 
                 case MACOS: {
                     libraries = new String[]{
-                            "/dev/webview/webview_java/natives/" + Platform.archTarget + "/macos/libwebview.dylib"
+                            prefix + Platform.archTarget + "/macos/libwebview.dylib"
                     };
                     break;
                 }
 
                 case WINDOWS_NT: {
                     libraries = new String[]{
-//                        "/dev/webview/webview_java/natives/" + Platform.archTarget + "/windows_nt/WebView2Loader.dll",
-                            "/dev/webview/webview_java/natives/" + Platform.archTarget + "/windows_nt/webview.dll"
+//                        prefix + Platform.archTarget + "/windows_nt/WebView2Loader.dll",
+                            prefix + Platform.archTarget + "/windows_nt/webview.dll"
                     };
                     break;
                 }
