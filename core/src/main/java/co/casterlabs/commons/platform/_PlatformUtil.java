@@ -6,7 +6,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 
 final class _PlatformUtil {
 
@@ -34,10 +34,9 @@ final class _PlatformUtil {
         return out.toByteArray();
     }
 
-    static String readInputStreamString(@NonNull InputStream source, @NonNull Charset sourceCharset) throws IOException {
+    static String readInputStreamString(@NonNull InputStream source) throws IOException {
         byte[] bytes = readInputStreamBytes(source);
-
-        return new String(bytes, sourceCharset);
+        return new String(bytes, StandardCharsets.UTF_8);
     }
 
     static int getWordSize() {

@@ -50,12 +50,12 @@ public enum OSDistribution {
     /**
      * A friendly name for the distribution (e.g "macOS" or "Windows NT").
      */
-    public final String name;
+    private final String name;
 
     /**
      * A "standard" target name.
      */
-    public final String target;
+    private final String target;
 
     private final String regex;
 
@@ -88,10 +88,6 @@ public enum OSDistribution {
 
         // Fallback.
         return GENERIC;
-    }
-
-    public OSFamily getFamily() {
-        return family;
     }
 
     /**

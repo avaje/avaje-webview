@@ -3,7 +3,6 @@ package co.casterlabs.commons.platform;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 
 /**
  * This class allows you to detect whether or not a machine uses GNU or MUSL
@@ -11,7 +10,7 @@ import java.nio.charset.StandardCharsets;
  */
 // Code adapted from here:
 // https://github.com/lovell/detect-libc/blob/main/lib/detect-libc.js
-public class LinuxLibC {
+public final class LinuxLibC {
 
     /**
      * If this returns true then you know that this OS supports GNU LibC. It may
@@ -43,14 +42,14 @@ public class LinuxLibC {
 
     private static boolean isGNUViaFS() throws IOException {
         try (FileInputStream fin = new FileInputStream(new File("/usr/bin/ldd"))) {
-            String ldd = _PlatformUtil.readInputStreamString(fin, StandardCharsets.UTF_8);
+            String ldd = _PlatformUtil.readInputStreamString(fin);
             return ldd.contains("GNU C Library");
         }
     }
 
     private static boolean isGNUViaCommand() throws IOException {
         Process unameProc = Runtime.getRuntime().exec("sh -c 'getconf GNU_LIBC_VERSION 2>&1 || true; ldd --version 2>&1 || true'");
-        String unameResult = _PlatformUtil.readInputStreamString(unameProc.getInputStream(), StandardCharsets.UTF_8);
+        String unameResult = _PlatformUtil.readInputStreamString(unameProc.getInputStream());
 
         return unameResult.contains("glibc");
     }

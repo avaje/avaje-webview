@@ -13,9 +13,6 @@ package co.casterlabs.commons.platform;
 
 import java.util.regex.Pattern;
 
-//import lombok.AllArgsConstructor;
-
-//@AllArgsConstructor
 public enum ArchFamily {
     // @formatter:off
     X86   ("x86",   false, "x86|i[0-9]86|ia32|amd64|ia64|itanium64"),
@@ -29,7 +26,7 @@ public enum ArchFamily {
     // @formatter:on
 
     private final String name;
-    public final boolean isUsuallyBigEndian;
+    private final boolean isUsuallyBigEndian;
     private final String regex;
 
     ArchFamily(String name, boolean isUsuallyBigEndian, String regex) {
@@ -59,15 +56,6 @@ public enum ArchFamily {
     @Override
     public String toString() {
         return this.name;
-    }
-
-    /**
-     * @param  wordSize The word size, usually 32 or 64.
-     *
-     * @return          A "standard" target name.
-     */
-    public String getArchTarget(int wordSize) {
-        return getArchTarget(wordSize, this.isUsuallyBigEndian);
     }
 
     /**
