@@ -1,15 +1,12 @@
 package dev.webview.webview_java;
 
-import co.casterlabs.commons.io.streams.StreamUtil;
 import co.casterlabs.commons.platform.LinuxLibC;
 import co.casterlabs.commons.platform.Platform;
 import com.sun.jna.Library;
 import com.sun.jna.Native;
+import org.jspecify.annotations.NonNull;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.UncheckedIOException;
+import java.io.*;
 import java.nio.file.Files;
 import java.util.Collections;
 
@@ -66,7 +63,7 @@ final class Bootstrap {
 
             // Copy it to a file.
             try (InputStream in = WebviewNative.class.getResourceAsStream(lib.toLowerCase())) {
-                byte[] bytes = StreamUtil.toBytes(in);
+                byte[] bytes = toBytes(in);
                 Files.write(target.toPath(), bytes);
             } catch (Exception e) {
                 if (e.getMessage().contains("used by another")) continue; // Ignore.
@@ -85,5 +82,32 @@ final class Bootstrap {
                 WebviewNative.class,
                 Collections.singletonMap(Library.OPTION_STRING_ENCODING, "UTF-8")
         );
+    }
+
+    private static byte[] toBytes(@NonNull InputStream source) throws IOException {
+        if (source == null) {
+            throw new NullPointerException("source is marked non-null but is null");
+        } else {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            streamTransfer(source, out, 2048);
+            return out.toByteArray();
+        }
+    }
+
+    private static void streamTransfer(@NonNull InputStream source, @NonNull OutputStream dest, int bufferSize) throws IOException {
+        if (source == null) {
+            throw new NullPointerException("source is marked non-null but is null");
+        } else if (dest == null) {
+            throw new NullPointerException("dest is marked non-null but is null");
+        } else {
+            byte[] buffer = new byte[bufferSize];
+            int read = 0;
+
+            while((read = source.read(buffer)) != -1) {
+                dest.write(buffer, 0, read);
+            }
+
+            dest.flush();
+        }
     }
 }
