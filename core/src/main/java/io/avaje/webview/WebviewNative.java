@@ -34,7 +34,9 @@ import java.util.List;
 
 interface WebviewNative extends Library {
 
-    WebviewNative N = Bootstrap.runSetup();
+    static WebviewBuilder builder() {
+        return new WebviewBuilder();
+    }
 
     int WV_HINT_NONE = 0;
     int WV_HINT_MIN = 1;

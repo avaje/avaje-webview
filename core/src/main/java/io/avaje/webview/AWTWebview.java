@@ -1,5 +1,8 @@
 package io.avaje.webview;
 
+import com.sun.jna.Native;
+import com.sun.jna.ptr.PointerByReference;
+
 import java.awt.*;
 import java.io.Closeable;
 import java.util.function.Consumer;
@@ -65,7 +68,9 @@ public class AWTWebview extends Canvas implements Closeable {
 
             // We need to create the webview off of the swing thread.
             Thread t = new Thread(() -> {
-                this.webview = new Webview(this.debug, this);
+                var ptr = new PointerByReference(Native.getComponentPointer(this));
+                this.webview = Webview.builder().debug(this.debug).windowPointer(ptr).build();
+                // this.webview = new Webview(this.debug, this);
 
                 this.updateSize();
 
