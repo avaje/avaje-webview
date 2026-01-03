@@ -42,6 +42,7 @@ public final class WebviewBuilder {
     private int height = 600;
     private String html;
     private String url;
+    private boolean shutdownHook = true;
 
     WebviewBuilder() {
 
@@ -91,6 +92,14 @@ public final class WebviewBuilder {
         return this;
     }
 
+    /**
+     * Set too false to disable the registration of a shutdown hook.
+     */
+    public WebviewBuilder shutdownHook(boolean shutdownHook) {
+        this.shutdownHook = shutdownHook;
+        return this;
+    }
+
     public Webview build() {
         var n = initNative(this);
         var view = new Webview(n, debug, windowPointer, width, height);
@@ -102,7 +111,22 @@ public final class WebviewBuilder {
         } else if (html != null) {
             view.setHTML(html);
         }
+        if (shutdownHook) {
+            Runtime.getRuntime().addShutdownHook(new Hook(view::close));
+        }
         return view;
+    }
+
+    static final class Hook extends Thread {
+
+        Hook(Runnable runnable) {
+            super(runnable, "WebviewHook");
+        }
+
+        @Override
+        public void run() {
+            super.run();
+        }
     }
 
     private synchronized WebviewNative initNative(WebviewBuilder bootstrap) {
