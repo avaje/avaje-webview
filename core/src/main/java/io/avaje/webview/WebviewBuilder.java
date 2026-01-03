@@ -12,6 +12,24 @@ import java.nio.file.Files;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * Builder for Webview.
+ *
+ * <pre>{@code
+ *
+ *    Webview wv = Webview.builder()
+ *             .debug(true)
+ *             .title("My App")
+ *             .width(1000)
+ *             .height(800)
+ *             .url("http://localhost:" + port)
+ *             .build();
+ *
+ *     wv.run(); // Run the webview event loop, the webview is fully disposed when this returns.
+ *     wv.close(); // Free any resources allocated.
+ *
+ * }</pre>
+ */
 public final class WebviewBuilder {
 
     private static WebviewNative NATIVE_LIB;

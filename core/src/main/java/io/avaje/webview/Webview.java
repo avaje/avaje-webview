@@ -32,6 +32,24 @@ import java.io.Closeable;
 
 import static io.avaje.webview.WebviewNative.*;
 
+/**
+ * Webview browser window.
+ *
+ * <pre>{@code
+ *
+ *    Webview wv = Webview.builder()
+ *             .debug(true)
+ *             .title("My App")
+ *             .width(1000)
+ *             .height(800)
+ *             .url("http://localhost:" + port)
+ *             .build();
+ *
+ *     wv.run(); // Run the webview event loop, the webview is fully disposed when this returns.
+ *     wv.close(); // Free any resources allocated.
+ *
+ * }</pre>
+ */
 public final class Webview implements Closeable, Runnable {
 
     private final WebviewNative N;
@@ -40,90 +58,6 @@ public final class Webview implements Closeable, Runnable {
     public static WebviewBuilder builder() {
         return new WebviewBuilder();
     }
-
-//    /**
-//     * Creates a new Webview. <br/>
-//     * The default size will be set, and if the size is set again before loading the
-//     * URL, a splash will appear.<br/>
-//     * eg:
-//     *
-//     * <pre>
-//     * <code>
-//     *   WebView wv = new WebView(true);
-//     *   wv.setSize(1280, 720);
-//     *   wv.loadURL("...")
-//     * </code>
-//     * </pre>
-//     *
-//     * It's recommended that setting size together:
-//     *
-//     * <pre>
-//     * <code>
-//     *   WebView wv = new WebView(true, 1280, 720);
-//     *   wv.loadURL("...")
-//     * </code>
-//     * </pre>
-//     *
-//     * @param debug Enables devtools/inspect element if true.
-//     *
-//     * @see         #Webview(boolean, int, int)
-//     */
-//    public Webview(boolean debug) {
-//        this(debug, (PointerByReference) null);
-//    }
-//
-//    /**
-//     * Creates a new Webview.
-//     *
-//     * @param debug  Enables devtools/inspect element if true.
-//     * @param width  preset - width
-//     * @param height preset - height
-//     */
-//    public Webview(boolean debug, int width, int height) {
-//        this(debug, null, width, height);
-//    }
-//
-//    /**
-//     * Creates a new Webview. <br/>
-//     * The default size will be set, and if the size is set again before loading the
-//     * URL, a splash will appear.<br/>
-//     * eg:
-//     *
-//     * <pre>
-//     * <code>
-//     *   WebView wv = new WebView(true);
-//     *   wv.setSize(1280, 720);
-//     *   wv.loadURL("...")
-//     * </code>
-//     * </pre>
-//     *
-//     * It's recommended that setting size together:
-//     *
-//     * <pre>
-//     * <code>
-//     *   WebView wv = new WebView(true, 1280, 720);
-//     *   wv.loadURL("...")
-//     * </code>
-//     * </pre>
-//     *
-//     * @param debug  Enables devtools/inspect element if true.
-//     *
-//     * @param target The target awt component, such as a {@link java.awt.JFrame} or
-//     *               {@link java.awt.Canvas}. Must be "drawable".
-//     *
-//     * @see          #Webview(boolean, PointerByReference, int, int)
-//     */
-//    public Webview(boolean debug, @NonNull Component target) {
-//        this(debug, new PointerByReference(Native.getComponentPointer(target)));
-//    }
-//
-//    /**
-//     * @deprecated Use this only if you absolutely know what you're doing.
-//     */
-//    @Deprecated
-//    public Webview(boolean debug, @Nullable PointerByReference windowPointer) {
-//        this(debug, windowPointer, 800, 600);
-//    }
 
     Webview(WebviewNative n, boolean debug, @Nullable PointerByReference windowPointer, int width, int height) {
         this.N = n;
@@ -142,7 +76,6 @@ public final class Webview implements Closeable, Runnable {
 
     public void setHTML(@Nullable String html) {
         N.webview_set_html($pointer, html);
-//        this.eval(this.initScript);
     }
 
     public void loadURL(@Nullable String url) {
@@ -151,7 +84,6 @@ public final class Webview implements Closeable, Runnable {
         }
 
         N.webview_navigate($pointer, url);
-//        this.eval(this.initScript);
     }
 
     public void setTitle(@NonNull String title) {
