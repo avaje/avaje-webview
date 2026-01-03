@@ -31,6 +31,7 @@ import org.jspecify.annotations.Nullable;
 import java.io.Closeable;
 
 import static io.avaje.webview.WebviewNative.*;
+import static java.lang.System.Logger.Level.DEBUG;
 
 /**
  * Webview browser window.
@@ -51,6 +52,8 @@ import static io.avaje.webview.WebviewNative.*;
  * }</pre>
  */
 public final class Webview implements Closeable, Runnable {
+
+    static final System.Logger log = System.getLogger("io.avaje.webview");
 
     private final WebviewNative N;
     private final long $pointer;
@@ -82,7 +85,6 @@ public final class Webview implements Closeable, Runnable {
         if (url == null) {
             url = "about:blank";
         }
-
         N.webview_navigate($pointer, url);
     }
 
@@ -239,6 +241,7 @@ public final class Webview implements Closeable, Runnable {
     @Override
     public void run() {
         N.webview_run($pointer);
+        log.log(DEBUG, "destroy");
         N.webview_destroy($pointer);
     }
 
@@ -260,6 +263,7 @@ public final class Webview implements Closeable, Runnable {
      */
     @Override
     public void close() {
+        log.log(DEBUG, "close");
         N.webview_terminate($pointer);
     }
 
