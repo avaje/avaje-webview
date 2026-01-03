@@ -9,7 +9,7 @@
         <version>0.1</version>
     </parent>
 
-    <artifactId>avaje-webview-core</artifactId>
+    <artifactId>avaje-webview</artifactId>
 
     <properties>
         <maven.compiler.source>25</maven.compiler.source>

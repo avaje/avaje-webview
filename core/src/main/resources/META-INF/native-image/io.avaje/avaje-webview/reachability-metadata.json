@@ -1,0 +1,16 @@
+{
+  "reflection": [
+    {
+      "type": {
+        "proxy": [
+          "dev.webview.webview_java.WebviewNative"
+        ]
+      }
+    }
+  ],
+  "resources": [
+    {
+      "glob": "dev/webview/webview_java/natives/**"
+    }
+  ]
+}
