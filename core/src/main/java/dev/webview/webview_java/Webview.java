@@ -23,10 +23,9 @@
  */
 package dev.webview.webview_java;
 
-import co.casterlabs.commons.platform.Platform;
+import dev.webview.webview_java.platform.Platform;
 import com.sun.jna.Native;
 import com.sun.jna.ptr.PointerByReference;
-import dev.webview.webview_java.WebviewNative.*;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 

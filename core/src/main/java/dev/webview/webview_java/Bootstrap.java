@@ -1,7 +1,7 @@
 package dev.webview.webview_java;
 
-import co.casterlabs.commons.platform.LinuxLibC;
-import co.casterlabs.commons.platform.Platform;
+import dev.webview.webview_java.platform.LinuxLibC;
+import dev.webview.webview_java.platform.Platform;
 import com.sun.jna.Library;
 import com.sun.jna.Native;
 import org.jspecify.annotations.NonNull;

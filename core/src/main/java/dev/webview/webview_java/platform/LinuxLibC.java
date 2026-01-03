@@ -1,4 +1,4 @@
-package co.casterlabs.commons.platform;
+package dev.webview.webview_java.platform;
 
 import java.io.File;
 import java.io.FileInputStream;
