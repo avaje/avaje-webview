@@ -9,6 +9,7 @@ import org.jspecify.annotations.NonNull;
 
 import java.io.*;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
 
@@ -34,6 +35,7 @@ public final class WebviewBuilder {
 
     private static WebviewNative NATIVE_LIB;
 
+    private boolean extractToUserHome;
     private boolean extractToTemp;
     private String title;
     private boolean debug;
@@ -43,17 +45,38 @@ public final class WebviewBuilder {
     private String html;
     private String url;
     private boolean shutdownHook = true;
+    private boolean keepExtractedFile;
 
     WebviewBuilder() {
 
     }
 
+    /**
+     * Return a new builder for a Webview.
+     */
     public static WebviewBuilder builder() {
         return new WebviewBuilder();
     }
 
+    /**
+     * When true the libraries will be extracted to the systems
+     * temp directory.
+     */
     public WebviewBuilder extractToTemp(boolean extractToTemp) {
         this.extractToTemp = extractToTemp;
+        return this;
+    }
+
+
+    /**
+     * When true the libraries will be extracted to a subdirectory under
+     * user home - {@code ${user.home}/.avaje-webview/0.2}.
+     * <p>
+     * This has a slight performance improvement in that the libraries only
+     * need to be extracted once and not on every execution.
+     */
+    public WebviewBuilder extractToUserHome(boolean extractToUserHome) {
+        this.extractToUserHome = extractToUserHome;
         return this;
     }
 
@@ -138,17 +161,16 @@ public final class WebviewBuilder {
 
 
     private WebviewNative initNativeLibrary() {
-        // Extract all of the libs.
         for (String lib : platformLibraries()) {
             File target = createTarget(lib);
-            if (target.exists()) {
-                target.delete();
+            if (target.exists() && !keepExtractedFile && !target.delete()) {
+                System.out.println("Failed to delete previously extracted: " + target);
             }
-            System.out.println("target: " + target.getAbsolutePath());
-            target.deleteOnExit();
+            if (!keepExtractedFile) {
+                target.deleteOnExit();
+            }
 
-            if (extractToFile(lib, target)) {
-                // Load it. This is so Native will be able to link it.
+            if (target.exists() || extractToFile(lib, target)) {
                 System.load(target.getAbsolutePath());
             }
         }
@@ -163,15 +185,28 @@ public final class WebviewBuilder {
     }
 
     private File createTarget(String lib) {
-        var name = new File(lib).getName();
+        var libName = new File(lib).getName();
+        if (extractToUserHome) {
+            keepExtractedFile = false;
+            String userHome = System.getProperty("user.home");
+            var homeDir = new File(userHome);
+            if (homeDir.exists()) {
+                File extractToDir = Path.of(userHome, ".avaje-webview", "0.2").toFile();
+                if (!extractToDir.exists() && !extractToDir.mkdirs()) {
+                    System.err.println("Failed to create directory to extract libraries: " + extractToDir);
+                }
+                keepExtractedFile = true;
+                return new File(extractToDir, libName);
+            }
+        }
         if (extractToTemp) {
             try {
-                return File.createTempFile("webview-", "-" + name);
+                return File.createTempFile("webview-", "-" + libName);
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
         }
-        return new File(name);
+        return new File(libName);
     }
 
     private static List<String> platformLibraries() {
