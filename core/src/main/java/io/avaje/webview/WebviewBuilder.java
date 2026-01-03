@@ -61,12 +61,14 @@ public final class WebviewBuilder {
     /**
      * When true the libraries will be extracted to the systems
      * temp directory.
+     * <p>
+     * When not set, defaults to extracting the embedded libraries
+     * into the current working directory.
      */
     public WebviewBuilder extractToTemp(boolean extractToTemp) {
         this.extractToTemp = extractToTemp;
         return this;
     }
-
 
     /**
      * When true the libraries will be extracted to a subdirectory under
@@ -74,42 +76,66 @@ public final class WebviewBuilder {
      * <p>
      * This has a slight performance improvement in that the libraries only
      * need to be extracted once and not on every execution.
+     * <p>
+     * When not set, defaults to extracting the embedded libraries
+     * into the current working directory.
      */
     public WebviewBuilder extractToUserHome(boolean extractToUserHome) {
         this.extractToUserHome = extractToUserHome;
         return this;
     }
 
+    /**
+     * Set the window title.
+     */
     public WebviewBuilder title(String title) {
         this.title = title;
         return this;
     }
 
+    /**
+     * Set to true to enable Browser Inspection of the Webview content.
+     */
     public WebviewBuilder debug(boolean debug) {
         this.debug = debug;
         return this;
     }
 
+    /**
+     * Set the window to attach the Webview to (typically not set).
+     */
     public WebviewBuilder windowPointer(PointerByReference windowPointer) {
         this.windowPointer = windowPointer;
         return this;
     }
 
+    /**
+     * Set the window width (defaults to 800).
+     */
     public WebviewBuilder width(int width) {
         this.width = width;
         return this;
     }
 
+    /**
+     * Set the window height (defaults to 600).
+     */
     public WebviewBuilder height(int height) {
         this.height = height;
         return this;
     }
 
+    /**
+     * Set raw html content to render.
+     */
     public WebviewBuilder html(String html) {
         this.html = html;
         return this;
     }
 
+    /**
+     * Set the url for the Webview to load.
+     */
     public WebviewBuilder url(String url) {
         this.url = url;
         return this;
@@ -123,6 +149,9 @@ public final class WebviewBuilder {
         return this;
     }
 
+    /**
+     * Build the Webview.
+     */
     public Webview build() {
         var n = initNative(this);
         var view = new Webview(n, debug, windowPointer, width, height);
