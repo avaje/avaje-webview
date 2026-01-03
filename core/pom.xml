@@ -20,12 +20,6 @@
 
     <dependencies>
         <dependency>
-            <groupId>co.casterlabs.commons</groupId>
-            <artifactId>platform</artifactId>
-            <version>1.7.1</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
             <groupId>net.java.dev.jna</groupId>
             <artifactId>jna</artifactId>
             <version>5.14.0</version>
