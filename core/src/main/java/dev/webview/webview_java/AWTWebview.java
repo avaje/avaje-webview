@@ -1,8 +1,5 @@
 package dev.webview.webview_java;
 
-import lombok.Getter;
-import lombok.Setter;
-
 import java.awt.*;
 import java.io.Closeable;
 import java.util.function.Consumer;
@@ -15,7 +12,7 @@ import java.util.function.Consumer;
 public class AWTWebview extends Canvas implements Closeable {
     private static final long serialVersionUID = 5199512256429931156L;
 
-    private @Getter Webview webview;
+    private Webview webview;
     private final boolean debug;
 
     private Dimension lastSize = null;
@@ -23,9 +20,9 @@ public class AWTWebview extends Canvas implements Closeable {
     /**
      * The callback handler for when the Webview gets created.
      */
-    private @Setter Consumer<Webview> onInitialized;
+    private Consumer<Webview> onInitialized;
 
-    private @Getter boolean initialized = false;
+    private boolean initialized = false;
 
     public AWTWebview() {
         this(false);
@@ -37,6 +34,18 @@ public class AWTWebview extends Canvas implements Closeable {
     public AWTWebview(boolean debug) {
         this.debug = debug;
         this.setBackground(Color.BLACK);
+    }
+
+    public Webview getWebview() {
+        return webview;
+    }
+
+    public boolean isInitialized() {
+        return initialized;
+    }
+
+    public void setOnInitialized(Consumer<Webview> onInitialized) {
+        this.onInitialized = onInitialized;
     }
 
     @Override

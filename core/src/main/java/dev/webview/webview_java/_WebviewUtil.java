@@ -23,7 +23,7 @@
  */
 package dev.webview.webview_java;
 
-import lombok.NonNull;
+import org.jspecify.annotations.NonNull;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;

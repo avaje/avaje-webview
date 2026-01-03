@@ -27,8 +27,8 @@ import co.casterlabs.commons.platform.Platform;
 import com.sun.jna.Native;
 import com.sun.jna.ptr.PointerByReference;
 import dev.webview.webview_java.WebviewNative.*;
-import lombok.NonNull;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 import java.awt.*;
 import java.io.Closeable;
