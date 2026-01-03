@@ -30,6 +30,6 @@ public interface WebviewBindCallback {
      * 
      * @return          A JSON string to be deserialized in the Webview.
      */
-    public String apply(String jsonArgs) throws Throwable;
+    String apply(String jsonArgs) throws Throwable;
 
 }

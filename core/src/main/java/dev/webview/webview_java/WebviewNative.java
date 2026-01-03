@@ -43,12 +43,11 @@ import java.util.Collections;
 import java.util.List;
 
 interface WebviewNative extends Library {
-    static final WebviewNative N = runSetup();
+    WebviewNative N = runSetup();
 
     private static WebviewNative runSetup() {
         String[] libraries = null;
         try {
-
             switch (Platform.osDistribution) {
                 case LINUX: {
                     if (LinuxLibC.isGNU()) {
@@ -117,18 +116,18 @@ interface WebviewNative extends Library {
         );
     }
 
-    static final int WV_HINT_NONE = 0;
-    static final int WV_HINT_MIN = 1;
-    static final int WV_HINT_MAX = 2;
-    static final int WV_HINT_FIXED = 3;
+    int WV_HINT_NONE = 0;
+    int WV_HINT_MIN = 1;
+    int WV_HINT_MAX = 2;
+    int WV_HINT_FIXED = 3;
 
     /**
-     * Used in {@link webview_bind}
+     * Used in {@code webview_bind}
      */
-    static interface BindCallback extends Callback {
+    interface BindCallback extends Callback {
 
         /**
-         * @param seq The request id, used in {@link webview_return}
+         * @param seq The request id, used in {@code webview_return}
          * @param req The javascript arguments converted to a json array (string)
          * @param arg Unused
          */
@@ -137,9 +136,9 @@ interface WebviewNative extends Library {
     }
 
     /**
-     * Used in {@link webview_dispatch}
+     * Used in {@code webview_dispatch}
      */
-    static interface DispatchCallback extends Callback {
+    interface DispatchCallback extends Callback {
 
         /**
          * @param $pointer The pointer of the webview
@@ -157,7 +156,7 @@ interface WebviewNative extends Library {
      * the platform, a GtkWindow, NSWindow or HWND pointer can be passed here.
      * 
      * @param debug   Enables developer tools if true (if supported)
-     * @param $window A pointer to a native window handle, for embedding the webview
+     * @param window A pointer to a native window handle, for embedding the webview
      *                in a window. (Either a GtkWindow, NSWindow, or HWND pointer)
      */
     long webview_create(boolean debug, PointerByReference window);
@@ -271,7 +270,7 @@ interface WebviewNative extends Library {
      * must be provided to help internal RPC engine match requests with responses.
      * 
      * @param $pointer The instance pointer of the webview
-     * @param name     The name of the callback
+     * @param seq      The seq of the callback
      * @param isError  Whether or not `result` should be thrown as an exception
      * @param result   The result (in json)
      */
@@ -292,7 +291,7 @@ interface WebviewNative extends Library {
      */
     VersionInfoStruct webview_version();
 
-    static class VersionInfoStruct extends Structure {
+    class VersionInfoStruct extends Structure {
         public int major; // This is technically in a sub-struct.
         public int minor; // This is technically in a sub-struct.
         public int patch; // This is technically in a sub-struct.
