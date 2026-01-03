@@ -28,7 +28,7 @@ import org.jspecify.annotations.NonNull;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 
-class _WebviewUtil {
+final class _WebviewUtil {
 
     static String getExceptionStack(@NonNull Throwable e) {
         StringWriter sw = new StringWriter();

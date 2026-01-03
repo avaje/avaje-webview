@@ -9,7 +9,7 @@ import com.sun.jna.platform.win32.WinDef.BOOLByReference;
 import com.sun.jna.platform.win32.WinDef.HWND;
 import com.sun.jna.ptr.PointerByReference;
 
-class _WindowsHelper {
+final class _WindowsHelper {
 
     @SuppressWarnings("deprecation")
     static void setWindowAppearance(Webview webview, boolean shouldBeDark) {
@@ -49,18 +49,18 @@ class _WindowsHelper {
         User32.N.InvalidateRect(hwnd, null, 0); // Repaint
     }
 
-    private static interface DWM extends Library {
-        static final DWM N = Native.load("dwmapi", DWM.class);
+    private interface DWM extends Library {
+        DWM N = Native.load("dwmapi", DWM.class);
 
-        static final int DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19;
-        static final int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+        int DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19;
+        int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
 
         int DwmSetWindowAttribute(HWND hwnd, int dwAttribute, PointerType pvAttribute, int cbAttribute);
 
     }
 
-    private static interface User32 extends Library {
-        static final User32 N = Native.load("user32", User32.class);
+    private interface User32 extends Library {
+        User32 N = Native.load("user32", User32.class);
 
         int InvalidateRect(HWND hwnd, PointerByReference rect, int erase);
 
