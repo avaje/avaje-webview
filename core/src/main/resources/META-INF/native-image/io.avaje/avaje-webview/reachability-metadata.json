@@ -10,7 +10,7 @@
   ],
   "resources": [
     {
-      "glob": "io/avaje/webview/natives/**"
+      "glob": "io/avaje/webview/nativelib/**"
     }
   ]
 }

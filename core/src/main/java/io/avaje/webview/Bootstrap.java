@@ -24,7 +24,6 @@ final class Bootstrap {
 
             if (extractToFile(lib, target)) {
                 // Load it. This is so Native will be able to link it.
-                System.out.println("LOADED " + target.getAbsolutePath());
                 System.load(target.getAbsolutePath());
             }
         }
@@ -40,20 +39,20 @@ final class Bootstrap {
 
     private static List<String> platformLibraries() {
         try {
-            String prefix = "/io/avaje/webview/natives/";
+            String prefix = "/io/avaje/webview/nativelib/";
             switch (Platform.osDistribution) {
                 case LINUX -> {
                     if (LinuxLibC.isGNU()) {
-                        return List.of(prefix + Platform.archTarget + "/linux/gnu/libwebview.so");
+                        return List.of(prefix + "linux/" + Platform.archTarget + "/gnu/libwebview.so");
                     } else {
-                        return List.of(prefix + Platform.archTarget + "/linux/musl/libwebview.so");
+                        return List.of(prefix + "linux/" + Platform.archTarget + "/musl/libwebview.so");
                     }
                 }
                 case MACOS -> {
-                    return List.of(prefix + Platform.archTarget + "/macos/libwebview.dylib");
+                    return List.of(prefix + "macos/" + Platform.archTarget + "/libwebview.dylib");
                 }
                 case WINDOWS_NT -> {
-                    return List.of(prefix + Platform.archTarget + "/windows_nt/webview.dll");
+                    return List.of(prefix + "windows_nt/" + Platform.archTarget + "/webview.dll");
                 }
                 default ->
                         throw new IllegalStateException("Unsupported platform: " + Platform.osDistribution + ":" + Platform.archTarget);
