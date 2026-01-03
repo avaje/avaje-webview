@@ -36,8 +36,7 @@ import static io.avaje.webview.WebviewNative.*;
 
 public class Webview implements Closeable, Runnable {
 
-    @Deprecated
-    public long $pointer;
+    private final long $pointer;
 
     /**
      * Creates a new Webview. <br/>
