@@ -241,8 +241,9 @@ public final class Webview implements Closeable, Runnable {
     @Override
     public void run() {
         N.webview_run($pointer);
-        log.log(DEBUG, "destroy");
+        log.log(DEBUG, "destroy and terminate");
         N.webview_destroy($pointer);
+        N.webview_terminate($pointer);
     }
 
     /**

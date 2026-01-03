@@ -13,8 +13,6 @@ import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
 
-import static java.lang.System.Logger.Level.DEBUG;
-
 /**
  * Builder for Webview.
  *
@@ -181,7 +179,6 @@ public final class WebviewBuilder {
 
         @Override
         public void run() {
-            Webview.log.log(DEBUG, "shutdown hook run");
             super.run();
         }
     }
