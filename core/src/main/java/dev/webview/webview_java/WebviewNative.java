@@ -32,10 +32,11 @@ import com.sun.jna.Native;
 import com.sun.jna.Structure;
 import com.sun.jna.ptr.PointerByReference;
 import lombok.NonNull;
-import lombok.SneakyThrows;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Collections;
@@ -44,42 +45,45 @@ import java.util.List;
 interface WebviewNative extends Library {
     static final WebviewNative N = runSetup();
 
-    @SneakyThrows
     private static WebviewNative runSetup() {
         String[] libraries = null;
+        try {
 
-        switch (Platform.osDistribution) {
-            case LINUX: {
-                if (LinuxLibC.isGNU()) {
-                    libraries = new String[] {
-                            "/dev/webview/webview_java/natives/" + Platform.archTarget + "/linux/gnu/libwebview.so"
-                    };
-                } else {
-                    libraries = new String[] {
-                            "/dev/webview/webview_java/natives/" + Platform.archTarget + "/linux/musl/libwebview.so"
-                    };
+            switch (Platform.osDistribution) {
+                case LINUX: {
+                    if (LinuxLibC.isGNU()) {
+                        libraries = new String[]{
+                                "/dev/webview/webview_java/natives/" + Platform.archTarget + "/linux/gnu/libwebview.so"
+                        };
+                    } else {
+                        libraries = new String[]{
+                                "/dev/webview/webview_java/natives/" + Platform.archTarget + "/linux/musl/libwebview.so"
+                        };
+                    }
+                    break;
                 }
-                break;
-            }
 
-            case MACOS: {
-                libraries = new String[] {
-                        "/dev/webview/webview_java/natives/" + Platform.archTarget + "/macos/libwebview.dylib"
-                };
-                break;
-            }
+                case MACOS: {
+                    libraries = new String[]{
+                            "/dev/webview/webview_java/natives/" + Platform.archTarget + "/macos/libwebview.dylib"
+                    };
+                    break;
+                }
 
-            case WINDOWS_NT: {
-                libraries = new String[] {
+                case WINDOWS_NT: {
+                    libraries = new String[]{
 //                        "/dev/webview/webview_java/natives/" + Platform.archTarget + "/windows_nt/WebView2Loader.dll",
-                        "/dev/webview/webview_java/natives/" + Platform.archTarget + "/windows_nt/webview.dll"
-                };
-                break;
-            }
+                            "/dev/webview/webview_java/natives/" + Platform.archTarget + "/windows_nt/webview.dll"
+                    };
+                    break;
+                }
 
-            default: {
-                throw new IllegalStateException("Unsupported platform: " + Platform.osDistribution + ":" + Platform.archTarget);
+                default: {
+                    throw new IllegalStateException("Unsupported platform: " + Platform.osDistribution + ":" + Platform.archTarget);
+                }
             }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
 
         // Extract all of the libs.
@@ -98,7 +102,7 @@ interface WebviewNative extends Library {
                 if (e.getMessage().contains("used by another")) continue; // Ignore.
 
                 System.err.println("Unable to extract native: " + lib);
-                throw e;
+                throw new RuntimeException(e);
             }
 
             System.load(target.getAbsolutePath()); // Load it. This is so Native will be able to link it.
