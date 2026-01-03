@@ -62,7 +62,7 @@ public final class Webview implements Closeable, Runnable {
     Webview(WebviewNative n, boolean debug, @Nullable PointerByReference windowPointer, int width, int height) {
         this.N = n;
         this.$pointer = N.webview_create(debug, windowPointer);
-        this.loadURL(null);
+        // this.loadURL(null);
         this.setSize(width, height);
     }
 

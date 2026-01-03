@@ -38,7 +38,7 @@ public final class WebviewBuilder {
     private boolean extractToUserHome;
     private boolean extractToTemp;
     private String title;
-    private boolean debug;
+    private boolean enableDeveloperTools;
     private PointerByReference windowPointer;
     private int width = 800;
     private int height = 600;
@@ -94,10 +94,10 @@ public final class WebviewBuilder {
     }
 
     /**
-     * Set to true to enable Browser Inspection of the Webview content.
+     * Set to true to enable Browser developer tools (if supported).
      */
-    public WebviewBuilder debug(boolean debug) {
-        this.debug = debug;
+    public WebviewBuilder enableDeveloperTools(boolean enableDeveloperTools) {
+        this.enableDeveloperTools = enableDeveloperTools;
         return this;
     }
 
@@ -154,7 +154,7 @@ public final class WebviewBuilder {
      */
     public Webview build() {
         var n = initNative(this);
-        var view = new Webview(n, debug, windowPointer, width, height);
+        var view = new Webview(n, enableDeveloperTools, windowPointer, width, height);
         if (title != null) {
             view.setTitle(title);
         }
@@ -162,6 +162,8 @@ public final class WebviewBuilder {
             view.loadURL(url);
         } else if (html != null) {
             view.setHTML(html);
+        } else {
+            view.loadURL("about:blank");
         }
         if (shutdownHook) {
             Runtime.getRuntime().addShutdownHook(new Hook(view::close));

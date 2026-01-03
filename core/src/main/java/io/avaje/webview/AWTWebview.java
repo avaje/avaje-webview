@@ -69,7 +69,7 @@ public class AWTWebview extends Canvas implements Closeable {
             // We need to create the webview off of the swing thread.
             Thread t = new Thread(() -> {
                 var ptr = new PointerByReference(Native.getComponentPointer(this));
-                this.webview = Webview.builder().debug(this.debug).windowPointer(ptr).build();
+                this.webview = Webview.builder().enableDeveloperTools(this.debug).windowPointer(ptr).build();
                 // this.webview = new Webview(this.debug, this);
 
                 this.updateSize();
