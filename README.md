@@ -53,6 +53,10 @@ Webview webview = Webview.builder()
 webview.run();
 ```
 
+-------
+
+## Options
+
 ### Extracting embedded libraries
 
 By default, the embedded native libs are extracted to the working dir and
