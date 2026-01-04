@@ -1,0 +1,13 @@
+{{<fragments/layout}}
+  {{$body}}
+
+    <div hx-get="/app" hx-trigger="load">
+      <img alt="Result loading..." class="htmx-indicator" width="50" src="/static/bars.svg"/>
+    </div>
+
+    <div hx-get="/env" hx-trigger="load">
+      <img alt="Result loading..." class="htmx-indicator" width="50" src="/static/bars.svg"/>
+    </div>
+
+  {{/body}}
+{{/fragments/layout}}

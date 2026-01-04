@@ -1,0 +1,7 @@
+.plan-container {
+  height: 700px;
+}
+#app {
+    border: 3px solid black;
+    height: 700px;
+}

@@ -1,0 +1,13 @@
+<nav aria-label="breadcrumb">
+  {{#breadcrumb}}
+    <ol class="breadcrumb my-4 p-0">
+      <li class="breadcrumb-item"><a href="/"><i class="bi bi-chevron-right"></i> Home</a></li>
+      {{#crumbs}}
+        <li class="breadcrumb-item {{active}}">
+          {{#href}}<a href="{{.}}">{{name}}</a>{{/href}}
+          {{^href}}{{name}}{{/href}}
+        </li>
+      {{/crumbs}}
+    </ol>
+  {{/breadcrumb}}
+</nav>
