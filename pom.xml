@@ -15,7 +15,7 @@
     <packaging>pom</packaging>
 
     <modules>
-        <module>core</module>
+        <module>avaje-webview</module>
     </modules>
 
 </project>
