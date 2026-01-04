@@ -4,19 +4,18 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
-        <groupId>org.avaje</groupId>
-        <artifactId>java11-oss</artifactId>
-        <version>5.1</version>
+        <groupId>io.avaje</groupId>
+        <artifactId>avaje-webview-parent</artifactId>
+        <version>0.1</version>
     </parent>
 
-    <groupId>io.avaje</groupId>
-    <artifactId>avaje-webview-parent</artifactId>
-    <version>0.1</version>
+    <artifactId>examples</artifactId>
     <packaging>pom</packaging>
 
     <modules>
-        <module>avaje-webview</module>
-        <module>examples</module>
+        <module>hello-world</module>
+        <module>hello-world-jex</module>
     </modules>
+
 
 </project>
