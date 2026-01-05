@@ -1,69 +1,88 @@
 package io.avaje.webview;
 
-import com.sun.jna.Library;
-import com.sun.jna.Native;
-import com.sun.jna.Pointer;
-import com.sun.jna.PointerType;
-import com.sun.jna.platform.win32.WinDef.BOOL;
-import com.sun.jna.platform.win32.WinDef.BOOLByReference;
-import com.sun.jna.platform.win32.WinDef.HWND;
-import com.sun.jna.ptr.PointerByReference;
+import module java.base;
+
+import static java.lang.foreign.ValueLayout.*;
 
 final class _WindowsHelper {
 
-    @SuppressWarnings("deprecation")
-    static void setWindowAppearance(Webview webview, boolean shouldBeDark) {
-        // References:
-        // https://docs.microsoft.com/en-us/windows/win32/api/dwmapi/nf-dwmapi-dwmsetwindowattribute
-        // https://winscp.net/forum/viewtopic.php?t=30088
-        // https://gist.github.com/rossy/ebd83ba8f22339ce25ef68bfc007dfd2
-        //
-        // This is the code that we're mimicking (in c):
-        /*
-        DwmSetWindowAttribute(
-            hwnd, 
-            DWMWA_USE_IMMERSIVE_DARK_MODE,
-            &(BOOL) { TRUE }, 
-            sizeof(BOOL)
-        );
-        InvalidateRect(hwnd, null, FALSE);
-        */
+  private static final Linker LINKER = Linker.nativeLinker();
+  private static final SymbolLookup DWMAPI = SymbolLookup.libraryLookup("dwmapi", Arena.global());
+  private static final SymbolLookup USER32 = SymbolLookup.libraryLookup("user32", Arena.global());
 
-        HWND hwnd = new HWND(new Pointer(webview.getNativeWindowPointer()));
-        BOOLByReference pvAttribute = new BOOLByReference(new BOOL(shouldBeDark));
+  private static final int DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19;
+  private static final int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+  private static final int FALSE = 0;
 
-        DWM.N.DwmSetWindowAttribute(
-            hwnd,
-            DWM.DWMWA_USE_IMMERSIVE_DARK_MODE,
-            pvAttribute,
-            BOOL.SIZE
-        );
+  private static final MethodHandle DwmSetWindowAttribute;
+  private static final MethodHandle InvalidateRect;
 
-        DWM.N.DwmSetWindowAttribute(
-            hwnd,
-            DWM.DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1,
-            pvAttribute,
-            BOOL.SIZE
-        );
+  static {
+    try {
+      // int DwmSetWindowAttribute(HWND hwnd, DWORD dwAttribute, LPCVOID pvAttribute, DWORD
+      // cbAttribute)
+      DwmSetWindowAttribute =
+          DWMAPI
+              .find("DwmSetWindowAttribute")
+              .map(
+                  addr ->
+                      LINKER.downcallHandle(
+                          addr,
+                          FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT, ADDRESS, JAVA_INT)))
+              .orElseThrow(() -> new UnsatisfiedLinkError("DwmSetWindowAttribute not found"));
 
-        User32.N.InvalidateRect(hwnd, null, 0); // Repaint
+      // BOOL InvalidateRect(HWND hWnd, const RECT *lpRect, BOOL bErase)
+      InvalidateRect =
+          USER32
+              .find("InvalidateRect")
+              .map(
+                  addr ->
+                      LINKER.downcallHandle(
+                          addr, FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, JAVA_INT)))
+              .orElseThrow(() -> new UnsatisfiedLinkError("InvalidateRect not found"));
+
+    } catch (Exception e) {
+      throw new ExceptionInInitializerError(e);
     }
+  }
 
-    private interface DWM extends Library {
-        DWM N = Native.load("dwmapi", DWM.class);
+  static void setWindowAppearance(Webview webview, boolean shouldBeDark) {
+    // References:
+    // https://docs.microsoft.com/en-us/windows/win32/api/dwmapi/nf-dwmapi-dwmsetwindowattribute
+    // https://winscp.net/forum/viewtopic.php?t=30088
+    // https://gist.github.com/rossy/ebd83ba8f22339ce25ef68bfc007dfd2
+    //
+    // This is the code that we're mimicking (in c):
+    /*
+    DwmSetWindowAttribute(
+        hwnd,
+        DWMWA_USE_IMMERSIVE_DARK_MODE,
+        &(BOOL) { TRUE },
+        sizeof(BOOL)
+    );
+    InvalidateRect(hwnd, null, FALSE);
+    */
 
-        int DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19;
-        int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment hwnd = webview.getNativeWindowPointer();
 
-        int DwmSetWindowAttribute(HWND hwnd, int dwAttribute, PointerType pvAttribute, int cbAttribute);
+      // Allocate a BOOL (int32) for the dark mode value
+      MemorySegment boolValue = arena.allocate(JAVA_INT);
+      boolValue.set(JAVA_INT, 0, shouldBeDark ? 1 : 0);
 
+      // Try the newer constant first (Windows 10 20H1+)
+      DwmSetWindowAttribute.invoke(
+          hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, boolValue, (int) JAVA_INT.byteSize());
+
+      // Try the older constant for compatibility (Windows 10 before 20H1)
+      DwmSetWindowAttribute.invoke(
+          hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1, boolValue, (int) JAVA_INT.byteSize());
+
+      // Repaint the window
+      InvalidateRect.invoke(hwnd, MemorySegment.NULL, FALSE);
+
+    } catch (Throwable e) {
+      throw new RuntimeException("Failed to set window appearance", e);
     }
-
-    private interface User32 extends Library {
-        User32 N = Native.load("user32", User32.class);
-
-        int InvalidateRect(HWND hwnd, PointerByReference rect, int erase);
-
-    }
-
+  }
 }

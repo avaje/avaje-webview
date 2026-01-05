@@ -1,3 +1,7 @@
 target
 .idea
 
+*.classpath
+*.factorypath
+*.prefs
+*.project
