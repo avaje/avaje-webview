@@ -21,9 +21,6 @@ jobs:
       - name: maven version
         run: mvn --version
 
-      - name: ldd (glibc) version
-        run: ldd --version
-
       - name: native image version
         run: |
           echo "GRAALVM_HOME: $GRAALVM_HOME"
