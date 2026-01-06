@@ -23,13 +23,13 @@
         <dependency>
             <groupId>io.avaje.experimental</groupId>
             <artifactId>avaje-webview</artifactId>
-            <version>0.2</version>
+            <version>0.4-SNAPSHOT</version>
         </dependency>
 
         <dependency>
             <groupId>io.avaje</groupId>
             <artifactId>avaje-simple-logger</artifactId>
-            <version>1.2</version>
+            <version>1.3</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
@@ -93,7 +93,7 @@
                             <execution>
                                 <id>build-native</id>
                                 <goals>
-                                    <goal>build</goal>
+                                    <goal>compile-no-fork</goal>
                                 </goals>
                                 <phase>package</phase>
                                 <configuration>
@@ -103,6 +103,7 @@
                                     </jvmArgs>
                                     <buildArgs>
                                         <buildArg>-Ob</buildArg> <!-- fast build -->
+                                        <buildArg>-H:+SharedArenaSupport</buildArg>
                                         <buildArg>-R:MaxHeapSize=200m</buildArg>
                                         <buildArg>--emit build-report</buildArg>
                                         <buildArg>--no-fallback</buildArg>
