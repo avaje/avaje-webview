@@ -249,23 +249,18 @@ public final class WebviewBuilder {
       throw new NullPointerException("source is marked non-null but is null");
     }
     ByteArrayOutputStream out = new ByteArrayOutputStream();
-      streamTransfer(source, out, 2048);
+      streamTransfer(source, out);
       return out.toByteArray();
   }
 
-  private static void streamTransfer(
-      @NonNull InputStream source, @NonNull OutputStream dest, int bufferSize) throws IOException {
+  private static void streamTransfer(@NonNull InputStream source, @NonNull OutputStream dest)
+      throws IOException {
     if (source == null) {
       throw new NullPointerException("source is marked non-null but is null");
     }
     if (dest == null) {
       throw new NullPointerException("dest is marked non-null but is null");
     }
-    byte[] buffer = new byte[bufferSize];
-      int read;
-      while ((read = source.read(buffer)) != -1) {
-        dest.write(buffer, 0, read);
-      }
-      dest.flush();
+    source.transferTo(dest);
   }
 }
