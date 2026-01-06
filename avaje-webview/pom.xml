@@ -12,7 +12,7 @@
 
     <groupId>io.avaje.experimental</groupId>
     <artifactId>avaje-webview</artifactId>
-    <version>0.3-SNAPSHOT</version>
+    <version>0.3</version>
 
     <name>avaje-webview</name>
     <description>Experimental fork of webview_java</description>
