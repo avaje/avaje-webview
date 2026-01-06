@@ -2,17 +2,17 @@
  * MIT LICENSE
  *
  * Copyright (c) 2024 Alex Bowles @ Casterlabs
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -24,10 +24,9 @@
 package io.avaje.webview;
 
 import io.avaje.webview.platform.Platform;
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
 
 import module java.base;
+import module org.jspecify;
 
 import static io.avaje.webview.WebviewNative.*;
 import static java.lang.System.Logger.Level.DEBUG;
@@ -56,7 +55,7 @@ public final class Webview implements Closeable, Runnable {
 
   private final WebviewNative N;
   private final MemorySegment webview;
-  private final Arena arena = Arena.ofShared();
+  private final Arena arena = Arena.ofAuto();
 
   public static WebviewBuilder builder() {
     return new WebviewBuilder();
@@ -134,15 +133,16 @@ public final class Webview implements Closeable, Runnable {
   public void setInitScript(@NonNull String script, boolean allowNestedAccess) {
     script =
         String.format(
-            "(() => {\n"
-                + "try {\n"
-                + "if (window.top == window.self || %b) {\n"
-                + "%s\n"
-                + "}\n"
-                + "} catch (e) {\n"
-                + "console.error('[Webview]', 'An error occurred whilst evaluating init script:', %s, e);\n"
-                + "}\n"
-                + "})();",
+            """
+      	(() => {
+      	try {
+      	if (window.top == window.self || %b) {
+      	%s
+      	}
+      	} catch (e) {
+      	console.error('[Webview]', 'An error occurred whilst evaluating init script:', %s, e);
+      	}
+      	})();""",
             allowNestedAccess, script, '"' + _WebviewUtil.jsonEscape(script) + '"');
 
     N.webview_init(webview, script);
@@ -159,11 +159,12 @@ public final class Webview implements Closeable, Runnable {
           N.webview_eval(
               webview,
               String.format(
-                  "try {\n"
-                      + "%s\n"
-                      + "} catch (e) {\n"
-                      + "console.error('[Webview]', 'An error occurred whilst evaluating script:', %s, e);\n"
-                      + "}",
+                  """
+        	try {
+        	%s
+        	} catch (e) {
+        	console.error('[Webview]', 'An error occurred whilst evaluating script:', %s, e);
+        	}""",
                   script, '"' + _WebviewUtil.jsonEscape(script) + '"'));
         });
   }
@@ -295,7 +296,6 @@ public final class Webview implements Closeable, Runnable {
   public void close() {
     log.log(DEBUG, "close");
     N.webview_terminate(webview);
-    arena.close();
   }
 
   public void setDarkAppearance(boolean shouldAppearDark) {
