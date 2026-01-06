@@ -24,11 +24,10 @@
 package io.avaje.webview;
 
 import io.avaje.webview.platform.Platform;
-import com.sun.jna.ptr.PointerByReference;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
-import java.io.Closeable;
+import module java.base;
 
 import static io.avaje.webview.WebviewNative.*;
 import static java.lang.System.Logger.Level.DEBUG;
@@ -53,85 +52,89 @@ import static java.lang.System.Logger.Level.DEBUG;
  */
 public final class Webview implements Closeable, Runnable {
 
-    static final System.Logger log = System.getLogger("io.avaje.webview");
+  static final System.Logger log = System.getLogger("io.avaje.webview");
 
-    private final WebviewNative N;
-    private final long $pointer;
+  private final WebviewNative N;
+  private final MemorySegment webview;
+  private final Arena arena;
 
-    public static WebviewBuilder builder() {
-        return new WebviewBuilder();
+  public static WebviewBuilder builder() {
+    return new WebviewBuilder();
+  }
+
+  Webview(
+      WebviewNative n,
+      boolean debug,
+      @Nullable MemorySegment windowPointer,
+      int width,
+      int height) {
+    this.N = n;
+    this.arena = Arena.ofShared();
+    this.webview =
+        N.webview_create(debug, windowPointer == null ? MemorySegment.NULL : windowPointer);
+    this.setSize(width, height);
+  }
+
+  /**
+   * @deprecated Use this only if you absolutely know what you're doing.
+   */
+  @Deprecated
+  public MemorySegment getNativeWindowPointer() {
+    return N.webview_get_window(webview);
+  }
+
+  public void setHTML(@Nullable String html) {
+    N.webview_set_html(webview, html);
+  }
+
+  public void loadURL(@Nullable String url) {
+    if (url == null) {
+      url = "about:blank";
     }
+    N.webview_navigate(webview, url);
+  }
 
-    Webview(WebviewNative n, boolean debug, @Nullable PointerByReference windowPointer, int width, int height) {
-        this.N = n;
-        this.$pointer = N.webview_create(debug, windowPointer);
-        // this.loadURL(null);
-        this.setSize(width, height);
-    }
+  public void setTitle(@NonNull String title) {
+    N.webview_set_title(webview, title);
+  }
 
-    /**
-     * @deprecated Use this only if you absolutely know what you're doing.
-     */
-    @Deprecated
-    public long getNativeWindowPointer() {
-        return N.webview_get_window($pointer);
-    }
+  public void setMinSize(int width, int height) {
+    N.webview_set_size(webview, width, height, WV_HINT_MIN);
+  }
 
-    public void setHTML(@Nullable String html) {
-        N.webview_set_html($pointer, html);
-    }
+  public void setMaxSize(int width, int height) {
+    N.webview_set_size(webview, width, height, WV_HINT_MAX);
+  }
 
-    public void loadURL(@Nullable String url) {
-        if (url == null) {
-            url = "about:blank";
-        }
-        N.webview_navigate($pointer, url);
-    }
+  public void setSize(int width, int height) {
+    N.webview_set_size(webview, width, height, WV_HINT_NONE);
+  }
 
-    public void setTitle(@NonNull String title) {
-        N.webview_set_title($pointer, title);
-    }
+  public void setFixedSize(int width, int height) {
+    N.webview_set_size(webview, width, height, WV_HINT_FIXED);
+  }
 
-    public void setMinSize(int width, int height) {
-        N.webview_set_size($pointer, width, height, WV_HINT_MIN);
-    }
+  /**
+   * Sets the script to be run on page load. Defaults to no nested access (false).
+   *
+   * @implNote This get's called AFTER window.load.
+   * @param script
+   * @see #setInitScript(String, boolean)
+   */
+  public void setInitScript(@NonNull String script) {
+    this.setInitScript(script, false);
+  }
 
-    public void setMaxSize(int width, int height) {
-        N.webview_set_size($pointer, width, height, WV_HINT_MAX);
-    }
-
-    public void setSize(int width, int height) {
-        N.webview_set_size($pointer, width, height, WV_HINT_NONE);
-    }
-
-    public void setFixedSize(int width, int height) {
-        N.webview_set_size($pointer, width, height, WV_HINT_FIXED);
-    }
-
-    /**
-     * Sets the script to be run on page load. Defaults to no nested access (false).
-     * 
-     * @implNote        This get's called AFTER window.load.
-     * 
-     * @param    script
-     * 
-     * @see             #setInitScript(String, boolean)
-     */
-    public void setInitScript(@NonNull String script) {
-        this.setInitScript(script, false);
-    }
-
-    /**
-     * Sets the script to be run on page load.
-     * 
-     * @implNote                   This get's called AFTER window.load.
-     * 
-     * @param    script
-     * @param    allowNestedAccess whether or not to inject the script into nested
-     *                             iframes.
-     */
-    public void setInitScript(@NonNull String script, boolean allowNestedAccess) {
-        script = String.format(
+  /**
+   * Sets the script to be run on page load.
+   *
+   * @implNote This get's called AFTER window.load.
+   * @param script
+   * @param allowNestedAccess whether or not to inject the script into nested iframes.
+   */
+  public void setInitScript(@NonNull String script, boolean allowNestedAccess) {
+    script =
+        String.format(
             "(() => {\n"
                 + "try {\n"
                 + "if (window.top == window.self || %b) {\n"
@@ -141,154 +144,174 @@ public final class Webview implements Closeable, Runnable {
                 + "console.error('[Webview]', 'An error occurred whilst evaluating init script:', %s, e);\n"
                 + "}\n"
                 + "})();",
-            allowNestedAccess,
-            script,
-            '"' + _WebviewUtil.jsonEscape(script) + '"'
-        );
+            allowNestedAccess, script, '"' + _WebviewUtil.jsonEscape(script) + '"');
 
-        N.webview_init($pointer, script);
-    }
+    N.webview_init(webview, script);
+  }
 
-    /**
-     * Executes the given script NOW.
-     * 
-     * @param script
-     */
-    public void eval(@NonNull String script) {
-        this.dispatch(() -> {
-            N.webview_eval(
-                $pointer,
-                String.format(
-                    "try {\n"
-                        + "%s\n"
-                        + "} catch (e) {\n"
-                        + "console.error('[Webview]', 'An error occurred whilst evaluating script:', %s, e);\n"
-                        + "}",
-                    script,
-                    '"' + _WebviewUtil.jsonEscape(script) + '"'
-                )
-            );
+  /**
+   * Executes the given script NOW.
+   *
+   * @param script
+   */
+  public void eval(@NonNull String script) {
+    this.dispatch(
+        () -> {
+          N.webview_eval(
+              webview,
+              String.format(
+                  "try {\n"
+                      + "%s\n"
+                      + "} catch (e) {\n"
+                      + "console.error('[Webview]', 'An error occurred whilst evaluating script:', %s, e);\n"
+                      + "}",
+                  script, '"' + _WebviewUtil.jsonEscape(script) + '"'));
         });
-    }
+  }
 
-    /**
-     * Binds a function to the JavaScript environment on page load.
-     * 
-     * @implNote         This get's called AFTER window.load.
-     * 
-     * @implSpec         After calling the function in JavaScript you will get a
-     *                   Promise instead of the value. This is to prevent you from
-     *                   locking up the browser while waiting on your Java code to
-     *                   execute and generate a return value.
-     * 
-     * @param    name    The name to be used for the function, e.g "foo" to get
-     *                   foo().
-     * @param    handler The callback handler, accepts a JsonArray (which are all
-     *                   arguments passed to the function()) and returns a value
-     *                   which is of type JsonElement (can be null). Exceptions are
-     *                   automatically passed back to JavaScript.
-     */
-    public void bind(@NonNull String name, @NonNull WebviewBindCallback handler) {
-        N.webview_bind($pointer, name, new BindCallback() {
-            @Override
-            public void callback(long seq, String req, long arg) {
-                try {
-                    req = _WebviewUtil.forceSafeChars(req);
+  /**
+   * Binds a function to the JavaScript environment on page load.
+   *
+   * @implNote This get's called AFTER window.load.
+   * @implSpec After calling the function in JavaScript you will get a Promise instead of the value.
+   *     This is to prevent you from locking up the browser while waiting on your Java code to
+   *     execute and generate a return value.
+   * @param name The name to be used for the function, e.g "foo" to get foo().
+   * @param handler The callback handler, accepts a JsonArray (which are all arguments passed to the
+   *     function()) and returns a value which is of type JsonElement (can be null). Exceptions are
+   *     automatically passed back to JavaScript.
+   */
+  public void bind(@NonNull String name, @NonNull WebviewBindCallback handler) {
+    BindCallback callback =
+        (seq, req, arg) -> {
+          try {
+            req = _WebviewUtil.forceSafeChars(req);
 
-                    String result = handler.apply(req);
-                    if (result == null) {
-                        result = "null";
-                    }
-
-                    N.webview_return($pointer, seq, false, _WebviewUtil.forceSafeChars(result));
-                } catch (Throwable e) {
-                    e.printStackTrace();
-
-                    String exceptionJson = '"' + _WebviewUtil.jsonEscape(_WebviewUtil.getExceptionStack(e)) + '"';
-
-                    N.webview_return($pointer, seq, true, exceptionJson);
-                }
+            String result = handler.apply(req);
+            if (result == null) {
+              result = "null";
             }
-        }, 0);
+
+            N.webview_return(webview, seq, false, _WebviewUtil.forceSafeChars(result));
+          } catch (Throwable e) {
+            e.printStackTrace();
+
+            String exceptionJson =
+                '"' + _WebviewUtil.jsonEscape(_WebviewUtil.getExceptionStack(e)) + '"';
+
+            N.webview_return(webview, seq, true, exceptionJson);
+          }
+        };
+
+    // Create upcall stub for the callback
+    MemorySegment callbackStub =
+        Linker.nativeLinker()
+            .upcallStub(createBindCallbackHandle(callback), BindCallback.DESCRIPTOR, arena);
+
+    N.webview_bind(webview, name, callbackStub, 0);
+  }
+
+  private static MethodHandle createBindCallbackHandle(BindCallback callback) {
+    try {
+      return MethodHandles.lookup()
+          .bind(
+              callback,
+              "callback",
+              MethodType.methodType(
+                  void.class, long.class, MemorySegment.class, long.class))
+          .asType(
+              MethodType.methodType(
+                  void.class, long.class, MemorySegment.class, long.class));
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to create callback handle", e);
     }
+  }
 
-    /**
-     * Unbinds a function, removing it from future pages.
-     * 
-     * @param name The name of the function.
-     */
-    public void unbind(@NonNull String name) {
-        N.webview_unbind($pointer, name);
+  /**
+   * Unbinds a function, removing it from future pages.
+   *
+   * @param name The name of the function.
+   */
+  public void unbind(@NonNull String name) {
+    N.webview_unbind(webview, name);
+  }
+
+  /**
+   * Executes an event on the event thread.
+   *
+   * @deprecated Use this only if you absolutely know what you're doing.
+   */
+  @Deprecated
+  public void dispatch(@NonNull Runnable handler) {
+    DispatchCallback callback = (wv, arg) -> handler.run();
+
+    // Create upcall stub for the dispatch callback
+    MemorySegment callbackStub =
+        Linker.nativeLinker()
+            .upcallStub(createDispatchCallbackHandle(callback), DispatchCallback.DESCRIPTOR, arena);
+
+    N.webview_dispatch(webview, callbackStub, 0);
+  }
+
+  private static MethodHandle createDispatchCallbackHandle(
+      DispatchCallback callback) {
+    try {
+      return MethodHandles.lookup()
+          .bind(
+              callback,
+              "callback",
+              MethodType.methodType(void.class, MemorySegment.class, long.class));
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to create callback handle", e);
     }
+  }
 
-    /**
-     * Executes an event on the event thread.
-     * 
-     * @deprecated Use this only if you absolutely know what you're doing.
-     */
-    @Deprecated
-    public void dispatch(@NonNull Runnable handler) {
-        N.webview_dispatch($pointer, ($pointer, arg) -> {
-            handler.run();
-        }, 0);
+  /**
+   * Executes the webview event loop until the user presses "X" on the window.
+   *
+   * @see #close()
+   */
+  @Override
+  public void run() {
+    N.webview_run(webview);
+    log.log(DEBUG, "destroy and terminate");
+    N.webview_destroy(webview);
+    N.webview_terminate(webview);
+  }
+
+  /**
+   * Executes the webview event loop asynchronously until the user presses "X" on the window.
+   *
+   * @see #close()
+   */
+  public void runAsync() {
+    Thread t = new Thread(this);
+    t.setDaemon(false);
+    t.setName("Webview RunAsync Thread - #" + this.hashCode());
+    t.start();
+  }
+
+  /** Closes the webview, call this to end the event loop and free up resources. */
+  @Override
+  public void close() {
+    log.log(DEBUG, "close");
+    N.webview_terminate(webview);
+    arena.close();
+  }
+
+  public void setDarkAppearance(boolean shouldAppearDark) {
+    switch (Platform.osFamily) {
+      case WINDOWS:
+        _WindowsHelper.setWindowAppearance(this, shouldAppearDark);
+        break;
+
+      default: // NOOP
+        break;
     }
+  }
 
-    /**
-     * Executes the webview event loop until the user presses "X" on the window.
-     * 
-     * @see #close()
-     */
-    @Override
-    public void run() {
-        N.webview_run($pointer);
-        log.log(DEBUG, "destroy and terminate");
-        N.webview_destroy($pointer);
-        N.webview_terminate($pointer);
-    }
-
-    /**
-     * Executes the webview event loop asynchronously until the user presses "X" on
-     * the window.
-     * 
-     * @see #close()
-     */
-    public void runAsync() {
-        Thread t = new Thread(this);
-        t.setDaemon(false);
-        t.setName("Webview RunAsync Thread - #" + this.hashCode());
-        t.start();
-    }
-
-    /**
-     * Closes the webview, call this to end the event loop and free up resources.
-     */
-    @Override
-    public void close() {
-        log.log(DEBUG, "close");
-        N.webview_terminate($pointer);
-    }
-
-    public void setDarkAppearance(boolean shouldAppearDark) {
-        switch (Platform.osFamily) {
-            case WINDOWS:
-                _WindowsHelper.setWindowAppearance(this, shouldAppearDark);
-                break;
-
-            default: // NOOP
-                break;
-        }
-    }
-
-    public String getVersion() {
-        byte[] bytes = N.webview_version().version_number;
-        int length = 0;
-        for (byte b : bytes) {
-            if (b == 0) {
-                break;
-            }
-            length++;
-        }
-        return new String(bytes, 0, length);
-    }
-
+  public String getVersion() {
+    VersionInfo versionInfo = N.webview_version();
+    return versionInfo.versionNumber();
+  }
 }
