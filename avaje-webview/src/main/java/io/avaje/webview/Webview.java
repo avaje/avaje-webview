@@ -56,7 +56,7 @@ public final class Webview implements Closeable, Runnable {
 
   private final WebviewNative N;
   private final MemorySegment webview;
-  private final Arena arena;
+  private final Arena arena = Arena.ofShared();
 
   public static WebviewBuilder builder() {
     return new WebviewBuilder();
@@ -69,7 +69,6 @@ public final class Webview implements Closeable, Runnable {
       int width,
       int height) {
     this.N = n;
-    this.arena = Arena.ofShared();
     this.webview =
         N.webview_create(debug, windowPointer == null ? MemorySegment.NULL : windowPointer);
     this.setSize(width, height);
