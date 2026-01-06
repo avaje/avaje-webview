@@ -2,7 +2,7 @@
 module io.avaje.webview {
 
   requires org.jspecify;
-  requires java.desktop;
+  requires static java.desktop;
 
   exports io.avaje.webview;
 
