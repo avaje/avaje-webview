@@ -11,6 +11,42 @@
   "resources": [
     {
       "glob": "io/avaje/webview/nativelib/**"
+    },
+    {
+      "glob": "static/**"
     }
-  ]
+  ],
+  "foreign": {
+    "downcalls": [
+      {
+        "returnType": "void",
+        "parameterTypes": [
+          "void*",
+          "jint",
+          "jint",
+          "jint"
+        ]
+      },
+      {
+        "returnType": "void",
+        "parameterTypes": [
+          "void*",
+          "void*"
+        ]
+      },
+      {
+        "returnType": "void",
+        "parameterTypes": [
+          "void*"
+        ]
+      },
+      {
+        "returnType": "void*",
+        "parameterTypes": [
+          "jboolean",
+          "void*"
+        ]
+      }
+    ]
+  }
 }
