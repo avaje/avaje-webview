@@ -102,6 +102,7 @@
                                         <jvmArg>--enable-native-access=ALL-UNNAMED</jvmArg>
                                     </jvmArgs>
                                     <buildArgs>
+                                        <buildArg>-Ob</buildArg> <!-- fast build -->
                                         <buildArg>-R:MaxHeapSize=200m</buildArg>
                                         <buildArg>--emit build-report</buildArg>
                                         <buildArg>--no-fallback</buildArg>
