@@ -7,19 +7,24 @@ Example uses:
 - Uses Bootstrap 5.3 - https://getbootstrap.com/
 - Uses HTMX 
 
-## Interesting notes
-- Need buildArg `-H:+SharedArenaSupport`
-
 
 ## To build as a single executable
 ```shell
-mvn package -Pnative
+mvn clean package -Pnative
 ```
 
 ## Run it
+Specify `data.dir` as a system property.
+
 ```shell
-./target/htmx-jex-bootstrap -Dlogger.config=logger.properties
+./target/htmx-jex-bootstrap
 ```
+
+Override the source data directory that contains the "knowledge base" (templates, docs, snippets etc)
+```shell
+./target/htmx-jex-bootstrap -Ddata.dir=data
+```
+
 
 Override the logging configuration using `-Dlogger.config`
 ```shell
@@ -29,5 +34,5 @@ Override the logging configuration using `-Dlogger.config`
 Run it on a specific port via `-Dhttp.port=8092` (rather than use random port). 
 With this we can use a normal browser against the http server:
 ```shell
-./target/htmx-jex-bootstrap -Dlogger.config=logger.properties -Dhttp.port=8092
+./target/htmx-jex-bootstrap -Dhttp.port=8092
 ```

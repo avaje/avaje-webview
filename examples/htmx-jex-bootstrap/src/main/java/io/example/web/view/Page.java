@@ -5,6 +5,6 @@ import io.jstach.jstache.JStache;
 public class Page {
 
     @JStache(path = "index")
-    public record Index(){}
+    public record Index(long kbaseCount, long taskCount){}
 
 }

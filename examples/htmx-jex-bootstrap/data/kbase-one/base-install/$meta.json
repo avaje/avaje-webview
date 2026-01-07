@@ -1,0 +1,7 @@
+{
+  "type": "docs",
+  "displayName": "Base install sdkman, java, maven, intellij",
+  "searchKeywords": "mvn docs development tooling",
+  "priority": 1000,
+  "description": "Install base tooling for Java development"
+}

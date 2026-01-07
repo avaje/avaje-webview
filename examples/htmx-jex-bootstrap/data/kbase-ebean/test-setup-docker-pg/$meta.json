@@ -1,0 +1,7 @@
+{
+  "type": "addCode",
+  "displayName": "Ebean test setup for Postgres docker container",
+  "searchKeywords": "",
+  "priority": 1000,
+  "description": ""
+}
