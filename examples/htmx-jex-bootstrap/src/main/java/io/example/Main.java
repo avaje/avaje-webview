@@ -7,6 +7,7 @@ import io.avaje.webview.Webview;
 import static java.lang.System.Logger.Level.DEBUG;
 
 public class Main {
+
     static final System.Logger log = System.getLogger("app");
 
     static void main(String[] args) {
@@ -28,8 +29,7 @@ public class Main {
                 .build();
 
 
-        wv.run(); // Run the webview event loop, the webview is fully disposed when this returns.
-        // wv.close(); // Free any resources allocated.
+        wv.run();
         server.shutdown();
         log.log(DEBUG, "done");
     }

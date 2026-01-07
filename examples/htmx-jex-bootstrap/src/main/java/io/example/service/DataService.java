@@ -11,13 +11,15 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
 
+import static java.lang.System.Logger.Level.DEBUG;
+
 @Component
-public class DataService {
+public final class DataService {
 
     private static final System.Logger log = System.getLogger("app");
 
     private final Jsonb jsonb;
-    public Data data = new Data(List.of());
+    private Data data = new Data(List.of());
 
     DataService(Jsonb jsonb) {
         this.jsonb = jsonb;
@@ -39,13 +41,12 @@ public class DataService {
     }
 
     private Optional<Data> loadPath(String path) {
-        File dataDir = new File(path);
+        var dataDir = new File(path);
         if (!dataDir.exists()) {
             return Optional.empty();
         }
-        log.log(System.Logger.Level.DEBUG, "Load data from {0}", dataDir.getAbsolutePath());
-        var dataLoader = new DataLoader(jsonb);
-        return Optional.of(dataLoader.load(dataDir));
+        log.log(DEBUG, "Load data from {0}", dataDir.getAbsolutePath());
+        return Optional.of(DataLoader.load(jsonb, dataDir));
     }
 
     public List<Task> searchTasks(String search, int limit) {

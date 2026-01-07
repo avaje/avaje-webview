@@ -24,7 +24,6 @@ class DataLoaderTest {
     static Data loadTestData() {
         var parentFile = new File(".").getParentFile();
         var dir = new File(parentFile, "data");
-        var dataLoader = new DataLoader(Jsonb.builder().build());
-        return dataLoader.load(dir);
+        return DataLoader.load(Jsonb.builder().build(), dir);
     }
 }

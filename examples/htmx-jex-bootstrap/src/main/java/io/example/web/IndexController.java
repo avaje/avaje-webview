@@ -16,7 +16,7 @@ import java.util.List;
 @Controller
 final class IndexController {
 
-    final DataService dataService;
+    private final DataService dataService;
 
     IndexController(DataService dataService) {
         this.dataService = dataService;
