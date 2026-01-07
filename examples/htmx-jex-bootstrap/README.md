@@ -36,3 +36,7 @@ With this we can use a normal browser against the http server:
 ```shell
 ./target/htmx-jex-bootstrap -Dhttp.port=8092
 ```
+
+## Screenshot
+
+<img src="screenshot.png">
