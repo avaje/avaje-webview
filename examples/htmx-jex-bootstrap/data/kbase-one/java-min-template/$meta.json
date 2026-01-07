@@ -1,0 +1,7 @@
+{
+  "type": "template",
+  "displayName": "Java Hello World application template (maven)",
+  "searchKeywords": "mvn",
+  "priority": 1000,
+  "description": "Create a minimal java 25 application"
+}

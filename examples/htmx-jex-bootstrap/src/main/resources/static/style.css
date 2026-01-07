@@ -5,3 +5,12 @@
     border: 3px solid black;
     height: 700px;
 }
+#detail-summary h3 {
+  font-size: calc(0.8rem + 0.6vw);
+}
+#detail-summary h4,h5 {
+  font-size: calc(0.7rem + 0.6vw);
+}
+#detail-summary h1,h2 {
+  font-size: calc(0.9rem + 0.6vw);
+}
