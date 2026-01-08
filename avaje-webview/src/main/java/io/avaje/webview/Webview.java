@@ -216,7 +216,7 @@ public final class Webview implements Closeable, Runnable {
       return MethodHandles.lookup()
           .bind(
               callback,
-              "callback",
+              "actualCallBack",
               MethodType.methodType(
                   void.class, long.class, MemorySegment.class, long.class))
           .asType(
