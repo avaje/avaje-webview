@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pulse Focus</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    
+    <style>
+        /* Mobile App Feel */
+        body {
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            overscroll-behavior-y: contain;
+        }
+
+        /* Smooth HTMX Transitions */
+        .htmx-added {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        .htmx-settling {
+            opacity: 1;
+            transform: translateY(0);
+            transition: all 0.3s ease-out;
+        }
+
+        /* Custom tabular numbers for the timer */
+        .timer-font {
+            font-variant-numeric: tabular-nums;
+            font-feature-settings: "tnum";
+        }
+
+        /* Loading Indicator Animation */
+        .loader-dots:after {
+            content: '.';
+            animation: dots 1.5s steps(5, end) infinite;
+        }
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60% { content: '...'; }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans">
+
+    <header class="pt-14 pb-6 px-6 bg-white/80 backdrop-blur-md sticky top-0 z-10 border-b border-slate-200">
+        <div class="flex justify-between items-center">
+            <div>
+                <h1 class="text-xs font-black tracking-[0.2em] text-slate-400 uppercase">Focus App</h1>
+                <p class="text-xl font-bold">Pulse</p>
+            </div>
+            <div id="daily-badge" class="bg-indigo-600 text-white text-xs font-bold px-4 py-2 rounded-full shadow-lg shadow-indigo-200 transition-all">
+                0 SESSIONS
+            </div>
+        </div>
+    </header>
+
+    <main class="p-6 space-y-8">
+        
+        <section id="timer-display" 
+                 hx-get="/timer/status" 
+                 hx-trigger="load"
+                 class="bg-white p-10 rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-slate-100 text-center transition-all">
+            <div class="timer-font text-7xl font-black text-slate-800 mb-2" id="timer-value">
+                25:00
+            </div>
+            <p class="text-slate-400 font-medium">Ready to begin?</p>
+            
+            <div class="mt-10 flex gap-4">
+                <button onclick="startTimer()" 
+                        class="flex-[2] bg-indigo-600 text-white py-4 rounded-2xl font-bold active:scale-95 transition-transform shadow-lg shadow-indigo-100">
+                    Start Session
+                </button>
+                <button onclick="resetTimer()" 
+                        class="flex-1 bg-slate-100 text-slate-500 py-4 rounded-2xl font-bold active:scale-95 transition-transform">
+                    Reset
+                </button>
+            </div>
+        </section>
+
+        <section>
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="font-bold text-xl text-slate-800">Today's Goals</h2>
+                <div class="htmx-indicator inline-flex items-center text-indigo-600 text-xs font-bold uppercase tracking-widest">
+                    <span class="loader-dots text-lg">Updating</span>
+                </div>
+            </div>
+
+            <ul id="task-list" class="space-y-4">
+                <li class="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-between group">
+                    <div class="flex flex-col">
+                        <span class="font-semibold text-slate-700">Daily Standup</span>
+                        <span class="text-xs text-slate-400 font-medium italic">Example Task</span>
+                    </div>
+                    <button hx-post="/tasks/complete" 
+                            hx-target="closest li" 
+                            hx-swap="outerHTML"
+                            class="w-8 h-8 rounded-full border-2 border-slate-200 hover:border-indigo-500 active:bg-indigo-500 transition-all shadow-inner">
+                    </button>
+                </li>
+            </ul>
+
+            <form hx-post="/tasks/add" 
+                  hx-target="#task-list" 
+                  hx-swap="beforeend" 
+                  hx-on::after-request="this.reset()"
+                  class="mt-6 relative">
+                <input type="text" 
+                       name="task_name" 
+                       required
+                       placeholder="What's next?" 
+                       class="w-full bg-white border border-slate-200 p-5 rounded-3xl shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all placeholder:text-slate-300">
+                <button type="submit" class="absolute right-4 top-1/2 -translate-y-1/2 bg-slate-800 text-white p-2 px-4 rounded-2xl text-sm font-bold">
+                    Add
+                </button>
+            </form>
+        </section>
+
+    </main>
+
+    <div id="global-loader" class="htmx-indicator fixed bottom-8 left-1/2 -translate-x-1/2 z-50">
+        <div class="bg-slate-900 text-white px-6 py-3 rounded-full text-xs font-bold shadow-2xl flex items-center gap-3">
+            <svg class="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            SYNCING WITH SERVER
+        </div>
+    </div>
+
+    <script>
+        let timerInterval = null;
+        
+        async function startTimer() {
+            if (typeof window.__timerStart__ !== 'function') return;
+            
+            // Notify backend to start
+            await window.__timerStart__();
+            
+            // Start countdown
+            let secondsLeft = 25 * 60;
+            const timerEl = document.getElementById('timer-value');
+            const container = document.getElementById('timer-display');
+            
+            // Update UI to show active state
+            timerEl.className = 'timer-font text-7xl font-black text-indigo-600 mb-2';
+            container.querySelector('p').textContent = 'Focus Mode Active';
+            container.querySelector('p').className = 'text-indigo-400 font-medium animate-pulse';
+            
+            // Replace buttons
+            container.querySelector('.flex.gap-4').innerHTML = `
+                <button onclick="stopTimer()" 
+                        class="flex-1 bg-red-500 text-white py-4 rounded-2xl font-bold active:scale-95 transition-transform shadow-lg shadow-red-100">
+                    Stop
+                </button>
+            `;
+            
+            function updateDisplay() {
+                const mins = Math.floor(secondsLeft / 60);
+                const secs = secondsLeft % 60;
+                timerEl.textContent = String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+            }
+            
+            updateDisplay();
+            
+            timerInterval = setInterval(async () => {
+                secondsLeft--;
+                
+                if (secondsLeft <= 0) {
+                    clearInterval(timerInterval);
+                    timerInterval = null;
+                    timerEl.textContent = '00:00';
+                    timerEl.className = 'timer-font text-7xl font-black text-green-600 mb-2';
+                    
+                    // Notify backend of completion
+                    await window.__timerComplete__();
+                    
+                    // Update badge
+                    const badge = document.getElementById('daily-badge');
+                    const sessions = await window.__getCompletedSessions__();
+                    badge.textContent = sessions + ' SESSIONS';
+                    badge.className = 'bg-green-600 text-white text-xs font-bold px-4 py-2 rounded-full shadow-lg shadow-green-200 transition-all';
+                    
+                    // Show completion message
+                    container.querySelector('p').textContent = 'Session Complete! 🎉';
+                    container.querySelector('p').className = 'text-green-400 font-medium';
+                    
+                    setTimeout(() => {
+                        htmx.ajax('GET', '/timer/status', {target: '#timer-display'});
+                    }, 2000);
+                } else {
+                    updateDisplay();
+                }
+            }, 1000);
+        }
+        
+        async function stopTimer() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+            
+            if (typeof window.__timerCancel__ === 'function') {
+                // Notify backend of cancellation
+                await window.__timerCancel__();
+            }
+            
+            // Reload timer display
+            htmx.ajax('GET', '/timer/status', {target: '#timer-display'});
+        }
+        
+        // Reset timer function for initial page load
+        async function resetTimer() {
+            if (typeof window.__timerCancel__ === 'function') {
+                await window.__timerCancel__();
+                htmx.ajax('GET', '/timer/status', {target: '#timer-display'});
+            }
+        }
+        
+        // Use this to trigger native mobile features from HTMX events
+        document.body.addEventListener('htmx:afterOnLoad', function(evt) {
+            if (evt.detail.target.id === 'timer-display') {
+                console.log('Timer view updated via Jex');
+            }
+        });
+    </script>
+
+</body>
+</html>

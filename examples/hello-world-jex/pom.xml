@@ -27,7 +27,7 @@
 
         <dependency>
             <groupId>io.avaje</groupId>
-            <artifactId>avaje-jex</artifactId>
+            <artifactId>avaje-jex-static-content</artifactId>
             <version>3.3</version>
         </dependency>
 

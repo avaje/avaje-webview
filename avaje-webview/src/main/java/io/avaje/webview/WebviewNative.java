@@ -189,6 +189,10 @@ interface WebviewNative {
      */
     void callback(long seq, String req, long arg);
 
+    default void actualCallBack(long seq, MemorySegment req, long arg) {
+      callback(seq, req.byteSize() == 0 ? "" : req.getString(0), arg);
+    }
+
     FunctionDescriptor DESCRIPTOR =
         FunctionDescriptor.ofVoid(
             JAVA_LONG, // seq
