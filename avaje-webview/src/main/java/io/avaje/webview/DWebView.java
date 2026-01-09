@@ -72,7 +72,7 @@ final class DWebView implements Webview {
   private final boolean async;
   private boolean running;
 
-  private CountDownLatch countDownLatch;
+  private CompletableFuture<Void> startFuture;
 
   private Thread uiThread;
 
@@ -100,8 +100,8 @@ final class DWebView implements Webview {
       return wbNative.webview_create(
           debug, windowPointer == null ? MemorySegment.NULL : windowPointer);
     }
-    this.countDownLatch = new CountDownLatch(1);
-    var future = new CompletableFuture<MemorySegment>();
+    this.startFuture = new CompletableFuture<>();
+    var nativeFuture = new CompletableFuture<MemorySegment>();
     this.uiThread =
         Thread.ofPlatform()
             .daemon(false)
@@ -111,16 +111,12 @@ final class DWebView implements Webview {
                   var web =
                       wbNative.webview_create(
                           debug, windowPointer == null ? MemorySegment.NULL : windowPointer);
-                  future.complete(web);
-                  try {
-                    countDownLatch.await();
-                    start();
-                  } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                  }
+                  nativeFuture.complete(web);
+                  startFuture.join();
+                  start();
                 });
 
-    return future.join();
+    return nativeFuture.join();
   }
 
   /**
@@ -218,7 +214,7 @@ final class DWebView implements Webview {
    */
   @Override
   public void eval(@NonNull String script) {
-    this.dispatch(
+    dispatch(
         () -> {
           wbNative.webview_eval(
               webview,
@@ -357,7 +353,7 @@ final class DWebView implements Webview {
       return;
     }
     if (async) {
-      countDownLatch.countDown();
+      startFuture.complete(null);
       return;
     }
     start();
@@ -388,7 +384,7 @@ final class DWebView implements Webview {
   @Override
   public Webview maximizeWindow() {
     if (WINDOWS.equals(OS_FAMILY)) {
-      WindowsHelper.maximizeWindow(this);
+      handleDispatch(() -> WindowsHelper.maximizeWindow(this));
     }
     return this;
   }
@@ -396,7 +392,7 @@ final class DWebView implements Webview {
   @Override
   public Webview fullscreen() {
     if (WINDOWS.equals(OS_FAMILY)) {
-      WindowsHelper.fullscreen(this);
+      handleDispatch(() -> WindowsHelper.fullscreen(this));
     }
     return this;
   }
