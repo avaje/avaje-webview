@@ -52,7 +52,7 @@ public enum OSDistribution {
     this.regex = Pattern.compile(regex);
   }
 
-  static OSDistribution get(OSFamily family) {
+  public static OSDistribution get(OSFamily family) {
     // If the OS Family is MS DOS then we can't detect it via normal means.
     // One way is to match path separator which changed in Windows 9x.
     if ((family == OSFamily.DOS) && ";".equals(System.getProperty("path.separator", ""))) {
@@ -61,8 +61,7 @@ public enum OSDistribution {
 
     String osName = System.getProperty("os.name", "<blank>").toLowerCase();
     for (OSDistribution os : values()) {
-      if (os.family != family) continue;
-      if (!os.regex.matcher(osName).find()) continue;
+      if (os.family != family || !os.regex.matcher(osName).find()) continue;
       return os;
     }
     return GENERIC;
