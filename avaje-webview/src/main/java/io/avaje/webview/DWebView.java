@@ -105,10 +105,15 @@ final class DWebView implements Webview {
             .name("Webview RunAsync Thread - #" + this.hashCode())
             .start(
                 () -> {
-                  var web =
-                      wbNative.webview_create(
-                          debug, windowPointer == null ? MemorySegment.NULL : windowPointer);
-                  nativeFuture.complete(web);
+                  try {
+                    var web =
+                        wbNative.webview_create(
+                            debug, windowPointer == null ? MemorySegment.NULL : windowPointer);
+                    nativeFuture.complete(web);
+                  } catch (Exception e) {
+                    nativeFuture.completeExceptionally(e);
+                    return;
+                  }
                   LockSupport.park();
                   if (!Thread.interrupted()) {
                     start();
