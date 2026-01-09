@@ -23,24 +23,6 @@ public class Main {
             .plugin(StaticContent.ofClassPath("/static/favicon.ico").route("/favicon.ico").build())
             .plugin(StaticContent.ofClassPath("/static/index.html").route("/").build())
             .get("/timer/status", Main::countDown)
-            // Start Timer (just updates backend state, no HTML response needed)
-            .post(
-                "/timer/start",
-                ctx -> {
-                  timerActive = true;
-                  startTime = LocalDateTime.now();
-                  ctx.html("");
-                })
-
-            // Stop/Reset Timer
-            .post(
-                "/timer/stop",
-                ctx -> {
-                  timerActive = false;
-                  startTime = null;
-                  ctx.redirect("/timer/status");
-                })
-
             // Add Task
             .post(
                 "/tasks/add",
@@ -60,13 +42,6 @@ public class Main {
                     ctx.html(taskHtml);
                   }
                 })
-
-            // Complete Task
-            .post(
-                "/tasks/complete",
-                ctx -> {
-                  ctx.html("");
-                })
             .port(0) // random port
             .start();
 
@@ -74,8 +49,7 @@ public class Main {
 
     try {
       Webview webview =
-          Webview.builder().title("Pulse Focus").url("http://localhost:" + port).build();
-
+          Webview.builder().title("Pulse Focus").url("http://localhost:" + port).enableDeveloperTools(true).build();
       // Bind function to start the timer
       webview.bind(
           "__timerStart__",
@@ -105,10 +79,10 @@ public class Main {
 
       // Bind function to get completed sessions count
       webview.bind("__getCompletedSessions__", _ -> String.valueOf(completedTasks));
-
+      webview.maximizeWindow();
       webview.run();
     } finally {
-      server.shutdown();
+     server.shutdown();
     }
   }
 
