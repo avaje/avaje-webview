@@ -36,14 +36,6 @@ public class AWTWebview extends Canvas implements Closeable {
     return webview;
   }
 
-  public boolean isInitialized() {
-    return initialized;
-  }
-
-  public void setOnInitialized(Consumer<Webview> onInitialized) {
-    this.onInitialized = onInitialized;
-  }
-
   @Override
   public void paint(Graphics g) {
     Dimension size = this.getSize();
