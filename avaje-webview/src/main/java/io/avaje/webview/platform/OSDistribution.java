@@ -61,8 +61,7 @@ public enum OSDistribution {
 
     String osName = System.getProperty("os.name", "<blank>").toLowerCase();
     for (OSDistribution os : values()) {
-      if (os.family != family) continue;
-      if (!os.regex.matcher(osName).find()) continue;
+      if (os.family != family || !os.regex.matcher(osName).find()) continue;
       return os;
     }
     return GENERIC;

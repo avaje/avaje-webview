@@ -20,7 +20,9 @@
  */
 package io.avaje.webview;
 
+import static io.avaje.webview.platform.OSDistribution.MACOS;
 import static io.avaje.webview.platform.OSFamily.WINDOWS;
+import static io.avaje.webview.platform.Platform.OS_DISTRIBUTION;
 import static io.avaje.webview.platform.Platform.OS_FAMILY;
 import static java.lang.System.Logger.Level.DEBUG;
 import static java.lang.foreign.ValueLayout.ADDRESS;
@@ -329,23 +331,29 @@ final class DWebView implements Webview {
 
   @Override
   public void setDarkAppearance(boolean shouldAppearDark) {
-    if (WINDOWS.equals(OS_FAMILY)) {
+    if (WINDOWS == OS_FAMILY) {
       handleDispatch(() -> WindowsHelper.setWindowAppearance(this, shouldAppearDark));
+    } else if (OS_DISTRIBUTION == MACOS) {
+      handleDispatch(() -> MacOSHelper.setWindowAppearance(this, shouldAppearDark));
     }
   }
 
   @Override
   public Webview maximizeWindow() {
-    if (WINDOWS.equals(OS_FAMILY)) {
+    if (WINDOWS == OS_FAMILY) {
       handleDispatch(() -> WindowsHelper.maximizeWindow(this));
+    } else if (OS_DISTRIBUTION == MACOS) {
+      handleDispatch(() -> MacOSHelper.maximizeWindow(this));
     }
     return this;
   }
 
   @Override
   public Webview fullscreen() {
-    if (WINDOWS.equals(OS_FAMILY)) {
+    if (WINDOWS == OS_FAMILY) {
       handleDispatch(() -> WindowsHelper.fullscreen(this));
+    } else if (OS_DISTRIBUTION == MACOS) {
+      handleDispatch(() -> MacOSHelper.fullscreen(this));
     }
     return this;
   }
