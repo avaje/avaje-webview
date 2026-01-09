@@ -30,44 +30,6 @@ final class WebviewNative {
                 : "libwebview.so");
   }
 
-  /** Used in {@code webview_bind} */
-  @FunctionalInterface
-  interface BindCallback {
-    /**
-     * @param seq The request id, used in {@code webview_return}
-     * @param req The javascript arguments converted to a json array (string)
-     * @param arg Unused
-     */
-    void callback(long seq, String req, long arg);
-
-    default void actualCallBack(long seq, MemorySegment req, long arg) {
-      callback(seq, req.byteSize() == 0 ? "" : req.getString(0), arg);
-    }
-
-    FunctionDescriptor DESCRIPTOR =
-        FunctionDescriptor.ofVoid(
-            JAVA_LONG, // seq
-            ADDRESS, // req (char*)
-            JAVA_LONG // arg
-            );
-  }
-
-  /** Used in {@code webview_dispatch} */
-  @FunctionalInterface
-  interface DispatchCallback {
-    /**
-     * @param webview The pointer of the webview
-     * @param arg Unused
-     */
-    void callback(MemorySegment webview, long arg);
-
-    FunctionDescriptor DESCRIPTOR =
-        FunctionDescriptor.ofVoid(
-            ADDRESS, // webview pointer
-            JAVA_LONG // arg
-            );
-  }
-
   /** Version information structure */
   record VersionInfo(
       int major,
