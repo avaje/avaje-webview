@@ -7,6 +7,8 @@ import module java.desktop;
  * An AWT component which will automatically initialize the webview when it's considered "drawable".
  */
 public class AWTWebview extends Canvas implements Closeable {
+
+  @Serial
   private static final long serialVersionUID = 5199512256429931156L;
 
   private Webview webview;
@@ -32,14 +34,6 @@ public class AWTWebview extends Canvas implements Closeable {
 
   public Webview getWebview() {
     return webview;
-  }
-
-  public boolean isInitialized() {
-    return initialized;
-  }
-
-  public void setOnInitialized(Consumer<Webview> onInitialized) {
-    this.onInitialized = onInitialized;
   }
 
   @Override

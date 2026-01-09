@@ -1,13 +1,11 @@
 package io.avaje.webview;
 
+import module java.base;
+import module org.jspecify;
+import io.avaje.webview.platform.LinuxLibC;
+
 import static io.avaje.webview.platform.Platform.OS_DISTRIBUTION;
 import static io.avaje.webview.platform.Platform.archTarget;
-
-import module java.base;
-
-import module org.jspecify;
-
-import io.avaje.webview.platform.LinuxLibC;
 
 /**
  * Builder for Webview.
@@ -233,7 +231,8 @@ public final class WebviewBuilder {
 
   private static boolean extractToFile(String lib, File target) {
     try (InputStream in = WebviewNative.class.getResourceAsStream(lib.toLowerCase())) {
-      byte[] bytes = toBytes(in);
+      if (in == null) throw new IllegalStateException("Failed to access resource of native: "+ lib);
+      byte[] bytes = in.readAllBytes();
       Files.write(target.toPath(), bytes);
       return true;
     } catch (Exception e) {
@@ -243,25 +242,5 @@ public final class WebviewBuilder {
       }
       return false;
     }
-  }
-
-  private static byte[] toBytes(@NonNull InputStream source) throws IOException {
-    if (source == null) {
-      throw new NullPointerException("source is marked non-null but is null");
-    }
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    streamTransfer(source, out);
-    return out.toByteArray();
-  }
-
-  private static void streamTransfer(@NonNull InputStream source, @NonNull OutputStream dest)
-      throws IOException {
-    if (source == null) {
-      throw new NullPointerException("source is marked non-null but is null");
-    }
-    if (dest == null) {
-      throw new NullPointerException("dest is marked non-null but is null");
-    }
-    source.transferTo(dest);
   }
 }

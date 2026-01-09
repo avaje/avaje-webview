@@ -20,6 +20,7 @@
  */
 package io.avaje.webview;
 
+@FunctionalInterface
 public interface WebviewBindCallback {
 
   /**

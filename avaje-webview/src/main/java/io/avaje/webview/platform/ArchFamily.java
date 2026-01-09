@@ -20,28 +20,22 @@ public enum ArchFamily {
   SPARC("sparc", true, "sparc"),
   MIPS("mips", true, "mips"),
   S390("s390", true, "s390"),
-  RISCV("riscv", false, "riscv"),
-  ;
+  RISCV("riscv", false, "riscv");
 
   private final String name;
-  private final String regex;
+  private final Pattern regex;
 
   ArchFamily(String name, boolean isUsuallyBigEndian, String regex) {
     this.name = name;
-    this.regex = regex;
+    this.regex = Pattern.compile(regex);
   }
 
   static ArchFamily get() {
     String osArch = System.getProperty("os.arch", "<blank>").toLowerCase();
-
-    // Search the enums for a match, returning it.
     for (ArchFamily arch : values()) {
-      if (Pattern.compile(arch.regex).matcher(osArch).find()) {
+        if (!arch.regex.matcher(osArch).find()) continue;
         return arch;
-      }
     }
-
-    // Couldn't find a match.
     throw new UnsupportedOperationException("Unknown cpu arch: " + osArch);
   }
 

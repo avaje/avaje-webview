@@ -18,27 +18,23 @@ public enum OSFamily {
   WINDOWS("Windows", "win"),
   DOS("DOS", "dos"),
   VMS("VMS", "vms"),
-  GENERIC("Generic", ""),
-  ;
+  GENERIC("Generic", "");
 
   /** A friendly name for the family (e.g "Unix" or "Windows"). */
   public final String name;
 
-  private final String regex;
+  private final Pattern regex;
 
   OSFamily(String name, String regex) {
     this.name = name;
-    this.regex = regex;
+    this.regex = Pattern.compile(regex);
   }
 
   static OSFamily get() {
     String osName = System.getProperty("os.name", "<blank>").toLowerCase();
-
-    // Search the enums for a match, returning it.
-    for (OSFamily e : values()) {
-      if (Pattern.compile(e.regex).matcher(osName).find()) {
-        return e;
-      }
+    for (OSFamily family : values()) {
+        if (!family.regex.matcher(osName).find()) continue;
+        return family;
     }
     return GENERIC;
   }
