@@ -37,20 +37,19 @@ public enum OSDistribution {
   OPEN_VMS(VMS, "OpenVMS", "VMS", "vms"),
 
   /** This is the fallback, this is not to be considered to be a valid value. */
-  GENERIC(null, "Generic", "Generic", ""),
-  ;
+  GENERIC(null, "Generic", "Generic", "");
 
   private final OSFamily family;
 
   /** A friendly name for the distribution (e.g "macOS" or "Windows NT"). */
   private final String name;
 
-  private final String regex;
+  private final Pattern regex;
 
   OSDistribution(OSFamily family, String name, String target, String regex) {
     this.family = family;
     this.name = name;
-    this.regex = regex;
+    this.regex = Pattern.compile(regex);
   }
 
   static OSDistribution get(OSFamily family) {
@@ -61,20 +60,11 @@ public enum OSDistribution {
     }
 
     String osName = System.getProperty("os.name", "<blank>").toLowerCase();
-
-    // Loop through the distributions and find one that belongs to the
-    // detected family and matches the regex, returning it if so.
-    for (OSDistribution e : values()) {
-      if (e.family != family) {
-        continue;
-      }
-
-      if (Pattern.compile(e.regex).matcher(osName).find()) {
-        return e;
-      }
+    for (OSDistribution os : values()) {
+      if (os.family != family) continue;
+      if (!os.regex.matcher(osName).find()) continue;
+      return os;
     }
-
-    // Fallback.
     return GENERIC;
   }
 
