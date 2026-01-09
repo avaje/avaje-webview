@@ -72,8 +72,6 @@ final class DWebView implements Webview {
   private final boolean async;
   private boolean running;
 
-  private CompletableFuture<Void> startFuture;
-
   private Thread uiThread;
 
   public static WebviewBuilder builder() {
@@ -100,7 +98,6 @@ final class DWebView implements Webview {
       return wbNative.webview_create(
           debug, windowPointer == null ? MemorySegment.NULL : windowPointer);
     }
-    this.startFuture = new CompletableFuture<>();
     var nativeFuture = new CompletableFuture<MemorySegment>();
     this.uiThread =
         Thread.ofPlatform()
@@ -112,7 +109,7 @@ final class DWebView implements Webview {
                       wbNative.webview_create(
                           debug, windowPointer == null ? MemorySegment.NULL : windowPointer);
                   nativeFuture.complete(web);
-                  startFuture.join();
+                  LockSupport.park();
                   start();
                 });
 
@@ -353,7 +350,7 @@ final class DWebView implements Webview {
       return;
     }
     if (async) {
-      startFuture.complete(null);
+      LockSupport.unpark(uiThread);
       return;
     }
     start();
