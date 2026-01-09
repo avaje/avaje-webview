@@ -1,51 +1,47 @@
 /**
  * MIT LICENSE
  *
- * Copyright (c) 2024 Alex Bowles @ Casterlabs
+ * <p>Copyright (c) 2024 Alex Bowles @ Casterlabs
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
+ * <p>Permission is hereby granted, free of charge, to any person obtaining a copy of this software
+ * and associated documentation files (the "Software"), to deal in the Software without restriction,
+ * including without limitation the rights to use, copy, modify, merge, publish, distribute,
+ * sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
  *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
+ * <p>The above copyright notice and this permission notice shall be included in all copies or
+ * substantial portions of the Software.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * <p>THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
+ * BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+ * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 package io.avaje.webview;
-
-import io.avaje.webview.platform.Platform;
 
 import module java.base;
 import module org.jspecify;
 
 import static io.avaje.webview.WebviewNative.*;
+import static io.avaje.webview.platform.OSFamily.WINDOWS;
+import static io.avaje.webview.platform.Platform.OS_FAMILY;
 import static java.lang.System.Logger.Level.DEBUG;
 
 /**
  * Webview browser window.
  *
  * <pre>{@code
+ * Webview wv = Webview.builder()
+ *          .debug(true)
+ *          .title("My App")
+ *          .width(1000)
+ *          .height(800)
+ *          .url("http://localhost:" + port)
+ *          .build();
  *
- *    Webview wv = Webview.builder()
- *             .debug(true)
- *             .title("My App")
- *             .width(1000)
- *             .height(800)
- *             .url("http://localhost:" + port)
- *             .build();
- *
- *     wv.run(); // Run the webview event loop, the webview is fully disposed when this returns.
- *     wv.close(); // Free any resources allocated.
+ *  wv.run(); // Run the webview event loop, the webview is fully disposed when this returns.
+ *  wv.close(); // Free any resources allocated.
  *
  * }</pre>
  */
@@ -73,11 +69,8 @@ public final class Webview implements Closeable, Runnable {
     this.setSize(width, height);
   }
 
-  /**
-   * @deprecated Use this only if you absolutely know what you're doing.
-   */
-  @Deprecated
-  public MemorySegment getNativeWindowPointer() {
+  /** Use this only if you absolutely know what you're doing. */
+  public MemorySegment nativeWindowPointer() {
     return N.webview_get_window(webview);
   }
 
@@ -217,11 +210,8 @@ public final class Webview implements Closeable, Runnable {
           .bind(
               callback,
               "actualCallBack",
-              MethodType.methodType(
-                  void.class, long.class, MemorySegment.class, long.class))
-          .asType(
-              MethodType.methodType(
-                  void.class, long.class, MemorySegment.class, long.class));
+              MethodType.methodType(void.class, long.class, MemorySegment.class, long.class))
+          .asType(MethodType.methodType(void.class, long.class, MemorySegment.class, long.class));
     } catch (Exception e) {
       throw new RuntimeException("Failed to create callback handle", e);
     }
@@ -239,9 +229,8 @@ public final class Webview implements Closeable, Runnable {
   /**
    * Executes an event on the event thread.
    *
-   * @deprecated Use this only if you absolutely know what you're doing.
+   * @implNote Use this only if you absolutely know what you're doing.
    */
-  @Deprecated
   public void dispatch(@NonNull Runnable handler) {
     DispatchCallback callback = (wv, arg) -> handler.run();
 
@@ -253,8 +242,7 @@ public final class Webview implements Closeable, Runnable {
     N.webview_dispatch(webview, callbackStub, 0);
   }
 
-  private static MethodHandle createDispatchCallbackHandle(
-      DispatchCallback callback) {
+  private static MethodHandle createDispatchCallbackHandle(DispatchCallback callback) {
     try {
       return MethodHandles.lookup()
           .bind(
@@ -299,17 +287,26 @@ public final class Webview implements Closeable, Runnable {
   }
 
   public void setDarkAppearance(boolean shouldAppearDark) {
-    switch (Platform.osFamily) {
-      case WINDOWS:
-        _WindowsHelper.setWindowAppearance(this, shouldAppearDark);
-        break;
-
-      default: // NOOP
-        break;
+    if (WINDOWS.equals(OS_FAMILY)) {
+      WindowsHelper.setWindowAppearance(this, shouldAppearDark);
     }
   }
 
-  public String getVersion() {
+  public Webview maximizeWindow() {
+    if (WINDOWS.equals(OS_FAMILY)) {
+      WindowsHelper.maximizeWindow(this);
+    }
+    return this;
+  }
+
+  public Webview fullscreen() {
+    if (WINDOWS.equals(OS_FAMILY)) {
+      WindowsHelper.fullscreen(this);
+    }
+    return this;
+  }
+
+  public String version() {
     VersionInfo versionInfo = N.webview_version();
     return versionInfo.versionNumber();
   }

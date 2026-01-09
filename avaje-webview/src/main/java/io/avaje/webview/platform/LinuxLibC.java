@@ -17,7 +17,7 @@ public final class LinuxLibC {
      * also support MUSL or other standards.
      */
     public static boolean isGNU() throws IOException {
-        if (Platform.osDistribution != OSDistribution.LINUX) {
+        if (Platform.OS_DISTRIBUTION != OSDistribution.LINUX) {
             throw new IllegalStateException("LinuxLibC is only supported on Linux.");
         }
 

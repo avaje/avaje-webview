@@ -208,7 +208,7 @@ public final class WebviewBuilder {
   private static List<String> platformLibraries() {
     try {
       String prefix = "/io/avaje/webview/nativelib/";
-      switch (Platform.osDistribution) {
+      switch (Platform.OS_DISTRIBUTION) {
         case LINUX -> {
           if (LinuxLibC.isGNU()) {
             return List.of(prefix + "linux/" + Platform.archTarget + "/gnu/libwebview.so");
@@ -223,7 +223,7 @@ public final class WebviewBuilder {
         }
         default ->
             throw new IllegalStateException(
-                "Unsupported platform: " + Platform.osDistribution + ":" + Platform.archTarget);
+                "Unsupported platform: " + Platform.OS_DISTRIBUTION + ":" + Platform.archTarget);
       }
     } catch (IOException e) {
       throw new UncheckedIOException(e);
