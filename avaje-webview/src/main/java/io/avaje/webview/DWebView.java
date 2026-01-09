@@ -135,10 +135,7 @@ final class DWebView implements Webview {
 
   @Override
   public void loadURL(@Nullable String url) {
-    handleDispatch(
-        () -> {
-          wbNative.webview_navigate(webview, url == null ? "about:blank" : url);
-        });
+    handleDispatch(() -> wbNative.webview_navigate(webview, url == null ? "about:blank" : url));
   }
 
   @Override
@@ -175,16 +172,9 @@ final class DWebView implements Webview {
    */
   @Override
   public void setInitScript(@NonNull String script) {
-    this.setInitScript(script, false);
+    setInitScript(script, false);
   }
 
-  /**
-   * Sets the script to be run on page load.
-   *
-   * @implNote This get's called AFTER window.load.
-   * @param script
-   * @param allowNestedAccess whether or not to inject the script into nested iframes.
-   */
   @Override
   public void setInitScript(@NonNull String script, boolean allowNestedAccess) {
     script =
@@ -204,11 +194,6 @@ final class DWebView implements Webview {
     wbNative.webview_init(webview, script);
   }
 
-  /**
-   * Executes the given script NOW.
-   *
-   * @param script
-   */
   @Override
   public void eval(@NonNull String script) {
     dispatch(
@@ -226,28 +211,11 @@ final class DWebView implements Webview {
         });
   }
 
-  /**
-   * Binds a function to the JavaScript environment on page load.
-   *
-   * @implNote This get's called AFTER window.load.
-   * @implSpec After calling the function in JavaScript you will get a Promise instead of the value.
-   *     This is to prevent you from locking up the browser while waiting on your Java code to
-   *     execute and generate a return value.
-   * @param name The name to be used for the function, e.g "foo" to get foo().
-   * @param handler The callback handler, accepts a JsonArray (which are all arguments passed to the
-   *     function()) and returns a value which is of type JsonElement (can be null). Exceptions are
-   *     automatically passed back to JavaScript.
-   */
   @Override
   public void bind(@NonNull String name, @NonNull WebviewBindCallback handler) {
     handleDispatch(() -> bindCallback(name, handler));
   }
 
-  /**
-   * methods called from different threads need to be run on the UI thread
-   *
-   * @param task
-   */
   private void handleDispatch(Runnable task) {
     if (uiThread == Thread.currentThread()) {
       task.run();
@@ -299,21 +267,11 @@ final class DWebView implements Webview {
     }
   }
 
-  /**
-   * Unbinds a function, removing it from future pages.
-   *
-   * @param name The name of the function.
-   */
   @Override
   public void unbind(@NonNull String name) {
     handleDispatch(() -> wbNative.webview_unbind(webview, name));
   }
 
-  /**
-   * Executes an event on the event thread.
-   *
-   * @implNote Use this only if you absolutely know what you're doing.
-   */
   @Override
   public void dispatch(@NonNull Runnable handler) {
 
@@ -338,11 +296,6 @@ final class DWebView implements Webview {
     }
   }
 
-  /**
-   * Executes the webview event loop until the user presses "X" on the window.
-   *
-   * @see #close()
-   */
   @Override
   public void run() {
 
@@ -364,7 +317,6 @@ final class DWebView implements Webview {
     wbNative.webview_terminate(webview);
   }
 
-  /** Closes the webview, call this to end the event loop and free up resources. */
   @Override
   public void close() {
     log.log(DEBUG, "close");
