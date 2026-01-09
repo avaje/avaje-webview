@@ -101,7 +101,7 @@ final class DWebView implements Webview {
           debug, windowPointer == null ? MemorySegment.NULL : windowPointer);
     }
     this.countDownLatch = new CountDownLatch(1);
-    var queue = new ArrayBlockingQueue<MemorySegment>(1);
+    var future = new CompletableFuture<MemorySegment>();
     this.uiThread =
         Thread.ofPlatform()
             .daemon(false)
@@ -111,7 +111,7 @@ final class DWebView implements Webview {
                   var web =
                       wbNative.webview_create(
                           debug, windowPointer == null ? MemorySegment.NULL : windowPointer);
-                  queue.add(web);
+                  future.complete(web);
                   try {
                     countDownLatch.await();
                     start();
@@ -120,11 +120,7 @@ final class DWebView implements Webview {
                   }
                 });
 
-    try {
-      return Optional.ofNullable(queue.poll(6700, TimeUnit.MILLISECONDS)).orElseThrow();
-    } catch (InterruptedException e) {
-      throw new RuntimeException(e);
-    }
+    return future.join();
   }
 
   /**
