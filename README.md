@@ -34,7 +34,7 @@ The main goals of this fork is to:
 <dependency>
     <groupId>io.avaje.experimental</groupId>
     <artifactId>avaje-webview</artifactId>
-    <version>0.2</version>
+    <version>0.5</version>
 </dependency>
 ```
 
