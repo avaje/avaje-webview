@@ -239,10 +239,12 @@ public final class WebviewBuilder {
   }
 
   private static boolean extractToFile(String lib, File target) {
-    try (InputStream in = WebviewNative.class.getResourceAsStream(lib.toLowerCase())) {
-      if (in == null) throw new IllegalStateException("Failed to access resource of native: "+ lib);
-      byte[] bytes = in.readAllBytes();
-      Files.write(target.toPath(), bytes);
+    try (var in = WebviewNative.class.getResourceAsStream(lib.toLowerCase());
+        var out = new FileOutputStream(target)) {
+      if (in == null)
+        throw new IllegalStateException("Failed to access resource of native: " + lib);
+
+      in.transferTo(out);
       return true;
     } catch (Exception e) {
       if (!e.getMessage().contains("used by another")) {
