@@ -66,6 +66,7 @@ final class DWebView implements Webview {
           JAVA_LONG // arg
           );
 
+  private final Thread uiThread;
   private final MemorySegment webview;
   private final WebviewNative wbNative;
 
@@ -73,8 +74,6 @@ final class DWebView implements Webview {
 
   private final boolean async;
   private boolean running;
-
-  private Thread uiThread;
 
   public static WebviewBuilder builder() {
     return new WebviewBuilder();
@@ -89,40 +88,37 @@ final class DWebView implements Webview {
       boolean async) {
     wbNative = n;
     this.async = async;
-    webview = createView(debug, windowPointer);
-
-    this.setSize(width, height);
-  }
-
-  private MemorySegment createView(boolean debug, MemorySegment windowPointer) {
     if (!async) {
       this.uiThread = Thread.currentThread();
-      return wbNative.webview_create(
-          debug, windowPointer == null ? MemorySegment.NULL : windowPointer);
+      webview =
+          wbNative.webview_create(
+              debug, windowPointer == null ? MemorySegment.NULL : windowPointer);
+    } else {
+      var nativeFuture = new CompletableFuture<MemorySegment>();
+      this.uiThread =
+          Thread.ofPlatform()
+              .daemon(false)
+              .name("Webview RunAsync Thread - #" + this.hashCode())
+              .start(
+                  () -> {
+                    try {
+                      var web =
+                          wbNative.webview_create(
+                              debug, windowPointer == null ? MemorySegment.NULL : windowPointer);
+                      nativeFuture.complete(web);
+                    } catch (Exception e) {
+                      nativeFuture.completeExceptionally(e);
+                      return;
+                    }
+                    LockSupport.park();
+                    if (!Thread.interrupted()) {
+                      start();
+                    }
+                  });
+      webview = nativeFuture.join();
     }
-    var nativeFuture = new CompletableFuture<MemorySegment>();
-    this.uiThread =
-        Thread.ofPlatform()
-            .daemon(false)
-            .name("Webview RunAsync Thread - #" + this.hashCode())
-            .start(
-                () -> {
-                  try {
-                    var web =
-                        wbNative.webview_create(
-                            debug, windowPointer == null ? MemorySegment.NULL : windowPointer);
-                    nativeFuture.complete(web);
-                  } catch (Exception e) {
-                    nativeFuture.completeExceptionally(e);
-                    return;
-                  }
-                  LockSupport.park();
-                  if (!Thread.interrupted()) {
-                    start();
-                  }
-                });
 
-    return nativeFuture.join();
+    this.setSize(width, height);
   }
 
   private void handleDispatch(Runnable task) {
