@@ -110,7 +110,9 @@ final class DWebView implements Webview {
                           debug, windowPointer == null ? MemorySegment.NULL : windowPointer);
                   nativeFuture.complete(web);
                   LockSupport.park();
-                  start();
+                  if (!Thread.interrupted()) {
+                    start();
+                  }
                 });
 
     return nativeFuture.join();
@@ -313,7 +315,11 @@ final class DWebView implements Webview {
   @Override
   public void close() {
     log.log(DEBUG, "close");
-    handleDispatch(() -> wbNative.webview_terminate(webview));
+    if (async && !running) {
+      uiThread.interrupt();
+    } else {
+      handleDispatch(() -> wbNative.webview_terminate(webview));
+    }
   }
 
   @Override
