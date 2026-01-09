@@ -116,13 +116,14 @@ final class DWebView implements Webview {
     return nativeFuture.join();
   }
 
-  /**
-   * Use this only if you absolutely know what you're doing.
-   *
-   * @return a native window handle pointer.
-   * @param webview The instance pointer of the webview
-   * @implNote This is either a pointer to a GtkWindow, NSWindow, or HWND.
-   */
+  private void handleDispatch(Runnable task) {
+    if (uiThread == Thread.currentThread()) {
+      task.run();
+    } else {
+      dispatch(task);
+    }
+  }
+
   @Override
   public MemorySegment nativeWindowPointer() {
     return wbNative.webview_get_window(webview);
@@ -214,14 +215,6 @@ final class DWebView implements Webview {
   @Override
   public void bind(@NonNull String name, @NonNull WebviewBindCallback handler) {
     handleDispatch(() -> bindCallback(name, handler));
-  }
-
-  private void handleDispatch(Runnable task) {
-    if (uiThread == Thread.currentThread()) {
-      task.run();
-    } else {
-      dispatch(task);
-    }
   }
 
   private void bindCallback(String name, WebviewBindCallback handler) {
