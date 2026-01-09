@@ -1,57 +1,53 @@
 package io.avaje.webview.platform;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
+import module java.base;
 
-/**
- * This class allows you to detect whether or not a machine uses GNU or MUSL
- * Libc.
- */
+/** This class allows you to detect whether or not a machine uses GNU or MUSL Libc. */
 // Code adapted from here:
 // https://github.com/lovell/detect-libc/blob/main/lib/detect-libc.js
 public final class LinuxLibC {
 
-    /**
-     * If this returns true then you know that this OS supports GNU LibC. It may
-     * also support MUSL or other standards.
-     */
-    public static boolean isGNU() throws IOException {
-        if (Platform.OS_DISTRIBUTION != OSDistribution.LINUX) {
-            throw new IllegalStateException("LinuxLibC is only supported on Linux.");
-        }
-
-        if ("true".equalsIgnoreCase(System.getProperty("casterlabs.commons.forcegnu"))) {
-            return true;
-        }
-
-        try {
-            return isGNUViaFS();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        try {
-            return isGNUViaCommand();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        return true;
+  /**
+   * If this returns true then you know that this OS supports GNU LibC. It may also support MUSL or
+   * other standards.
+   */
+  public static boolean isGNU() throws IOException {
+    if (Platform.OS_DISTRIBUTION != OSDistribution.LINUX) {
+      throw new IllegalStateException("LinuxLibC is only supported on Linux.");
     }
 
-    private static boolean isGNUViaFS() throws IOException {
-        try (FileInputStream fin = new FileInputStream(new File("/usr/bin/ldd"))) {
-            String ldd = _PlatformUtil.readInputStreamString(fin);
-            return ldd.contains("GNU C Library");
-        }
+    if ("true".equalsIgnoreCase(System.getProperty("casterlabs.commons.forcegnu"))) {
+      return true;
     }
 
-    private static boolean isGNUViaCommand() throws IOException {
-        Process unameProc = Runtime.getRuntime().exec("sh -c 'getconf GNU_LIBC_VERSION 2>&1 || true; ldd --version 2>&1 || true'");
-        String unameResult = _PlatformUtil.readInputStreamString(unameProc.getInputStream());
-
-        return unameResult.contains("glibc");
+    try {
+      return isGNUViaFS();
+    } catch (IOException e) {
+      e.printStackTrace();
     }
 
+    try {
+      return isGNUViaCommand();
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+
+    return true;
+  }
+
+  private static boolean isGNUViaFS() throws IOException {
+    try (FileInputStream fin = new FileInputStream(new File("/usr/bin/ldd"))) {
+      String ldd = PlatformUtil.readInputStreamString(fin);
+      return ldd.contains("GNU C Library");
+    }
+  }
+
+  private static boolean isGNUViaCommand() throws IOException {
+    Process unameProc =
+        Runtime.getRuntime()
+            .exec("sh -c 'getconf GNU_LIBC_VERSION 2>&1 || true; ldd --version 2>&1 || true'");
+    String unameResult = PlatformUtil.readInputStreamString(unameProc.getInputStream());
+
+    return unameResult.contains("glibc");
+  }
 }

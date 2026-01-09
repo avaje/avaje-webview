@@ -7,7 +7,6 @@ import java.util.List;
 
 public class Partial {
 
-    @JStache(path = "partial/search-tasks")
-    public record SearchTasks(Task first, List<Task> tasks){}
-
+  @JStache(path = "partial/search-tasks")
+  public record SearchTasks(Task first, List<Task> tasks) {}
 }

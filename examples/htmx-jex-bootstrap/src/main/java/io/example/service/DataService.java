@@ -16,59 +16,60 @@ import static java.lang.System.Logger.Level.DEBUG;
 @Component
 public final class DataService {
 
-    private static final System.Logger log = System.getLogger("app");
+  private static final System.Logger log = System.getLogger("app");
 
-    private final Jsonb jsonb;
-    private Data data = new Data(List.of());
+  private final Jsonb jsonb;
+  private Data data = new Data(List.of());
 
-    DataService(Jsonb jsonb) {
-        this.jsonb = jsonb;
+  DataService(Jsonb jsonb) {
+    this.jsonb = jsonb;
+  }
+
+  public Data data() {
+    return data;
+  }
+
+  void refreshData(Data data) {
+    this.data = data;
+  }
+
+  @PostConstruct
+  void initialLoad() {
+    data =
+        loadPath(System.getProperty("data.dir", "data"))
+            .or(() -> loadPath("examples/htmx-jex-bootstrap/data"))
+            .orElse(new Data(List.of()));
+  }
+
+  private Optional<Data> loadPath(String path) {
+    var dataDir = new File(path);
+    if (!dataDir.exists()) {
+      return Optional.empty();
     }
+    log.log(DEBUG, "Load data from {0}", dataDir.getAbsolutePath());
+    return Optional.of(DataLoader.load(jsonb, dataDir));
+  }
 
-    public Data data() {
-        return data;
-    }
+  public List<Task> searchTasks(String search, int limit) {
+    if (search == null) return List.of();
+    String[] tokens = asTokens(search);
+    return searchTasks(tokens, limit);
+  }
 
-    void refreshData(Data data) {
-        this.data = data;
-    }
+  static String[] asTokens(String search) {
+    String[] tokens = search.split(" ");
+    return Stream.of(tokens).map(String::toLowerCase).toList().toArray(new String[0]);
+  }
 
-    @PostConstruct
-    void initialLoad() {
-        data = loadPath(System.getProperty("data.dir", "data"))
-                .or(() -> loadPath("examples/htmx-jex-bootstrap/data"))
-                .orElse(new Data(List.of()));
+  private List<Task> searchTasks(String[] tokens, int limit) {
+    if (tokens == null || tokens.length == 0) {
+      return List.of();
     }
-
-    private Optional<Data> loadPath(String path) {
-        var dataDir = new File(path);
-        if (!dataDir.exists()) {
-            return Optional.empty();
-        }
-        log.log(DEBUG, "Load data from {0}", dataDir.getAbsolutePath());
-        return Optional.of(DataLoader.load(jsonb, dataDir));
-    }
-
-    public List<Task> searchTasks(String search, int limit) {
-        if (search == null) return List.of();
-        String[] tokens = asTokens(search);
-        return searchTasks(tokens, limit);
-    }
-
-    static String[] asTokens(String search) {
-        String[] tokens = search.split(" ");
-        return Stream.of(tokens).map(String::toLowerCase).toList().toArray(new String[0]);
-    }
-
-    private List<Task> searchTasks(String[] tokens, int limit) {
-        if (tokens == null || tokens.length == 0) {
-            return List.of();
-        }
-        return data.kbases().stream()
-                .flatMap(kb -> kb.tasks().stream())
-                .filter(task -> task.matchAll(tokens))
-                .sorted()
-                .limit(limit)
-                .toList();
-    }
+    return data.kbases().stream()
+        .flatMap(kb -> kb.tasks().stream())
+        .filter(task -> task.matchAll(tokens))
+        .sorted()
+        .limit(limit)
+        .toList();
+  }
 }

@@ -1,27 +1,28 @@
 package io.avaje.webview;
 
+import static io.avaje.webview.platform.Platform.OS_DISTRIBUTION;
+import static io.avaje.webview.platform.Platform.archTarget;
+
 import module java.base;
 
-import org.jspecify.annotations.NonNull;
+import module org.jspecify;
 
 import io.avaje.webview.platform.LinuxLibC;
-import io.avaje.webview.platform.Platform;
 
 /**
  * Builder for Webview.
  *
  * <pre>{@code
+ * Webview wv = Webview.builder()
+ *          .debug(true)
+ *          .title("My App")
+ *          .width(1000)
+ *          .height(800)
+ *          .url("http://localhost:" + port)
+ *          .build();
  *
- *    Webview wv = Webview.builder()
- *             .debug(true)
- *             .title("My App")
- *             .width(1000)
- *             .height(800)
- *             .url("http://localhost:" + port)
- *             .build();
- *
- *     wv.run(); // Run the webview event loop, the webview is fully disposed when this returns.
- *     wv.close(); // Free any resources allocated.
+ *  wv.run(); // Run the webview event loop, the webview is fully disposed when this returns.
+ *  wv.close(); // Free any resources allocated.
  *
  * }</pre>
  */
@@ -125,7 +126,7 @@ public final class WebviewBuilder {
   /** Build the Webview. */
   public Webview build() {
     var n = initNative(this);
-    var view = new Webview(n, enableDeveloperTools, windowPointer, width, height);
+    var view = new DWebView(n, enableDeveloperTools, windowPointer, width, height);
     if (title != null) {
       view.setTitle(title);
     }
@@ -177,7 +178,7 @@ public final class WebviewBuilder {
     }
 
     // Return the FFM-based native implementation
-    return new WebviewNative.Default();
+    return new WebviewNative();
   }
 
   private File createTarget(String lib) {
@@ -208,22 +209,22 @@ public final class WebviewBuilder {
   private static List<String> platformLibraries() {
     try {
       String prefix = "/io/avaje/webview/nativelib/";
-      switch (Platform.OS_DISTRIBUTION) {
+      switch (OS_DISTRIBUTION) {
         case LINUX -> {
           if (LinuxLibC.isGNU()) {
-            return List.of(prefix + "linux/" + Platform.archTarget + "/gnu/libwebview.so");
+            return List.of(prefix + "linux/" + archTarget + "/gnu/libwebview.so");
           }
-          return List.of(prefix + "linux/" + Platform.archTarget + "/musl/libwebview.so");
+          return List.of(prefix + "linux/" + archTarget + "/musl/libwebview.so");
         }
         case MACOS -> {
-          return List.of(prefix + "macos/" + Platform.archTarget + "/libwebview.dylib");
+          return List.of(prefix + "macos/" + archTarget + "/libwebview.dylib");
         }
         case WINDOWS_NT -> {
-          return List.of(prefix + "windows_nt/" + Platform.archTarget + "/webview.dll");
+          return List.of(prefix + "windows_nt/" + archTarget + "/webview.dll");
         }
         default ->
             throw new IllegalStateException(
-                "Unsupported platform: " + Platform.OS_DISTRIBUTION + ":" + Platform.archTarget);
+                "Unsupported platform: " + OS_DISTRIBUTION + ":" + archTarget);
       }
     } catch (IOException e) {
       throw new UncheckedIOException(e);
@@ -249,8 +250,8 @@ public final class WebviewBuilder {
       throw new NullPointerException("source is marked non-null but is null");
     }
     ByteArrayOutputStream out = new ByteArrayOutputStream();
-      streamTransfer(source, out);
-      return out.toByteArray();
+    streamTransfer(source, out);
+    return out.toByteArray();
   }
 
   private static void streamTransfer(@NonNull InputStream source, @NonNull OutputStream dest)

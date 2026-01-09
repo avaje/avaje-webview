@@ -14,77 +14,72 @@ import java.util.stream.Stream;
 
 final class DataLoader {
 
-    private final JsonType<TaskMeta> metaJsonType;
-    private final JsonType<KBaseMeta> kBaseMetaJsonType;
+  private final JsonType<TaskMeta> metaJsonType;
+  private final JsonType<KBaseMeta> kBaseMetaJsonType;
 
-    DataLoader(Jsonb jsonb) {
-        this.metaJsonType = jsonb.type(TaskMeta.class);
-        this.kBaseMetaJsonType = jsonb.type(KBaseMeta.class);
+  DataLoader(Jsonb jsonb) {
+    this.metaJsonType = jsonb.type(TaskMeta.class);
+    this.kBaseMetaJsonType = jsonb.type(KBaseMeta.class);
+  }
+
+  static Data load(Jsonb jsonb, File dataDirectory) {
+    return new DataLoader(jsonb).load(dataDirectory);
+  }
+
+  private Data load(File dataDirectory) {
+    if (!dataDirectory.exists()) {
+      return new Data(List.of());
     }
 
-    static Data load(Jsonb jsonb, File dataDirectory) {
-        return new DataLoader(jsonb).load(dataDirectory);
+    List<KBase> kBases =
+        fileStream(dataDirectory).filter(File::isDirectory).map(this::loadKBase).toList();
+
+    return new Data(kBases);
+  }
+
+  private KBase loadKBase(File kbaseDir) {
+    KBaseMeta kBase = readKbase(kbaseDir);
+    List<Task> list = fileStream(kbaseDir).filter(File::isDirectory).map(this::loadTask).toList();
+
+    return new KBase(kBase, list);
+  }
+
+  private Task loadTask(File taskDir) {
+    TaskMeta taskMeta = readTaskMeta(taskDir);
+    String previewContent = readPreview(taskDir);
+    return new Task(taskMeta, previewContent, taskMeta.allSearchKeywords());
+  }
+
+  private Stream<File> fileStream(File dir) {
+    File[] files = dir.listFiles();
+    return files != null ? Stream.of(files) : Stream.of();
+  }
+
+  private String readPreview(File taskDir) {
+    var file = new File(taskDir, "preview.html");
+    if (!file.exists()) {
+      return "";
     }
-
-    private Data load(File dataDirectory) {
-        if (!dataDirectory.exists()) {
-            return new Data(List.of());
-        }
-
-        List<KBase> kBases = fileStream(dataDirectory)
-                .filter(File::isDirectory)
-                .map(this::loadKBase)
-                .toList();
-
-        return new Data(kBases);
+    try {
+      return Files.readString(file.toPath());
+    } catch (IOException e) {
+      return "";
     }
+  }
 
-    private KBase loadKBase(File kbaseDir) {
-        KBaseMeta kBase = readKbase(kbaseDir);
-        List<Task> list = fileStream(kbaseDir)
-                .filter(File::isDirectory)
-                .map(this::loadTask)
-                .toList();
-
-        return new KBase(kBase, list);
+  private TaskMeta readTaskMeta(File taskDir) {
+    try (var is = new FileInputStream(new File(taskDir, "$meta.json"))) {
+      return metaJsonType.fromJson(is);
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
     }
+  }
 
-    private Task loadTask(File taskDir) {
-        TaskMeta taskMeta = readTaskMeta(taskDir);
-        String previewContent = readPreview(taskDir);
-        return new Task(taskMeta, previewContent, taskMeta.allSearchKeywords());
+  private KBaseMeta readKbase(File kbaseDir) {
+    try (var is = new FileInputStream(new File(kbaseDir, "kbase.json"))) {
+      return kBaseMetaJsonType.fromJson(is);
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
     }
-
-    private Stream<File> fileStream(File dir) {
-        File[] files = dir.listFiles();
-        return files != null ? Stream.of(files) : Stream.of();
-    }
-
-    private String readPreview(File taskDir) {
-        var file = new File(taskDir, "preview.html");
-        if (!file.exists()) {
-            return "";
-        }
-        try {
-            return Files.readString(file.toPath());
-        } catch (IOException e) {
-            return "";
-        }
-    }
-
-    private TaskMeta readTaskMeta(File taskDir) {
-        try (var is = new FileInputStream(new File(taskDir, "$meta.json"))) {
-            return metaJsonType.fromJson(is);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    private KBaseMeta readKbase(File kbaseDir) {
-        try (var is = new FileInputStream(new File(kbaseDir, "kbase.json"))) {
-            return kBaseMetaJsonType.fromJson(is);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
+  }
 }

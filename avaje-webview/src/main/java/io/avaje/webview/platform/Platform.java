@@ -15,40 +15,37 @@ import module java.base;
 
 public class Platform {
 
-    /* ---------------- */
-    /* CPU Architecture */
-    /* ---------------- */
+  /* ---------------- */
+  /* CPU Architecture */
+  /* ---------------- */
 
-    /**
-     * Whether or not the current machine's endianess is big endian.
-     *
-     * @implNote This just calls {@link ByteOrder#nativeOrder()}.
-     */
-    public static final boolean isBigEndian = ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN;
+  /**
+   * Whether or not the current machine's endianess is big endian.
+   *
+   * @implNote This just calls {@link ByteOrder#nativeOrder()}.
+   */
+  public static final boolean isBigEndian = ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN;
 
-    /**
-     * The processor's word size/bitness, or -1 if unknown. Usually 32 or 64.
-     *
-     * @implNote Some IBM Z mainframes will return 32 even though their words are 31
-     *           bits long.
-     */
-    public static final int wordSize = _PlatformUtil.getWordSize();
+  /**
+   * The processor's word size/bitness, or -1 if unknown. Usually 32 or 64.
+   *
+   * @implNote Some IBM Z mainframes will return 32 even though their words are 31 bits long.
+   */
+  public static final int wordSize = PlatformUtil.getWordSize();
 
-    /** The CPU Architecture of the host, e.g x86 or arm. */
-    public static final ArchFamily archFamily = ArchFamily.get();
+  /** The CPU Architecture of the host, e.g x86 or arm. */
+  public static final ArchFamily archFamily = ArchFamily.get();
 
-    /** The CPU Target of the host, e.g x86_64 or aarch64. */
-    public static final String archTarget = archFamily.getArchTarget(wordSize, isBigEndian);
+  /** The CPU Target of the host, e.g x86_64 or aarch64. */
+  public static final String archTarget = archFamily.getArchTarget(wordSize, isBigEndian);
 
-    /* ---------------- */
-    /* Operating System */
-    /* ---------------- */
+  /* ---------------- */
+  /* Operating System */
+  /* ---------------- */
 
-    /** The family of the host's OS, e.g macOS or Windows NT */
-    public static final OSFamily OS_FAMILY= OSFamily.get();
+  /** The family of the host's OS, e.g macOS or Windows NT */
+  public static final OSFamily OS_FAMILY = OSFamily.get();
 
-    /** The family distribution of the host's OS, e.g Unix or Windows */
-    public static final OSDistribution OS_DISTRIBUTION = OSDistribution.get(OS_FAMILY);
-
-
+  /** The family distribution of the host's OS, e.g Unix or Windows */
+  public static final OSDistribution OS_DISTRIBUTION = OSDistribution.get(OS_FAMILY);
 }

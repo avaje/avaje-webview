@@ -8,29 +8,30 @@ import static java.lang.System.Logger.Level.DEBUG;
 
 public class Main {
 
-    static final System.Logger log = System.getLogger("app");
+  static final System.Logger log = System.getLogger("app");
 
-    static void main(String[] args) {
+  static void main(String[] args) {
 
-        var server = Jex.create()
-                .configureWith(BeanScope.builder().build())
-                .port(Integer.getInteger("http.port", 0)) // 8092
-                .start();
+    var server =
+        Jex.create()
+            .configureWith(BeanScope.builder().build())
+            .port(Integer.getInteger("http.port", 0)) // 8092
+            .start();
 
-        int port = server.port();
+    int port = server.port();
 
-        Webview wv = Webview.builder()
-                .enableDeveloperTools(true)
-                .extractToUserHome(true)
-                .title("My App")
-                .width(1000)
-                .height(800)
-                .url("http://localhost:" + port)
-                .build();
+    Webview wv =
+        Webview.builder()
+            .enableDeveloperTools(true)
+            .extractToUserHome(true)
+            .title("My App")
+            .width(1000)
+            .height(800)
+            .url("http://localhost:" + port)
+            .build();
 
-
-        wv.run();
-        server.shutdown();
-        log.log(DEBUG, "done");
-    }
+    wv.run();
+    server.shutdown();
+    log.log(DEBUG, "done");
+  }
 }

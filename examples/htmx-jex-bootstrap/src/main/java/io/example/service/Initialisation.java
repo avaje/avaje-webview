@@ -7,8 +7,8 @@ import io.avaje.jsonb.Jsonb;
 @Factory
 final class Initialisation {
 
-    @Bean
-    Jsonb jsonb() {
-        return Jsonb.builder().build();
-    }
+  @Bean
+  Jsonb jsonb() {
+    return Jsonb.builder().build();
+  }
 }
