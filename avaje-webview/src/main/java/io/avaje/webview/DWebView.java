@@ -183,9 +183,11 @@ final class DWebView implements Webview {
 
   @Override
   public void setInitScript(@NonNull String script, boolean allowNestedAccess) {
-    script =
-        String.format(
-            """
+    handleDispatch(
+        () -> {
+          var script1 =
+              String.format(
+                  """
       	(() => {
       	try {
       	if (window.top == window.self || %b) {
@@ -195,9 +197,10 @@ final class DWebView implements Webview {
       	console.error('[Webview]', 'An error occurred whilst evaluating init script:', %s, e);
       	}
       	})();""",
-            allowNestedAccess, script, '"' + WebviewUtil.jsonEscape(script) + '"');
+                  allowNestedAccess, script, '"' + WebviewUtil.jsonEscape(script) + '"');
 
-    wbNative.webview_init(webview, script);
+          wbNative.webview_init(webview, script1);
+        });
   }
 
   @Override
