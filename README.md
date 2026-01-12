@@ -7,6 +7,11 @@ The main goals of this fork is to:
 - Target Java 25 / GraalVM 25
 - Minimise the dependencies (which are not in maven central but in https://jitpack.io)
 
+## Known Restrictions / Pain points
+
+- Use of Clipboard (copy and paste) keyboard shortcuts is not working on MacOS.
+
+
 ## Changes (from upstream)
 
 - Add support for GraalVM native image
