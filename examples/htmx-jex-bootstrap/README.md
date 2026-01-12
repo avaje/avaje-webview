@@ -1,0 +1,42 @@
+## html jex boostrap 
+
+Example uses:
+- Webview 
+- Jex (JDK HttpServer) as the webserver
+- JStachio for SSR html for htmx UI
+- Uses Bootstrap 5.3 - https://getbootstrap.com/
+- Uses HTMX 
+
+
+## To build as a single executable
+```shell
+mvn clean package -Pnative
+```
+
+## Run it
+Specify `data.dir` as a system property.
+
+```shell
+./target/htmx-jex-bootstrap
+```
+
+Override the source data directory that contains the "knowledge base" (templates, docs, snippets etc)
+```shell
+./target/htmx-jex-bootstrap -Ddata.dir=data
+```
+
+
+Override the logging configuration using `-Dlogger.config`
+```shell
+./target/htmx-jex-bootstrap -Dlogger.config=logger.properties
+```
+
+Run it on a specific port via `-Dhttp.port=8092` (rather than use random port). 
+With this we can use a normal browser against the http server:
+```shell
+./target/htmx-jex-bootstrap -Dhttp.port=8092
+```
+
+## Screenshot
+
+<img src="screenshot.png">

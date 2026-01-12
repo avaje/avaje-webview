@@ -10,6 +10,7 @@ The main goals of this fork is to:
 ## Changes (from upstream)
 
 - Add support for GraalVM native image
+- Use FFM, replacing use of JNA, remove JNA dependencies
 - Add support for extracting the embedded libraries into temp or user home subdir
 - Add option to register Shutdown hook to cleanup resources on CTRL-C
 - Change run() to include webview_terminate(), so easier to ensure resources cleaned up
@@ -33,7 +34,7 @@ The main goals of this fork is to:
 <dependency>
     <groupId>io.avaje.experimental</groupId>
     <artifactId>avaje-webview</artifactId>
-    <version>0.2</version>
+    <version>0.5</version>
 </dependency>
 ```
 

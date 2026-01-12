@@ -22,12 +22,12 @@
         <dependency>
             <groupId>io.avaje.experimental</groupId>
             <artifactId>avaje-webview</artifactId>
-            <version>0.3-SNAPSHOT</version>
+            <version>0.5</version>
         </dependency>
 
         <dependency>
             <groupId>io.avaje</groupId>
-            <artifactId>avaje-jex</artifactId>
+            <artifactId>avaje-jex-static-content</artifactId>
             <version>3.3</version>
         </dependency>
 

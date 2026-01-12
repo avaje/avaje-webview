@@ -1,13 +1,20 @@
 {{<fragments/layout}}
   {{$body}}
+<div class="container-fluid">
+    <div class="row">
+      <div class="col-6">
+        <input class="m-1 form-control" type="search"
+               name="search" placeholder="Search tasks..."
+               hx-post="/search"
+               hx-trigger="input changed delay:200ms, keyup[key=='Enter'], load"
+               hx-target="#search-results">
 
-    <div hx-get="/app" hx-trigger="load">
-      <img alt="Result loading..." class="htmx-indicator" width="50" src="/static/bars.svg"/>
+        <div id="search-results"></div>
+      </div>
+      <div class="col-6">
+        <div id="detail-summary" class="p-1 card"></div>
+      </div>
     </div>
-
-    <div hx-get="/env" hx-trigger="load">
-      <img alt="Result loading..." class="htmx-indicator" width="50" src="/static/bars.svg"/>
-    </div>
-
+</div>
   {{/body}}
 {{/fragments/layout}}

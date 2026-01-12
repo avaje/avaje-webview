@@ -1,0 +1,23 @@
+<h3>Install Kubernetes CLI</h3>
+<p>
+  Refer <a target="_self" href="https://kubernetes.io/docs/tasks/tools/">https://kubernetes.io/docs/tasks/tools/</a>
+</p>
+
+<b>Mac Apple silicon</b>
+<pre>
+    <code class="language-bash">curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/darwin/arm64/kubectl"</code>
+</pre>
+
+<p>Validate binary (optional)</p>
+<pre>
+    <code class="language-bash">curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/darwin/arm64/kubectl.sha256"</code>
+</pre>
+
+<pre>
+    <code class="language-bash">echo "$(cat kubectl.sha256)  kubectl" | shasum -a 256 --check</code>
+</pre>
+
+<p>If valid, the output is:</p>
+<pre>
+    <code class="language-bash">kubectl: OK</code>
+</pre>

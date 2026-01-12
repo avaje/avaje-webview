@@ -1,0 +1,19 @@
+<div id="detail-summary" class="card p-1" hx-swap-oob="true">
+  <div class="card-body">
+      <h4 class="card-title">{{ first.displayName }}</h4>
+      <p>{{ first.description }}</p>
+      <div>{{{ first.preview }}}</div>
+  </div>
+</div>
+<div>
+  <table class="table">
+    <tbody>
+    {{#tasks}}
+      <tr>
+        <td>{{ displayName }}</td>
+        <td>{{ type }}</td>
+      </tr>
+    {{/tasks}}
+    </tbody>
+  </table>
+</div>
