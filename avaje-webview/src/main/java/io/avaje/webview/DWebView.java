@@ -58,9 +58,7 @@ final class DWebView implements Webview {
   private static final int WV_HINT_MAX = 2;
   private static final int WV_HINT_FIXED = 3;
   private static final FunctionDescriptor BIND_DESCRIPTOR =
-      FunctionDescriptor.ofVoid(
-          JAVA_LONG, ADDRESS, // req (char*)
-          JAVA_LONG);
+      FunctionDescriptor.ofVoid(JAVA_LONG, ADDRESS);
   private static final FunctionDescriptor DISPATCH_DESCRIPTOR =
       FunctionDescriptor.ofVoid(
           ADDRESS, // webview pointer
@@ -247,8 +245,7 @@ final class DWebView implements Webview {
             String stacktrace = WebviewUtil.getExceptionStack(e);
             log.log(ERROR, stacktrace);
 
-            String exceptionJson =
-                '"' + WebviewUtil.jsonEscape(stacktrace) + '"';
+            String exceptionJson = '"' + WebviewUtil.jsonEscape(stacktrace) + '"';
 
             wbNative.webview_return(webview, seq, true, exceptionJson);
           }
@@ -268,8 +265,8 @@ final class DWebView implements Webview {
           .bind(
               callback,
               "actualCallBack",
-              MethodType.methodType(void.class, long.class, MemorySegment.class, long.class))
-          .asType(MethodType.methodType(void.class, long.class, MemorySegment.class, long.class));
+              MethodType.methodType(void.class, long.class, MemorySegment.class))
+          .asType(MethodType.methodType(void.class, long.class, MemorySegment.class));
     } catch (Exception e) {
       throw new RuntimeException("Failed to create callback handle", e);
     }
@@ -379,7 +376,7 @@ final class DWebView implements Webview {
     void callback(long seq, String req);
 
     @SuppressWarnings("unused")
-    default void actualCallBack(final long seq, final MemorySegment req, final long arg) {
+    default void actualCallBack(final long seq, final MemorySegment req) {
       callback(seq, req.reinterpret(Long.MAX_VALUE).getString(0));
     }
   }
