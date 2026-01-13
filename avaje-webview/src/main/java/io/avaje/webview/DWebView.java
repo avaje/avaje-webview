@@ -89,13 +89,15 @@ final class DWebView implements Webview {
   }
 
   DWebView(
-      WebviewNative n,
+      WebviewNative webNative,
       boolean debug,
       @Nullable MemorySegment windowPointer,
       int width,
       int height,
       boolean async) {
-    wbNative = n;
+
+    checkEnvironment();
+    wbNative = webNative;
     this.async = async;
     if (!async) {
       this.uiThread = Thread.currentThread();
@@ -325,7 +327,6 @@ final class DWebView implements Webview {
   }
 
   private void start() {
-    checkEnvironment();
     wbNative.webview_run(webview);
     log.log(DEBUG, "destroy and terminate");
     wbNative.webview_destroy(webview);
