@@ -20,17 +20,16 @@
  */
 package io.avaje.webview;
 
+import module java.base;
+import module org.jspecify;
+
 import static io.avaje.webview.platform.OSDistribution.MACOS;
 import static io.avaje.webview.platform.OSFamily.WINDOWS;
 import static io.avaje.webview.platform.Platform.OS_DISTRIBUTION;
 import static io.avaje.webview.platform.Platform.OS_FAMILY;
-import static java.lang.System.Logger.Level.DEBUG;
-import static java.lang.System.Logger.Level.ERROR;
+import static java.lang.System.Logger.Level.*;
 import static java.lang.foreign.ValueLayout.ADDRESS;
 import static java.lang.foreign.ValueLayout.JAVA_LONG;
-
-import module java.base;
-import module org.jspecify;
 
 final class DWebView implements Webview {
 
@@ -108,6 +107,7 @@ final class DWebView implements Webview {
     if (OS_DISTRIBUTION == MACOS) {
       MacOSHelper.createMenus();
     }
+    this.redirectConsole();
   }
 
   private void handleDispatch(Runnable task) {
@@ -118,6 +118,37 @@ final class DWebView implements Webview {
     }
   }
 
+  /**
+   * Redirect {@code console.*} in the JavaScript context to delegate to
+   * {@link System.Logger} using {@link #log}, also continuing to log to the
+   * original JavaScript logger e.g. for developer tools if available.
+   */
+  private void redirectConsole() {
+    this.bind("__$io_avaje_webview$log__", json -> {
+      // TODO - json is currently always an empty string ^ ("")?
+      
+      // TODO - parse and provide nicer output
+      log.log(INFO, json);
+      
+      return "\"ok\"";
+	});
+    this.eval("""
+    (function() {
+      const original = { ...console };
+    
+      function log(name, ...parameters) {
+        __$io_avaje_webview$log__(...parameters);
+        original[name](...parameters);
+      }
+    
+      for (const [name, it] of Object.entries(console)) {
+        if (typeof it !== "function") continue;
+        console[name] = (...parameters) => log(name, ...parameters);
+      }
+    })();
+    """);
+  }
+  
   @Override
   public MemorySegment nativeWindowPointer() {
     return wbNative.webview_get_window(webview);
