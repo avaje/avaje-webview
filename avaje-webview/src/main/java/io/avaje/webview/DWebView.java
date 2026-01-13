@@ -73,7 +73,7 @@ final class DWebView implements Webview {
   private final Arena arena = Arena.ofAuto();
 
   private final boolean async;
-  private boolean running;
+  private volatile boolean running;
 
   public static WebviewBuilder builder() {
     return new WebviewBuilder();
@@ -110,7 +110,9 @@ final class DWebView implements Webview {
                       nativeFuture.completeExceptionally(e);
                       return;
                     }
-                    LockSupport.park();
+                    while (!this.running) {
+                      LockSupport.park();
+                    }
                     if (!Thread.interrupted()) {
                       start();
                     }
@@ -302,10 +304,10 @@ final class DWebView implements Webview {
 
   @Override
   public void run() {
-
     if (running) {
       return;
     }
+    running = true;
     if (async) {
       LockSupport.unpark(uiThread);
       return;
@@ -314,7 +316,6 @@ final class DWebView implements Webview {
   }
 
   private void start() {
-    running = true;
     wbNative.webview_run(webview);
     log.log(DEBUG, "destroy and terminate");
     wbNative.webview_destroy(webview);
