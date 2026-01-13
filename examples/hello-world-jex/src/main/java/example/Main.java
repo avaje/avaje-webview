@@ -20,8 +20,8 @@ public class Main {
     // needs JVM argument -XstartOnFirstThread on Macos
     Jex.Server server =
         Jex.create()
-            .plugin(StaticContent.ofClassPath("/static/favicon.ico").route("/favicon.ico").build())
-            .plugin(StaticContent.ofClassPath("/static/index.html").route("/").build())
+            .plugin(StaticContent.ofClassPath("/static/favicon.ico").resourceLoader(Main.class).route("/favicon.ico").build())
+            .plugin(StaticContent.ofClassPath("/static/index.html").resourceLoader(Main.class).route("/").build())
             .get("/timer/status", Main::countDown)
             // Add Task
             .post(
@@ -81,6 +81,7 @@ public class Main {
       webview.bind("__getCompletedSessions__", _ -> String.valueOf(completedTasks));
       webview.maximizeWindow();
       webview.run();
+      System.err.println("Sus" );
     } finally {
      server.shutdown();
     }
