@@ -381,9 +381,6 @@ final class DWebView implements Webview {
   /**
    * Checks if the current thread is the main thread.
    *
-   * <p>This method determines if the current thread has an ID of 1, which is typically associated
-   * with the main thread in JVM-based applications.
-   *
    * @return {@code true} if the current thread is the main thread, {@code false} otherwise.
    */
   public static boolean isMainThread() {
