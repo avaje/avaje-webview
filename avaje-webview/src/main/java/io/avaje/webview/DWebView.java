@@ -328,6 +328,7 @@ final class DWebView implements Webview {
     if (closed) {
       return;
     }
+    closed = true;
     log.log(DEBUG, "close");
     if (async && !running) {
       uiThread.interrupt();
