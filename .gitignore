@@ -5,3 +5,5 @@ target
 *.factorypath
 *.prefs
 *.project
+.DS_Store
+
