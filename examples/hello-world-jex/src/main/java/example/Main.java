@@ -20,8 +20,16 @@ public class Main {
     // needs JVM argument -XstartOnFirstThread on Macos
     Jex.Server server =
         Jex.create()
-            .plugin(StaticContent.ofClassPath("/static/favicon.ico").resourceLoader(Main.class).route("/favicon.ico").build())
-            .plugin(StaticContent.ofClassPath("/static/index.html").resourceLoader(Main.class).route("/").build())
+            .plugin(
+                StaticContent.ofClassPath("/static/favicon.ico")
+                    .resourceLoader(Main.class)
+                    .route("/favicon.ico")
+                    .build())
+            .plugin(
+                StaticContent.ofClassPath("/static/index.html")
+                    .resourceLoader(Main.class)
+                    .route("/")
+                    .build())
             .get("/timer/status", Main::countDown)
             // Add Task
             .post(
@@ -47,44 +55,43 @@ public class Main {
 
     int port = server.port();
 
-    try {
-      Webview webview =
-          Webview.builder().title("Pulse Focus").url("http://localhost:" + port).enableDeveloperTools(true).build();
-      // Bind function to start the timer
-      webview.bind(
-          "__timerStart__",
-          _ -> {
-            timerActive = true;
-            startTime = LocalDateTime.now();
-            return "\"ok\"";
-          });
+    Webview webview =
+        Webview.builder()
+            .title("Pulse Focus")
+            .url("http://localhost:" + port)
+            .enableDeveloperTools(true)
+            .buildAsync();
+    // Bind function to start the timer
+    webview.bind(
+        "__timerStart__",
+        _ -> {
+          timerActive = true;
+          startTime = LocalDateTime.now();
+          return "\"ok\"";
+        });
 
-      // Bind function to notify backend when timer completes
-      webview.bind(
-          "__timerComplete__",
-          _ -> {
-            timerActive = false;
-            completedTasks++;
-            return "\"ok\"";
-          });
+    // Bind function to notify backend when timer completes
+    webview.bind(
+        "__timerComplete__",
+        _ -> {
+          timerActive = false;
+          completedTasks++;
+          return "\"ok\"";
+        });
 
-      // Bind function to cancel/stop the timer
-      webview.bind(
-          "__timerCancel__",
-          _ -> {
-            timerActive = false;
-            startTime = null;
-            return "\"ok\"";
-          });
+    // Bind function to cancel/stop the timer
+    webview.bind(
+        "__timerCancel__",
+        _ -> {
+          timerActive = false;
+          startTime = null;
+          return "\"ok\"";
+        });
 
-      // Bind function to get completed sessions count
-      webview.bind("__getCompletedSessions__", _ -> String.valueOf(completedTasks));
-      webview.maximizeWindow();
-      webview.run();
-      System.err.println("Sus" );
-    } finally {
-     server.shutdown();
-    }
+    // Bind function to get completed sessions count
+    webview.bind("__getCompletedSessions__", _ -> String.valueOf(completedTasks));
+    webview.maximizeWindow();
+    webview.run();
   }
 
   private static void countDown(Context ctx) {

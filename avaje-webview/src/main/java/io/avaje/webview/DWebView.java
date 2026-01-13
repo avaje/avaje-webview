@@ -328,20 +328,19 @@ final class DWebView implements Webview {
     if (closed) {
       return;
     }
-    closed = true;
     log.log(DEBUG, "close");
     if (async && !running) {
       uiThread.interrupt();
     } else {
-      handleDispatch(() -> wbNative.webview_terminate(webview));
+      handleDispatch(this::shutdown);
     }
   }
 
-  @Override
-  public void shutdown() {
+  void shutdown() {
     if (closed) {
       return;
     }
+    closed = true;
     log.log(DEBUG, "shutdown");
     wbNative.webview_terminate(webview);
   }
