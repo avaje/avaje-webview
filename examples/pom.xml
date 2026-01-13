@@ -17,6 +17,7 @@
         <module>hello-world</module>
         <module>hello-world-jex</module>
         <module>htmx-jex-bootstrap</module>
+        <module>todo-basecoat-vue</module>
     </modules>
 
 

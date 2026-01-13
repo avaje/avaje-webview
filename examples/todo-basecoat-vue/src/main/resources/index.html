@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+@import "https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&display=swap";
+@import "https://cdn.jsdelivr.net/npm/basecoat-css@0.3.10-beta.2/dist/basecoat.cdn.min.css";
+
+body {
+	margin: 24px;
+}
+
+.title {
+	font-family: "Kalam", sans-serif;
+	font-weight: 700;
+	font-size: 64px;
+
+	text-align: center;
+	letter-spacing: -3px;
+	user-select: none;
+	color: #e69a3c;
+}
+
+section {
+	user-select: none;
+}
+</style>
+
+<script type="module">
+import { createApp } from "https://esm.run/petite-vue";
+import "https://esm.run/basecoat-css/all";
+
+createApp({
+	tasks: [],
+	input: "",
+
+	add() {
+		if (this.input.trim() === "") return;
+		this.tasks.push(this.input);
+		this.input = "";
+	},
+
+	remove(index) {
+		this.tasks.splice(index, 1);
+	}
+}).mount()
+</script>
+
+</head>
+<body>
+
+<div class="card">
+	<header>
+		<h1 class="title">avaje todo</h1>
+	</header>
+
+	<section>
+		<input
+			class="input"
+			type="text"
+			v-model="input"
+			@keyup.enter="add()"/>
+
+		<br/>
+
+		<button
+			:data-tooltip="`Add '${input}'`"
+			class="btn-outline"
+			@click="add()">
+		Add
+		</button>
+	</section>
+</div>
+
+<template v-for="(task, index) in tasks">
+<br/>
+<div class="card"
+	data-tooltip="Click to remove this item"
+	@click="remove(index)">
+
+	<section>
+	{{ task }}
+	</section>
+</div>
+</template>
+
+</body>
+</html>
