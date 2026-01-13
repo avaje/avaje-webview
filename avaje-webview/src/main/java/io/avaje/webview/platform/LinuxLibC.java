@@ -2,11 +2,15 @@ package io.avaje.webview.platform;
 
 import module java.base;
 
+import static java.lang.System.Logger.Level.ERROR;
+
 /** This class allows you to detect whether or not a machine uses GNU or MUSL Libc. */
 // Code adapted from here:
 // https://github.com/lovell/detect-libc/blob/main/lib/detect-libc.js
 public final class LinuxLibC {
-
+  
+  private static final System.Logger log = System.getLogger("io.avaje.webview");
+  
   /**
    * If this returns true then you know that this OS supports GNU LibC. It may also support MUSL or
    * other standards.
@@ -23,13 +27,13 @@ public final class LinuxLibC {
     try {
       return isGNUViaFS();
     } catch (IOException e) {
-      e.printStackTrace();
+      log.log(ERROR, "Failed checking glibc presence via filesystem", e);
     }
 
     try {
       return isGNUViaCommand();
     } catch (IOException e) {
-      e.printStackTrace();
+      log.log(ERROR, "Failed checking glibc presence via shell invocation", e);
     }
 
     return true;
