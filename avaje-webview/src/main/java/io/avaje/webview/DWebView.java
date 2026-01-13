@@ -25,6 +25,7 @@ import static io.avaje.webview.platform.OSFamily.WINDOWS;
 import static io.avaje.webview.platform.Platform.OS_DISTRIBUTION;
 import static io.avaje.webview.platform.Platform.OS_FAMILY;
 import static java.lang.System.Logger.Level.DEBUG;
+import static java.lang.System.Logger.Level.ERROR;
 import static java.lang.foreign.ValueLayout.ADDRESS;
 import static java.lang.foreign.ValueLayout.JAVA_LONG;
 
@@ -243,10 +244,11 @@ final class DWebView implements Webview {
 
             wbNative.webview_return(webview, seq, false, WebviewUtil.forceSafeChars(result));
           } catch (Throwable e) {
-            e.printStackTrace();
+            String stacktrace = WebviewUtil.getExceptionStack(e);
+            log.log(ERROR, stacktrace);
 
             String exceptionJson =
-                '"' + WebviewUtil.jsonEscape(WebviewUtil.getExceptionStack(e)) + '"';
+                '"' + WebviewUtil.jsonEscape(stacktrace) + '"';
 
             wbNative.webview_return(webview, seq, true, exceptionJson);
           }
