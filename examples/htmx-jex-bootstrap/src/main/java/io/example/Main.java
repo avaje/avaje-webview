@@ -10,6 +10,8 @@ public class Main {
 
   static final System.Logger log = System.getLogger("app");
 
+  // -XstartOnFirstThread --enable-native-access=ALL-UNNAMED
+  // -agentlib:native-image-agent=config-output-dir=/Users/robinbygrave/trace
   static void main(String[] args) {
 
     var server =
