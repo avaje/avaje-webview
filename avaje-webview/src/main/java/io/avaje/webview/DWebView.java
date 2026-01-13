@@ -325,9 +325,6 @@ final class DWebView implements Webview {
 
   @Override
   public void close() {
-    if (closed) {
-      return;
-    }
     log.log(DEBUG, "close");
     if (async && !running) {
       uiThread.interrupt();
