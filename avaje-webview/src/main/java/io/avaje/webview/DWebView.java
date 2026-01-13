@@ -119,6 +119,9 @@ final class DWebView implements Webview {
     }
 
     this.setSize(width, height);
+    if (OS_DISTRIBUTION == MACOS) {
+      MacOSHelper.createMenus();
+    }
   }
 
   private void handleDispatch(Runnable task) {
