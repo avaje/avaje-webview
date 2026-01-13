@@ -1,11 +1,11 @@
 package io.avaje.webview;
 
+import module java.base;
+import module org.jspecify;
+import io.avaje.webview.platform.LinuxLibC;
+
 import static io.avaje.webview.platform.Platform.OS_DISTRIBUTION;
 import static io.avaje.webview.platform.Platform.archTarget;
-
-import module java.base;
-
-import io.avaje.webview.platform.LinuxLibC;
 
 /**
  * Builder for Webview.
@@ -123,17 +123,8 @@ public final class WebviewBuilder {
 
   /** Build the Webview. */
   public Webview build() {
-    return createView(false);
-  }
-
-  /** Builds an Asynchronous Webview */
-  public Webview buildAsync() {
-    return createView(true);
-  }
-
-  private DWebView createView(boolean async) {
     var n = initNative(this);
-    var view = new DWebView(n, enableDeveloperTools, windowPointer, width, height, async);
+    var view = new DWebView(n, enableDeveloperTools, windowPointer, width, height);
     if (title != null) {
       view.setTitle(title);
     }
@@ -239,12 +230,10 @@ public final class WebviewBuilder {
   }
 
   private static boolean extractToFile(String lib, File target) {
-    try (var in = WebviewNative.class.getResourceAsStream(lib.toLowerCase());
-        var out = new FileOutputStream(target)) {
-      if (in == null)
-        throw new IllegalStateException("Failed to access resource of native: " + lib);
-
-      in.transferTo(out);
+    try (InputStream in = WebviewNative.class.getResourceAsStream(lib.toLowerCase())) {
+      if (in == null) throw new IllegalStateException("Failed to access resource of native: "+ lib);
+      byte[] bytes = in.readAllBytes();
+      Files.write(target.toPath(), bytes);
       return true;
     } catch (Exception e) {
       if (!e.getMessage().contains("used by another")) {
