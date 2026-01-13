@@ -10,12 +10,12 @@
         <relativePath/>
     </parent>
 
-    <groupId>io.avaje.experimental</groupId>
+    <groupId>io.avaje</groupId>
     <artifactId>avaje-webview</artifactId>
     <version>0.6</version>
 
     <name>avaje-webview</name>
-    <description>Experimental fork of webview_java</description>
+    <description>FFM Wrapper over webview</description>
 
     <scm>
         <developerConnection>scm:git:git@github.com:avaje/avaje-webview.git</developerConnection>
