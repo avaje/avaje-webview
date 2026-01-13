@@ -380,7 +380,7 @@ final class DWebView implements Webview {
 
     @SuppressWarnings("unused")
     default void actualCallBack(final long seq, final MemorySegment req, final long arg) {
-      callback(seq, req.byteSize() == 0 ? "" : req.getString(0));
+      callback(seq, req.reinterpret(Long.MAX_VALUE).getString(0));
     }
   }
 
