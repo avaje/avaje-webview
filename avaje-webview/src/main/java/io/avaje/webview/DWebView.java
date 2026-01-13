@@ -397,14 +397,14 @@ final class DWebView implements Webview {
    *
    * @throws UnsupportedOperationException if the environment does not meet the required conditions.
    */
-  private static void checkEnvironment() {
+  private void checkEnvironment() {
     if (OS_DISTRIBUTION == MACOS) {
       if (!MacOSHelper.startedOnFirstThread()) {
         String extra = isMainThread() ? MACOS_RELOAD : MACOS_DEVELOPER_ERROR;
         throw new UnsupportedOperationException(ERROR_NO_XSTART_ON_FIRST_THREAD + extra);
       }
 
-      if (!isMainThread()) {
+      if (!isMainThread() || async) {
         throw new UnsupportedOperationException(ERROR_MAC_OS_NOT_MAIN_THREAD);
       }
     }
