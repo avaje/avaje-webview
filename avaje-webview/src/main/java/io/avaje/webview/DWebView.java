@@ -387,7 +387,7 @@ final class DWebView implements Webview {
    * @return {@code true} if the current thread is the main thread, {@code false} otherwise.
    */
   public static boolean isMainThread() {
-    return Thread.currentThread().threadId() == 1;
+    return "main".equals(Thread.currentThread().getName());
   }
 
   /**
