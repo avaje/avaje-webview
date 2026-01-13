@@ -4,9 +4,9 @@ import static java.lang.foreign.ValueLayout.ADDRESS;
 import module java.base;
 
 /**
- * A helper class that uses Java's Foreign Function & Memory API to interact with the
- * MacOS Objective-C runtime (AppKit). This allows controlling window appearance,
- * fullscreen state, and system menus without requiring native C/C++ JNI code.
+ * A helper class that uses Java's Foreign Function & Memory API to interact with the MacOS
+ * Objective-C runtime (AppKit). This allows controlling window appearance, fullscreen state, and
+ * system menus without requiring native C/C++ JNI code.
  */
 final class MacOSHelper {
   // The Linker allows Java to find and invoke native functions
@@ -63,10 +63,11 @@ final class MacOSHelper {
   }
 
   /**
-   * Sets the window appearance to light or dark mode.
-   * Equivalent to: [window setAppearance:[NSAppearance appearanceNamed:NSAppearanceNameDarkAqua]]
+   * Sets the window appearance to light or dark mode. Equivalent to: [window
+   * setAppearance:[NSAppearance appearanceNamed:NSAppearanceNameDarkAqua]]
    */
   public static void setWindowAppearance(Webview webview, boolean shouldBeDark) {
+    // Arena.ofConfined() ensures native memory is freed immediately after this block
     try (Arena arena = Arena.ofConfined()) {
       MemorySegment nsWindow = webview.nativeWindowPointer();
       MemorySegment nsAppearanceClass = getClass(arena, "NSAppearance");
@@ -84,8 +85,9 @@ final class MacOSHelper {
     }
   }
 
-  /** * Enters native fullscreen mode using macOS's built-in fullscreen API.
-   * Equivalent to: [window toggleFullScreen:nil]
+  /**
+   * Enters native fullscreen mode using macOS's built-in fullscreen API. Equivalent to: [window
+   * toggleFullScreen:nil]
    */
   public static void fullscreen(Webview webview) {
     try (Arena arena = Arena.ofConfined()) {
@@ -96,8 +98,9 @@ final class MacOSHelper {
     }
   }
 
-  /** * Maximizes the window to fill the screen without entering fullscreen mode.
-   * Equivalent to clicking the green 'zoom' button.
+  /**
+   * Maximizes the window to fill the screen without entering fullscreen mode. Equivalent to
+   * clicking the green 'zoom' button.
    */
   public static void maximizeWindow(Webview webview) {
     try (Arena arena = Arena.ofConfined()) {
@@ -109,8 +112,9 @@ final class MacOSHelper {
     }
   }
 
-  /** * Creates and attaches the standard macOS application menu and edit menu.
-   * This is required because Cocoa apps started from the command line often have no menu.
+  /**
+   * Creates and attaches the standard macOS application menu and edit menu. This is required
+   * because Cocoa apps started from the command line often have no menu.
    */
   public static void createMenus() {
     try (Arena arena = Arena.ofConfined()) {
