@@ -36,7 +36,7 @@
             <artifactId>slf4j-jdk-platform-logging</artifactId>
             <version>2.0.17</version>
         </dependency>
-        <dependency>
+        <dependency> <!-- composite of Jex + JStachio etc -->
             <groupId>io.avaje.kate</groupId>
             <artifactId>avaje-kate-htmx</artifactId>
             <version>0.11</version>

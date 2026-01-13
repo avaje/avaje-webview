@@ -9,6 +9,7 @@
         <version>0.1</version>
     </parent>
 
+    <groupId>io.avaje</groupId>
     <artifactId>examples</artifactId>
     <packaging>pom</packaging>
 
