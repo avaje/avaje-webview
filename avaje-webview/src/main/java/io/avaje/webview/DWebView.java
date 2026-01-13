@@ -83,6 +83,7 @@ final class DWebView implements Webview {
 
   private final boolean async;
   private volatile boolean running;
+  private boolean closed;
 
   public static WebviewBuilder builder() {
     return new WebviewBuilder();
@@ -331,10 +332,14 @@ final class DWebView implements Webview {
     log.log(DEBUG, "destroy and terminate");
     wbNative.webview_destroy(webview);
     wbNative.webview_terminate(webview);
+    closed = true;
   }
 
   @Override
   public void close() {
+    if (closed) {
+      return;
+    }
     log.log(DEBUG, "close");
     if (async && !running) {
       uiThread.interrupt();
@@ -405,6 +410,8 @@ final class DWebView implements Webview {
       if (!isMainThread() || async) {
         throw new UnsupportedOperationException(ERROR_MAC_OS_NOT_MAIN_THREAD);
       }
+      String extra = isMainThread() ? MACOS_RELOAD : MACOS_DEVELOPER_ERROR;
+      throw new UnsupportedOperationException(ERROR_NO_XSTART_ON_FIRST_THREAD + extra);
     }
   }
 
