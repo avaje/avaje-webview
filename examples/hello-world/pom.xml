@@ -19,7 +19,7 @@
     <dependencies>
 
         <dependency>
-            <groupId>io.avaje.experimental</groupId>
+            <groupId>io.avaje</groupId>
             <artifactId>avaje-webview</artifactId>
             <version>0.6</version>
         </dependency>
