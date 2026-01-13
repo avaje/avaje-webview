@@ -101,19 +101,13 @@ public interface Webview extends Closeable, Runnable {
   void dispatch(@NonNull Runnable handler);
 
   /**
-   * Executes the webview event loop until the user presses "X" on the window.
+   * Executes the webview event loop until the user presses "X" on the window. Will block the
+   * calling thread if webview is not in asynchronous mode
    *
    * @see #close()
    */
   @Override
   void run();
-
-  /**
-   * Executes the webview event loop asynchronously until the user presses "X" on the window.
-   *
-   * @see #close()
-   */
-  void runAsync();
 
   /** Closes the webview, call this to end the event loop and free up resources. */
   @Override
