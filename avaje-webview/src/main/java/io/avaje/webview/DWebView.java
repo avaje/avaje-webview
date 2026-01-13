@@ -77,6 +77,9 @@ public final class DWebView implements Webview {
     this.webview =
         n.webview_create(debug, windowPointer == null ? MemorySegment.NULL : windowPointer);
     this.setSize(width, height);
+    if (OS_DISTRIBUTION == MACOS) {
+      MacOSHelper.createMenus();
+    }
   }
 
   /** Use this only if you absolutely know what you're doing. */
