@@ -1,0 +1,1 @@
+mvnd clean package && java -p ./examples/hello-world-jex/target/modules -m webview.example

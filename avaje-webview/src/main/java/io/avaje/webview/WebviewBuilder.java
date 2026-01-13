@@ -145,7 +145,7 @@ public final class WebviewBuilder {
       view.loadURL("about:blank");
     }
     if (shutdownHook) {
-      Runtime.getRuntime().addShutdownHook(new Hook(view::close));
+      Runtime.getRuntime().addShutdownHook(new Hook(view::shutdown));
     }
     return view;
   }

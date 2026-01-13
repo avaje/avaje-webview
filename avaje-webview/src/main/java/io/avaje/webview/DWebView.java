@@ -58,9 +58,7 @@ final class DWebView implements Webview {
   private static final int WV_HINT_MAX = 2;
   private static final int WV_HINT_FIXED = 3;
   private static final FunctionDescriptor BIND_DESCRIPTOR =
-      FunctionDescriptor.ofVoid(
-          JAVA_LONG, ADDRESS, // req (char*)
-          JAVA_LONG);
+      FunctionDescriptor.ofVoid(JAVA_LONG, ADDRESS);
   private static final FunctionDescriptor DISPATCH_DESCRIPTOR =
       FunctionDescriptor.ofVoid(
           ADDRESS, // webview pointer
@@ -75,6 +73,7 @@ final class DWebView implements Webview {
 
   private final boolean async;
   private volatile boolean running;
+  private boolean closed;
 
   public static WebviewBuilder builder() {
     return new WebviewBuilder();
@@ -247,8 +246,7 @@ final class DWebView implements Webview {
             String stacktrace = WebviewUtil.getExceptionStack(e);
             log.log(ERROR, stacktrace);
 
-            String exceptionJson =
-                '"' + WebviewUtil.jsonEscape(stacktrace) + '"';
+            String exceptionJson = '"' + WebviewUtil.jsonEscape(stacktrace) + '"';
 
             wbNative.webview_return(webview, seq, true, exceptionJson);
           }
@@ -267,9 +265,9 @@ final class DWebView implements Webview {
       return MethodHandles.lookup()
           .bind(
               callback,
-              "actualCallBack",
-              MethodType.methodType(void.class, long.class, MemorySegment.class, long.class))
-          .asType(MethodType.methodType(void.class, long.class, MemorySegment.class, long.class));
+              "invoke",
+              MethodType.methodType(void.class, long.class, MemorySegment.class))
+          .asType(MethodType.methodType(void.class, long.class, MemorySegment.class));
     } catch (Exception e) {
       throw new RuntimeException("Failed to create callback handle", e);
     }
@@ -322,6 +320,7 @@ final class DWebView implements Webview {
     log.log(DEBUG, "destroy and terminate");
     wbNative.webview_destroy(webview);
     wbNative.webview_terminate(webview);
+    closed = true;
   }
 
   @Override
@@ -330,8 +329,17 @@ final class DWebView implements Webview {
     if (async && !running) {
       uiThread.interrupt();
     } else {
-      handleDispatch(() -> wbNative.webview_terminate(webview));
+      handleDispatch(this::shutdown);
     }
+  }
+
+  void shutdown() {
+    if (closed) {
+      return;
+    }
+    closed = true;
+    log.log(DEBUG, "shutdown");
+    wbNative.webview_terminate(webview);
   }
 
   @Override
@@ -379,8 +387,8 @@ final class DWebView implements Webview {
     void callback(long seq, String req);
 
     @SuppressWarnings("unused")
-    default void actualCallBack(final long seq, final MemorySegment req, final long arg) {
-      callback(seq, req.byteSize() == 0 ? "" : req.getString(0));
+    default void invoke(final long seq, final MemorySegment req) {
+      callback(seq, req.reinterpret(Long.MAX_VALUE).getString(0));
     }
   }
 
