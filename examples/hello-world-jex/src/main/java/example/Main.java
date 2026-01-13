@@ -60,7 +60,7 @@ public class Main {
             .title("Pulse Focus")
             .url("http://localhost:" + port)
             .enableDeveloperTools(true)
-            .buildAsync();
+            .build();
     // Bind function to start the timer
     webview.bind(
         "__timerStart__",
