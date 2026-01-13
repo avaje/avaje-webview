@@ -264,7 +264,7 @@ final class DWebView implements Webview {
       return MethodHandles.lookup()
           .bind(
               callback,
-              "actualCallBack",
+              "invoke",
               MethodType.methodType(void.class, long.class, MemorySegment.class))
           .asType(MethodType.methodType(void.class, long.class, MemorySegment.class));
     } catch (Exception e) {
@@ -376,7 +376,7 @@ final class DWebView implements Webview {
     void callback(long seq, String req);
 
     @SuppressWarnings("unused")
-    default void actualCallBack(final long seq, final MemorySegment req) {
+    default void invoke(final long seq, final MemorySegment req) {
       callback(seq, req.reinterpret(Long.MAX_VALUE).getString(0));
     }
   }
