@@ -338,6 +338,15 @@ final class DWebView implements Webview {
   }
 
   @Override
+  public void shutdown() {
+    if (closed) {
+      return;
+    }
+    log.log(DEBUG, "shutdown");
+    wbNative.webview_terminate(webview);
+  }
+
+  @Override
   public void setDarkAppearance(boolean shouldAppearDark) {
     if (WINDOWS == OS_FAMILY) {
       handleDispatch(() -> WindowsHelper.setWindowAppearance(this, shouldAppearDark));

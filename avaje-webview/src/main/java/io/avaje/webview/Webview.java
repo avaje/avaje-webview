@@ -113,6 +113,8 @@ public interface Webview extends Closeable, Runnable {
   @Override
   void close();
 
+  void shutdown();
+
   void setDarkAppearance(boolean shouldAppearDark);
 
   Webview maximizeWindow();
