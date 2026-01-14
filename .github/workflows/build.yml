@@ -7,7 +7,7 @@ jobs:
     strategy:
       matrix:
 #        os: [macos-latest, ubuntu-latest]
-        os: [macos-latest]
+        os: [ubuntu-24.04]
     steps:
       - uses: actions/checkout@v6
 
@@ -18,6 +18,7 @@ jobs:
           cache: 'maven'
           github-token: ${{ secrets.GITHUB_TOKEN }}
           native-image-job-reports: 'true'
+          
       - name: Maven cache
         uses: actions/cache@v5
         env:
@@ -32,5 +33,3 @@ jobs:
 
       - name: Build with Maven
         run: mvn clean verify
-        env: 
-          JAVA_TOOL_OPTIONS:  -XstartOnFirstThread
