@@ -6,6 +6,25 @@
           "io.avaje.webview.WebviewNative"
         ]
       }
+    },
+    {
+      "type": {
+        "lambda": {
+          "declaringClass": "io.avaje.webview.DWebView",
+          "interfaces": [
+            "io.avaje.webview.DWebView$BindCallback"
+          ]
+        }
+      },
+      "methods": [
+        {
+          "name": "invoke",
+          "parameterTypes": [
+            "long",
+            "java.lang.foreign.MemorySegment"
+          ]
+        }
+      ]
     }
   ],
   "resources": [
@@ -17,7 +36,23 @@
     }
   ],
   "foreign": {
+    "upcalls": [
+      {
+        "returnType": "void",
+        "parameterTypes": [
+          "jlong",
+          "void*"
+        ]
+      }
+    ],
     "downcalls": [
+      {
+        "returnType": "void*",
+        "parameterTypes": [
+          "void*",
+          "void*"
+        ]
+      },
       {
         "returnType": "void",
         "parameterTypes": [
@@ -28,13 +63,6 @@
         ]
       },
       {
-        "returnType": "void*",
-        "parameterTypes": [
-          "void*",
-          "void*"
-        ]
-      },
-      {
         "returnType": "void",
         "parameterTypes": [
           "void*",
@@ -50,6 +78,15 @@
         ]
       },
       {
+        "returnType": "void",
+        "parameterTypes": [
+          "void*",
+          "void*",
+          "void*",
+          "jlong"
+        ]
+      },
+      {
         "returnType": "void*",
         "parameterTypes": [
           "void*",
@@ -61,6 +98,16 @@
       },
       {
         "returnType": "void*",
+        "parameterTypes": [
+          "void*"
+        ]
+      },
+      {
+        "returnType": "jint",
+        "parameterTypes": []
+      },
+      {
+        "returnType": "void",
         "parameterTypes": [
           "void*"
         ]
@@ -68,6 +115,9 @@
       {
         "returnType": "void",
         "parameterTypes": [
+          "void*",
+          "jlong",
+          "jboolean",
           "void*"
         ]
       },
