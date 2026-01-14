@@ -24,6 +24,23 @@ import module java.base;
 
 import module org.jspecify;
 
+/**
+ * Webview browser window.
+ *
+ * <pre>{@code
+ * Webview wv = Webview.builder()
+ *          .debug(true)
+ *          .title("My App")
+ *          .width(1000)
+ *          .height(800)
+ *          .url("http://localhost:" + port)
+ *          .build();
+ *
+ *  wv.run(); // Run the webview event loop, the webview is fully disposed when this returns.
+ *  wv.close(); // Free any resources allocated.
+ *
+ * }</pre>
+ */
 public interface Webview extends Closeable, Runnable {
 
   static WebviewBuilder builder() {
