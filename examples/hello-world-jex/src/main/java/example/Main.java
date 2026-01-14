@@ -61,6 +61,7 @@ public class Main {
             .url("http://localhost:" + port)
             .enableDeveloperTools(true)
             .build();
+
     // Bind function to start the timer
     webview.bind(
         "__timerStart__",
@@ -95,6 +96,7 @@ public class Main {
     webview.bind("__getCompletedSessions__", _ -> String.valueOf(completedTasks));
     webview.version();
     webview.run();
+    server.shutdown();
   }
 
   private static void countDown(Context ctx) {
