@@ -52,6 +52,16 @@ import module org.jspecify;
 final class DWebView implements Webview {
 
   private static final System.Logger log = System.getLogger("io.avaje.webview");
+  private static final String MACOS_RELOAD =
+      "Reload the application with -XstartOnFirstThread to fix this.";
+  private static final String MACOS_DEVELOPER_ERROR =
+      "Also, webview has to be run on JVM's main thread. This is a limitation of MacOS.";
+
+  private static final String ERROR_NO_XSTART_ON_FIRST_THREAD =
+      "Process was not started with -XstartOnFirstThread. ";
+
+  private static final String ERROR_MAC_OS_NOT_MAIN_THREAD =
+      "Cannot create webview on a non-main thread on macOS.";
 
   private static final int WV_HINT_NONE = 0;
   private static final int WV_HINT_MIN = 1;
@@ -80,13 +90,15 @@ final class DWebView implements Webview {
   }
 
   DWebView(
-      WebviewNative n,
+      WebviewNative webNative,
       boolean debug,
       @Nullable MemorySegment windowPointer,
       int width,
       int height,
       boolean async) {
-    wbNative = n;
+
+    checkEnvironment();
+    wbNative = webNative;
     this.async = async;
     if (!async) {
       this.uiThread = Thread.currentThread();
@@ -375,6 +387,38 @@ final class DWebView implements Webview {
   public String version() {
     var versionInfo = wbNative.webview_version();
     return versionInfo.versionNumber();
+  }
+
+  /**
+   * Checks if the current thread is the main thread.
+   *
+   * @return {@code true} if the current thread is the main thread, {@code false} otherwise.
+   */
+  public static boolean isMainThread() {
+    return "main".equals(Thread.currentThread().getName());
+  }
+
+  /**
+   * Checks the environment to ensure compatibility with the current platform.
+   *
+   * <p>This method performs platform-specific checks to verify that the application is running in a
+   * supported environment.
+   *
+   * @throws UnsupportedOperationException if the environment does not meet the required conditions.
+   */
+  private void checkEnvironment() {
+    if (OS_DISTRIBUTION == MACOS) {
+      if (!MacOSHelper.startedOnFirstThread()) {
+        String extra = isMainThread() ? MACOS_RELOAD : MACOS_DEVELOPER_ERROR;
+        throw new UnsupportedOperationException(ERROR_NO_XSTART_ON_FIRST_THREAD + extra);
+      }
+
+      if (!isMainThread() || async) {
+        throw new UnsupportedOperationException(ERROR_MAC_OS_NOT_MAIN_THREAD);
+      }
+      String extra = isMainThread() ? MACOS_RELOAD : MACOS_DEVELOPER_ERROR;
+      throw new UnsupportedOperationException(ERROR_NO_XSTART_ON_FIRST_THREAD + extra);
+    }
   }
 
   /** Used in {@code webview_bind} */
