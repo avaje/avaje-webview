@@ -22,14 +22,53 @@
         "returnType": "void",
         "parameterTypes": [
           "void*",
+          "void*"
+        ]
+      },
+      {
+        "returnType": "void*",
+        "parameterTypes": [
+          "void*"
+        ]
+      },
+      {
+        "returnType": "void*",
+        "parameterTypes": []
+      },
+      {
+        "returnType": "void",
+        "parameterTypes": [
+          "void*"
+        ]
+      },
+      {
+        "returnType": "void",
+        "parameterTypes": [
+          "void*",
           "jint",
           "jint",
           "jint"
         ]
       },
       {
+        "returnType": "void",
+        "parameterTypes": [
+          "void*",
+          "void*",
+          "jlong"
+        ]
+      },
+      {
         "returnType": "void*",
         "parameterTypes": [
+          "void*",
+          "void*"
+        ]
+      },
+      {
+        "returnType": "void*",
+        "parameterTypes": [
+          "void*",
           "void*",
           "void*"
         ]
@@ -38,7 +77,9 @@
         "returnType": "void",
         "parameterTypes": [
           "void*",
-          "void*"
+          "void*",
+          "void*",
+          "jlong"
         ]
       },
       {
@@ -46,28 +87,17 @@
         "parameterTypes": [
           "void*",
           "void*",
-          "void*"
-        ]
-      },
-      {
-        "returnType": "void*",
-        "parameterTypes": [
           "void*",
           "void*",
-          "void*",
-          "void*",
-          "void*"
-        ]
-      },
-      {
-        "returnType": "void*",
-        "parameterTypes": [
           "void*"
         ]
       },
       {
         "returnType": "void",
         "parameterTypes": [
+          "void*",
+          "jlong",
+          "jboolean",
           "void*"
         ]
       },

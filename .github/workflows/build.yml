@@ -18,6 +18,15 @@ jobs:
           cache: 'maven'
           github-token: ${{ secrets.GITHUB_TOKEN }}
           native-image-job-reports: 'true'
+          
+      - name: Maven cache
+        uses: actions/cache@v5
+        env:
+          cache-name: maven-cache
+        with:
+          path:
+            ~/.m2
+          key: build-${{ env.cache-name }}
 
       - name: maven version
         run: mvn --version
