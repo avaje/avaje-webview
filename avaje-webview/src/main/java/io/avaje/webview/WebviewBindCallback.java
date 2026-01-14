@@ -20,12 +20,25 @@
  */
 package io.avaje.webview;
 
+/**
+ * A callback interface for handling function calls invoked from the JavaScript environment.
+ *
+ * <p>When a function is registered via {@link Webview#bind(String, WebviewBindCallback)}, calling
+ * that function in JavaScript serializes the arguments into a JSON array and passes them to this
+ * {@code apply} method.
+ */
 @FunctionalInterface
 public interface WebviewBindCallback {
 
   /**
-   * @param jsonArgs A JSON string containing an array of arguments.
-   * @return A JSON string to be deserialized in the Webview.
+   * Processes a call from the webview's JavaScript context.
+   *
+   * @param jsonArgs A JSON-encoded string representing an array of arguments passed from JavaScript
+   *     (e.g., {@code "[1, \"hello\", true]"}).
+   * @return A JSON-encoded string representing the return value to be sent back to JavaScript.
+   *     Return {@code "null"} (as a string) for void functions.
+   * @throws Throwable Any exception thrown will be caught by the bridge and passed to the
+   *     JavaScript Promise's {@code .catch()} handler.
    */
   String apply(String jsonArgs) throws Throwable;
 }
