@@ -232,18 +232,19 @@ public final class WebviewBuilder {
   }
 
   private WebviewNative initNativeLibrary() {
-    for (String lib : platformLibraries()) {
-      File target = createTarget(lib);
-      if (target.exists() && !keepExtractedFile && !target.delete()) {
-        System.out.println("Failed to delete previously extracted: " + target);
-      }
-      if (!keepExtractedFile) {
-        target.deleteOnExit();
-      }
+    String prefix = "/io/avaje/webview/nativelib/";
+    String name = System.mapLibraryName("webview");
 
-      if (target.exists() || extractToFile(lib, target)) {
-        System.load(target.getAbsolutePath());
-      }
+    File target = createTarget(prefix + name);
+
+    if (target.exists() && !keepExtractedFile && !target.delete()) {
+      System.out.println("Failed to delete previously extracted: " + target);
+    }
+    if (!keepExtractedFile) {
+      target.deleteOnExit();
+    }
+    if (target.exists() || extractToFile(lib, target)) {
+      System.load(target.getAbsolutePath());
     }
 
     // Return the FFM-based native implementation
@@ -273,31 +274,6 @@ public final class WebviewBuilder {
       }
     }
     return new File(libName);
-  }
-
-  private static List<String> platformLibraries() {
-    try {
-      String prefix = "/io/avaje/webview/nativelib/";
-      switch (OS_DISTRIBUTION) {
-        case LINUX -> {
-          if (LinuxLibC.isGNU()) {
-            return List.of(prefix + "linux/" + archTarget + "/gnu/libwebview.so");
-          }
-          return List.of(prefix + "linux/" + archTarget + "/musl/libwebview.so");
-        }
-        case MACOS -> {
-          return List.of(prefix + "macos/" + archTarget + "/libwebview.dylib");
-        }
-        case WINDOWS_NT -> {
-          return List.of(prefix + "windows_nt/" + archTarget + "/webview.dll");
-        }
-        default ->
-            throw new IllegalStateException(
-                "Unsupported platform: " + OS_DISTRIBUTION + ":" + archTarget);
-      }
-    } catch (IOException e) {
-      throw new UncheckedIOException(e);
-    }
   }
 
   private static boolean extractToFile(String lib, File target) {
