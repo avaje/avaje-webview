@@ -14,64 +14,81 @@ final class WebviewNative {
     return new WebviewBuilder();
   }
 
-  private final SymbolLookup library;
+  private static final SymbolLookup LIBRARY;
+  private static final Linker LINKER = Linker.nativeLinker();
 
-  WebviewNative(String libraryName) {
-    this.library = SymbolLookup.libraryLookup(libraryName, Arena.global());
-    Arena.ofAuto();
-  }
+  // Memory layouts for webview_version structures
+  private static final StructLayout WEBVIEW_VERSION_T_LAYOUT =
+      MemoryLayout.structLayout(
+          JAVA_INT.withName("major"), JAVA_INT.withName("minor"), JAVA_INT.withName("patch"));
 
-  WebviewNative() {
-    this(
+  private static final StructLayout WEBVIEW_VERSION_INFO_T_LAYOUT =
+      MemoryLayout.structLayout(
+          WEBVIEW_VERSION_T_LAYOUT.withName("version"),
+          MemoryLayout.sequenceLayout(32, JAVA_BYTE).withName("version_number"),
+          MemoryLayout.sequenceLayout(48, JAVA_BYTE).withName("pre_release"),
+          MemoryLayout.sequenceLayout(48, JAVA_BYTE).withName("build_metadata"));
+
+  // Cached method handles
+  private static final MethodHandle webview_version;
+  private static final MethodHandle webview_create;
+  private static final MethodHandle webview_get_window;
+  private static final MethodHandle webview_set_html;
+  private static final MethodHandle webview_navigate;
+  private static final MethodHandle webview_set_title;
+  private static final MethodHandle webview_set_size;
+  private static final MethodHandle webview_run;
+  private static final MethodHandle webview_destroy;
+  private static final MethodHandle webview_terminate;
+  private static final MethodHandle webview_eval;
+  private static final MethodHandle webview_init;
+  private static final MethodHandle webview_bind;
+  private static final MethodHandle webview_unbind;
+  private static final MethodHandle webview_return;
+  private static final MethodHandle webview_dispatch;
+
+  static {
+    String libraryName =
         System.getProperty("os.name").toLowerCase().contains("win")
             ? "webview.dll"
             : System.getProperty("os.name").toLowerCase().contains("mac")
                 ? "libwebview.dylib"
-                : "libwebview.so");
+                : "libwebview.so";
+
+    LIBRARY = SymbolLookup.libraryLookup(libraryName, Arena.global());
+
+    // Initialize all method handles
+    webview_version = downcallHandle("webview_version", FunctionDescriptor.of(ADDRESS));
+    webview_create =
+        downcallHandle("webview_create", FunctionDescriptor.of(ADDRESS, JAVA_BOOLEAN, ADDRESS));
+    webview_get_window =
+        downcallHandle("webview_get_window", FunctionDescriptor.of(ADDRESS, ADDRESS));
+    webview_set_html =
+        downcallHandle("webview_set_html", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
+    webview_navigate =
+        downcallHandle("webview_navigate", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
+    webview_set_title =
+        downcallHandle("webview_set_title", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
+    webview_set_size =
+        downcallHandle(
+            "webview_set_size", FunctionDescriptor.ofVoid(ADDRESS, JAVA_INT, JAVA_INT, JAVA_INT));
+    webview_run = downcallHandle("webview_run", FunctionDescriptor.ofVoid(ADDRESS));
+    webview_destroy = downcallHandle("webview_destroy", FunctionDescriptor.ofVoid(ADDRESS));
+    webview_terminate = downcallHandle("webview_terminate", FunctionDescriptor.ofVoid(ADDRESS));
+    webview_eval = downcallHandle("webview_eval", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
+    webview_init = downcallHandle("webview_init", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
+    webview_bind =
+        downcallHandle(
+            "webview_bind", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, ADDRESS, JAVA_LONG));
+    webview_unbind = downcallHandle("webview_unbind", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
+    webview_return =
+        downcallHandle(
+            "webview_return", FunctionDescriptor.ofVoid(ADDRESS, JAVA_LONG, JAVA_BOOLEAN, ADDRESS));
+    webview_dispatch =
+        downcallHandle("webview_dispatch", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, JAVA_LONG));
   }
 
-  /** Version information structure */
-  record VersionInfo(
-      int major,
-      int minor,
-      int patch,
-      String versionNumber,
-      String preRelease,
-      String buildMetadata) {
-
-    static final StructLayout LAYOUT =
-        MemoryLayout.structLayout(
-            JAVA_INT.withName("major"),
-            JAVA_INT.withName("minor"),
-            JAVA_INT.withName("patch"),
-            MemoryLayout.sequenceLayout(32, JAVA_BYTE).withName("version_number"),
-            MemoryLayout.sequenceLayout(48, JAVA_BYTE).withName("pre_release"),
-            MemoryLayout.sequenceLayout(48, JAVA_BYTE).withName("build_metadata"));
-
-    static VersionInfo fromMemorySegment(MemorySegment segment) {
-      int major = segment.get(JAVA_INT, 0);
-      int minor = segment.get(JAVA_INT, 4);
-      int patch = segment.get(JAVA_INT, 8);
-
-      String versionNumber = readCString(segment, 12, 32);
-      String preRelease = readCString(segment, 44, 48);
-      String buildMetadata = readCString(segment, 92, 48);
-
-      return new VersionInfo(major, minor, patch, versionNumber, preRelease, buildMetadata);
-    }
-
-    private static String readCString(MemorySegment segment, long offset, int maxLen) {
-      byte[] bytes = new byte[maxLen];
-      for (int i = 0; i < maxLen; i++) {
-        byte b = segment.get(JAVA_BYTE, offset + i);
-        if (b == 0) {
-          return new String(bytes, 0, i, StandardCharsets.UTF_8);
-        }
-        bytes[i] = b;
-      }
-      return new String(bytes, StandardCharsets.UTF_8);
-    }
-  }
+  WebviewNative() {}
 
   /**
    * Creates a new webview instance. If debug is true - developer tools will be enabled (if the
@@ -86,9 +103,8 @@ final class WebviewNative {
    */
   public MemorySegment webview_create(boolean debug, MemorySegment window) {
     try {
-      MethodHandle handle =
-          downcallHandle("webview_create", FunctionDescriptor.of(ADDRESS, JAVA_BOOLEAN, ADDRESS));
-      return (MemorySegment) handle.invoke(debug, window == null ? MemorySegment.NULL : window);
+      return (MemorySegment)
+          webview_create.invoke(debug, window == null ? MemorySegment.NULL : window);
     } catch (Throwable e) {
       throw new RuntimeException(e);
     }
@@ -101,9 +117,7 @@ final class WebviewNative {
    */
   public MemorySegment webview_get_window(MemorySegment webview) {
     try {
-      MethodHandle handle =
-          downcallHandle("webview_get_window", FunctionDescriptor.of(ADDRESS, ADDRESS));
-      return (MemorySegment) handle.invoke(webview);
+      return (MemorySegment) webview_get_window.invoke(webview);
     } catch (Throwable e) {
       throw new RuntimeException(e);
     }
@@ -116,11 +130,8 @@ final class WebviewNative {
    * @param html The raw HTML string.
    */
   public void webview_set_html(MemorySegment webview, String html) {
-    try (Arena tempArena = Arena.ofConfined()) {
-      MethodHandle handle =
-          downcallHandle("webview_set_html", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
-      MemorySegment htmlSegment = tempArena.allocateFrom(html);
-      handle.invoke(webview, htmlSegment);
+    try (var arena = Arena.ofConfined()) {
+      webview_set_html.invoke(webview, arena.allocateFrom(html));
     } catch (Throwable e) {
       throw new RuntimeException(e);
     }
@@ -133,11 +144,8 @@ final class WebviewNative {
    * @param url The target url, can be a data uri.
    */
   public void webview_navigate(MemorySegment webview, String url) {
-    try (Arena tempArena = Arena.ofConfined()) {
-      MethodHandle handle =
-          downcallHandle("webview_navigate", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
-      MemorySegment urlSegment = tempArena.allocateFrom(url);
-      handle.invoke(webview, urlSegment);
+    try (var arena = Arena.ofConfined()) {
+      webview_navigate.invoke(webview, arena.allocateFrom(url));
     } catch (Throwable e) {
       throw new RuntimeException(e);
     }
@@ -150,11 +158,8 @@ final class WebviewNative {
    * @param title
    */
   public void webview_set_title(MemorySegment webview, String title) {
-    try (Arena tempArena = Arena.ofConfined()) {
-      MethodHandle handle =
-          downcallHandle("webview_set_title", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
-      MemorySegment titleSegment = tempArena.allocateFrom(title);
-      handle.invoke(webview, titleSegment);
+    try (var arena = Arena.ofConfined()) {
+      webview_set_title.invoke(webview, arena.allocateFrom(title));
     } catch (Throwable e) {
       throw new RuntimeException(e);
     }
@@ -171,10 +176,7 @@ final class WebviewNative {
    */
   public void webview_set_size(MemorySegment webview, int width, int height, int hint) {
     try {
-      MethodHandle handle =
-          downcallHandle(
-              "webview_set_size", FunctionDescriptor.ofVoid(ADDRESS, JAVA_INT, JAVA_INT, JAVA_INT));
-      handle.invoke(webview, width, height, hint);
+      webview_set_size.invoke(webview, width, height, hint);
     } catch (Throwable e) {
       throw new RuntimeException(e);
     }
@@ -188,8 +190,7 @@ final class WebviewNative {
    */
   public void webview_run(MemorySegment webview) {
     try {
-      MethodHandle handle = downcallHandle("webview_run", FunctionDescriptor.ofVoid(ADDRESS));
-      handle.invoke(webview);
+      webview_run.invoke(webview);
     } catch (Throwable e) {
       throw new RuntimeException(e);
     }
@@ -202,8 +203,7 @@ final class WebviewNative {
    */
   public void webview_destroy(MemorySegment webview) {
     try {
-      MethodHandle handle = downcallHandle("webview_destroy", FunctionDescriptor.ofVoid(ADDRESS));
-      handle.invoke(webview);
+      webview_destroy.invoke(webview);
     } catch (Throwable e) {
       throw new RuntimeException(e);
     }
@@ -216,8 +216,7 @@ final class WebviewNative {
    */
   public void webview_terminate(MemorySegment webview) {
     try {
-      MethodHandle handle = downcallHandle("webview_terminate", FunctionDescriptor.ofVoid(ADDRESS));
-      handle.invoke(webview);
+      webview_terminate.invoke(webview);
     } catch (Throwable e) {
       throw new RuntimeException(e);
     }
@@ -230,11 +229,8 @@ final class WebviewNative {
    * @param js The script to execute
    */
   public void webview_eval(MemorySegment webview, String js) {
-    try (Arena tempArena = Arena.ofConfined()) {
-      MethodHandle handle =
-          downcallHandle("webview_eval", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
-      MemorySegment jsSegment = tempArena.allocateFrom(js);
-      handle.invoke(webview, jsSegment);
+    try (var arena = Arena.ofConfined()) {
+      webview_eval.invoke(webview, arena.allocateFrom(js));
     } catch (Throwable e) {
       throw new RuntimeException(e);
     }
@@ -248,11 +244,8 @@ final class WebviewNative {
    * @param js The script to execute
    */
   public void webview_init(MemorySegment webview, String js) {
-    try (Arena tempArena = Arena.ofConfined()) {
-      MethodHandle handle =
-          downcallHandle("webview_init", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
-      MemorySegment jsSegment = tempArena.allocateFrom(js);
-      handle.invoke(webview, jsSegment);
+    try (var arena = Arena.ofConfined()) {
+      webview_init.invoke(webview, arena.allocateFrom(js));
     } catch (Throwable e) {
       throw new RuntimeException(e);
     }
@@ -268,12 +261,8 @@ final class WebviewNative {
    * @param arg Unused
    */
   public void webview_bind(MemorySegment webview, String name, MemorySegment callback, long arg) {
-    try (Arena tempArena = Arena.ofConfined()) {
-      MethodHandle handle =
-          downcallHandle(
-              "webview_bind", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, ADDRESS, JAVA_LONG));
-      MemorySegment nameSegment = tempArena.allocateFrom(name);
-      handle.invoke(webview, nameSegment, callback, arg);
+    try (var arena = Arena.ofConfined()) {
+      webview_bind.invoke(webview, arena.allocateFrom(name), callback, arg);
     } catch (Throwable e) {
       throw new RuntimeException(e);
     }
@@ -286,11 +275,8 @@ final class WebviewNative {
    * @param name The name of the callback
    */
   public void webview_unbind(MemorySegment webview, String name) {
-    try (Arena tempArena = Arena.ofConfined()) {
-      MethodHandle handle =
-          downcallHandle("webview_unbind", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
-      MemorySegment nameSegment = tempArena.allocateFrom(name);
-      handle.invoke(webview, nameSegment);
+    try (var arena = Arena.ofConfined()) {
+      webview_unbind.invoke(webview, arena.allocateFrom(name));
     } catch (Throwable e) {
       throw new RuntimeException(e);
     }
@@ -306,13 +292,8 @@ final class WebviewNative {
    * @param result The result (in json)
    */
   public void webview_return(MemorySegment webview, long seq, boolean isError, String result) {
-    try (Arena tempArena = Arena.ofConfined()) {
-      MethodHandle handle =
-          downcallHandle(
-              "webview_return",
-              FunctionDescriptor.ofVoid(ADDRESS, JAVA_LONG, JAVA_BOOLEAN, ADDRESS));
-      MemorySegment resultSegment = tempArena.allocateFrom(result);
-      handle.invoke(webview, seq, isError, resultSegment);
+    try (var arena = Arena.ofConfined()) {
+      webview_return.invoke(webview, seq, isError, arena.allocateFrom(result));
     } catch (Throwable e) {
       throw new RuntimeException(e);
     }
@@ -328,31 +309,48 @@ final class WebviewNative {
    */
   public void webview_dispatch(MemorySegment webview, MemorySegment callback, long arg) {
     try {
-      MethodHandle handle =
-          downcallHandle(
-              "webview_dispatch", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, JAVA_LONG));
-      handle.invoke(webview, callback, arg);
+      webview_dispatch.invoke(webview, callback, arg);
     } catch (Throwable e) {
       throw new RuntimeException(e);
     }
   }
 
-  /** Returns the version info. */
-  public VersionInfo webview_version() {
-    try (Arena tempArena = Arena.ofConfined()) {
-      MethodHandle handle =
-          downcallHandle("webview_version", FunctionDescriptor.of(VersionInfo.LAYOUT));
-      MemorySegment result = (MemorySegment) handle.invoke(tempArena);
-      return VersionInfo.fromMemorySegment(result);
+  /** Get the library's version information. */
+  public String webview_version() {
+    try {
+      MemorySegment result = (MemorySegment) webview_version.invoke();
+
+      // Reinterpret the returned pointer with the struct layout
+      MemorySegment versionInfo = result.reinterpret(WEBVIEW_VERSION_INFO_T_LAYOUT.byteSize());
+
+      // Extract version_number string
+      long versionNumberOffset =
+          WEBVIEW_VERSION_INFO_T_LAYOUT.byteOffset(
+              MemoryLayout.PathElement.groupElement("version_number"));
+      return readCString(versionInfo, versionNumberOffset, 32);
     } catch (Throwable e) {
-      throw new RuntimeException(e);
+      throw new RuntimeException("Failed to get webview version", e);
     }
   }
 
-  private MethodHandle downcallHandle(String name, FunctionDescriptor descriptor) {
-    return library
+  /** Helper method to read a null-terminated C string from memory */
+  private static String readCString(MemorySegment segment, long offset, int maxLen) {
+    byte[] bytes = new byte[maxLen];
+    int len = 0;
+
+    for (int i = 0; i < maxLen; i++) {
+      byte b = segment.get(JAVA_BYTE, offset + i);
+      if (b == 0) break;
+      bytes[len++] = b;
+    }
+
+    return new String(bytes, 0, len);
+  }
+
+  private static MethodHandle downcallHandle(String name, FunctionDescriptor descriptor) {
+    return LIBRARY
         .find(name)
-        .map(addr -> Linker.nativeLinker().downcallHandle(addr, descriptor))
+        .map(addr -> LINKER.downcallHandle(addr, descriptor))
         .orElseThrow(() -> new UnsatisfiedLinkError("Unable to find symbol: " + name));
   }
 }

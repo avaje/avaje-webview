@@ -32,6 +32,13 @@
             <artifactId>jspecify</artifactId>
             <version>1.0.0</version>
         </dependency>
+        
+        <dependency>
+            <groupId>io.avaje</groupId>
+            <artifactId>junit</artifactId>
+            <version>1.6</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
 </project>
