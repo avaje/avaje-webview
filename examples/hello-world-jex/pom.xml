@@ -66,4 +66,43 @@
 			</plugin>
 		</plugins>
 	</build>
+
+	<profiles>
+		<profile>
+			<id>native</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.graalvm.buildtools</groupId>
+						<artifactId>native-maven-plugin</artifactId>
+						<version>0.11.3</version>
+						<executions>
+							<execution>
+								<id>build-native</id>
+								<goals>
+									<goal>compile-no-fork</goal>
+								</goals>
+								<phase>package</phase>
+								<configuration>
+									<mainClass>example.Main</mainClass>
+									<jvmArgs>
+										<jvmArg>--enable-native-access=ALL-UNNAMED</jvmArg>
+									</jvmArgs>
+									<buildArgs>
+										<buildArg>-Ob</buildArg> <!-- fast build -->
+										<buildArg>-R:MaxHeapSize=200m</buildArg>
+										<buildArg>--emit build-report</buildArg>
+										<buildArg>--no-fallback</buildArg>
+										<buildArg>--allow-incomplete-classpath</buildArg>
+										<buildArg>-march=compatibility</buildArg>
+									</buildArgs>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+
+		</profile>
+	</profiles>
 </project>
