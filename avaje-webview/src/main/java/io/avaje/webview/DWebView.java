@@ -260,14 +260,20 @@ final class DWebView implements Webview {
     wbNative.webview_bind(webview, name, callbackStub, 0);
   }
 
+  private static void bindCallbackInvoke(BindCallback callback, long seq, MemorySegment req) {
+    callback.callback(seq, req.reinterpret(Long.MAX_VALUE).getString(0));
+  }
+
   private static MethodHandle createBindCallbackHandle(BindCallback callback) {
     try {
-      return MethodHandles.lookup()
-          .bind(
-              callback,
-              "invoke",
-              MethodType.methodType(void.class, long.class, MemorySegment.class))
-          .asType(MethodType.methodType(void.class, long.class, MemorySegment.class));
+      return MethodHandles.insertArguments(
+              MethodHandles.lookup().findStatic(
+                      DWebView.class,
+                      "bindCallbackInvoke",
+                      MethodType.methodType(void.class, BindCallback.class, long.class, MemorySegment.class)
+              ),
+              0, callback
+      );
     } catch (Exception e) {
       throw new RuntimeException("Failed to create callback handle", e);
     }
