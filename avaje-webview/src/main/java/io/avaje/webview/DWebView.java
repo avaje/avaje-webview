@@ -260,6 +260,7 @@ final class DWebView implements Webview {
     wbNative.webview_bind(webview, name, callbackStub, 0);
   }
 
+  @SuppressWarnings("unused")
   private static void bindCallbackInvoke(BindCallback callback, long seq, MemorySegment req) {
     callback.callback(seq, req.reinterpret(Long.MAX_VALUE).getString(0));
   }
@@ -267,13 +268,14 @@ final class DWebView implements Webview {
   private static MethodHandle createBindCallbackHandle(BindCallback callback) {
     try {
       return MethodHandles.insertArguments(
-              MethodHandles.lookup().findStatic(
-                      DWebView.class,
-                      "bindCallbackInvoke",
-                      MethodType.methodType(void.class, BindCallback.class, long.class, MemorySegment.class)
-              ),
-              0, callback
-      );
+          MethodHandles.lookup()
+              .findStatic(
+                  DWebView.class,
+                  "bindCallbackInvoke",
+                  MethodType.methodType(
+                      void.class, BindCallback.class, long.class, MemorySegment.class)),
+          0,
+          callback);
     } catch (Exception e) {
       throw new RuntimeException("Failed to create callback handle", e);
     }
@@ -390,11 +392,6 @@ final class DWebView implements Webview {
      * @param req The javascript arguments converted to a json array (string)
      */
     void callback(long seq, String req);
-
-    @SuppressWarnings("unused")
-    default void invoke(final long seq, final MemorySegment req) {
-      callback(seq, req.reinterpret(Long.MAX_VALUE).getString(0));
-    }
   }
 
   /** Used in {@code webview_dispatch} */
