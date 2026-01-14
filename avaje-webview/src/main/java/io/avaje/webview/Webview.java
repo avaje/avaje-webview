@@ -24,100 +24,191 @@ import module java.base;
 
 import module org.jspecify;
 
+/**
+ * Provides a high-level interface for creating and managing a native Webview window.
+ *
+ * <p>A {@code Webview} instance allows for rendering HTML/URL content, executing JavaScript, and
+ * binding Java callbacks to the JavaScript environment.
+ *
+ *
+ * @see WebviewBuilder
+ */
 public interface Webview extends Closeable, Runnable {
 
+  /**
+   * Creates a new builder to configure and instantiate a {@code Webview}.
+   *
+   * @return a new WebviewBuilder instance
+   */
   static WebviewBuilder builder() {
     return new WebviewBuilder();
   }
 
-  /** Use this only if you absolutely know what you're doing. */
+  /**
+   * Returns the native window handle/pointer.
+   *
+   * <p><strong>Caution:</strong> This provides direct access to the underlying native memory. Use
+   * this only if you are integrating with other native libraries and understand the threading
+   * implications.
+   *
+   * @return the {@link MemorySegment} pointing to the native window
+   */
   MemorySegment nativeWindowPointer();
 
+  /**
+   * Sets the HTML content of the webview directly.
+   *
+   * @param html the HTML string to render, or {@code null} to clear
+   */
   void setHTML(@Nullable String html);
 
+  /**
+   * Navigates the webview to the specified URL.
+   *
+   * @param url the URL to load (e.g., "https://google.com"), or {@code null}
+   */
   void loadURL(@Nullable String url);
 
+  /**
+   * Sets the title of the native window.
+   *
+   * @param title the window title
+   */
   void setTitle(@NonNull String title);
 
+  /**
+   * Sets the minimum window dimensions.
+   *
+   * @param width the minimum width in pixels
+   * @param height the minimum height in pixels
+   */
   void setMinSize(int width, int height);
 
+  /**
+   * Sets the maximum window dimensions.
+   *
+   * @param width the maximum width in pixels
+   * @param height the maximum height in pixels
+   */
   void setMaxSize(int width, int height);
 
+  /**
+   * Resizes the window to the specified dimensions.
+   *
+   * @param width the width in pixels
+   * @param height the height in pixels
+   */
   void setSize(int width, int height);
 
+  /**
+   * Sets the window size and prevents the user from manually resizing it.
+   *
+   * @param width the width in pixels
+   * @param height the height in pixels
+   */
   void setFixedSize(int width, int height);
 
   /**
-   * Sets the script to be run on page load. Defaults to no nested access (false).
+   * Registers a script to be executed automatically whenever a new page is loaded. Defaults to no
+   * nested access (script will not run in iframes).
    *
-   * @implNote This get's called AFTER window.load.
-   * @param script
+   * @param script the JavaScript source code to run
+   * @implNote The script is executed immediately after the {@code window.load} event.
    * @see #setInitScript(String, boolean)
    */
   void setInitScript(@NonNull String script);
 
   /**
-   * Sets the script to be run on page load.
+   * Registers a script to be executed automatically whenever a new page is loaded.
    *
-   * @implNote This get's called AFTER window.load.
-   * @param script
-   * @param allowNestedAccess whether or not to inject the script into nested iframes.
+   * @param script the JavaScript source code to run
+   * @param allowNestedAccess if {@code true}, the script will also be injected into nested iframes
+   * @implNote The script is executed immediately after the {@code window.load} event.
    */
   void setInitScript(@NonNull String script, boolean allowNestedAccess);
 
   /**
-   * Executes the given script NOW.
+   * Evaluates the provided JavaScript string immediately in the current context.
    *
-   * @param script
+   * @param script the JavaScript source code to execute
    */
   void eval(@NonNull String script);
 
   /**
-   * Binds a function to the JavaScript environment on page load.
+   * Binds a Java callback to a global JavaScript function.
    *
-   * @implNote This get's called AFTER window.load.
-   * @implSpec After calling the function in JavaScript you will get a Promise instead of the value.
-   *     This is to prevent you from locking up the browser while waiting on your Java code to
-   *     execute and generate a return value.
-   * @param name The name to be used for the function, e.g "foo" to get foo().
-   * @param handler The callback handler, accepts a JsonArray (which are all arguments passed to the
-   *     function()) and returns a value which is of type JsonElement (can be null). Exceptions are
-   *     automatically passed back to JavaScript.
+   * <p>When the function is called in JavaScript, it returns a {@code Promise} that resolves when
+   * the Java handler completes. This prevents the browser UI thread from locking up during Java
+   * execution.
+   *
+   * @param name the name of the function in the JavaScript {@code window} object (e.g.,
+   *     "submitData")
+   * @param handler the callback logic to execute when the function is invoked
+   * @implNote Binds persist across page navigations. Callbacks are registered after {@code
+   *     window.load}.
    */
   void bind(@NonNull String name, @NonNull WebviewBindCallback handler);
 
   /**
-   * Unbinds a function, removing it from future pages.
+   * Removes a previously bound JavaScript function.
    *
-   * @param name The name of the function.
+   * @param name the name of the function to unbind
    */
   void unbind(@NonNull String name);
 
   /**
-   * Executes an event on the event thread.
+   * Schedules a task to be executed on the webview's internal event thread.
    *
-   * @implNote Use this only if you absolutely know what you're doing.
+   * <p>Use this for thread-safe interaction with the webview state from external background
+   * threads.
+   *
+   * @param handler the task to run on the event thread
    */
   void dispatch(@NonNull Runnable handler);
 
   /**
-   * Executes the webview event loop until the user presses "X" on the window. Will block the
-   * calling thread if webview is not in asynchronous mode
+   * Starts the webview event loop.
+   *
+   * <p>This call is blocking and will not return until the window is closed or {@link #close()} is
+   * called, unless the webview is configured in asynchronous mode.
    *
    * @see #close()
    */
   @Override
   void run();
 
-  /** Closes the webview, call this to end the event loop and free up resources. */
+  /**
+   * Closes the webview window and releases all associated native resources. This will cause the
+   * {@link #run()} loop to exit.
+   */
   @Override
   void close();
 
+  /**
+   * Requests the window to use a dark theme appearance.
+   *
+   * @param shouldAppearDark {@code true} for dark mode, {@code false} for light mode
+   */
   void setDarkAppearance(boolean shouldAppearDark);
 
+  /**
+   * Maximizes the webview window to fill the screen.
+   *
+   * @return this Webview instance for chaining
+   */
   Webview maximizeWindow();
 
+  /**
+   * Switches the webview window to fullscreen mode.
+   *
+   * @return this Webview instance for chaining
+   */
   Webview fullscreen();
 
+  /**
+   * Returns the version string of the underlying webview engine.
+   *
+   * @return the engine version
+   */
   String version();
 }
