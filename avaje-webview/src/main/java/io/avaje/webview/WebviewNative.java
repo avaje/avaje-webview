@@ -88,7 +88,7 @@ final class WebviewNative {
         downcallHandle("webview_dispatch", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, JAVA_LONG));
   }
 
-  WebviewNative() {}
+  private WebviewNative() {}
 
   /**
    * Creates a new webview instance. If debug is true - developer tools will be enabled (if the
@@ -130,9 +130,8 @@ final class WebviewNative {
    * @param html The raw HTML string.
    */
   public void webview_set_html(MemorySegment webview, String html) {
-    try (Arena tempArena = Arena.ofConfined()) {
-      MemorySegment htmlSegment = tempArena.allocateFrom(html);
-      webview_set_html.invoke(webview, htmlSegment);
+    try (var arena = Arena.ofConfined()) {
+      webview_set_html.invoke(webview, arena.allocateFrom(html));
     } catch (Throwable e) {
       throw new RuntimeException(e);
     }
@@ -145,9 +144,8 @@ final class WebviewNative {
    * @param url The target url, can be a data uri.
    */
   public void webview_navigate(MemorySegment webview, String url) {
-    try (Arena tempArena = Arena.ofConfined()) {
-      MemorySegment urlSegment = tempArena.allocateFrom(url);
-      webview_navigate.invoke(webview, urlSegment);
+    try (var arena = Arena.ofConfined()) {
+      webview_navigate.invoke(webview, arena.allocateFrom(url));
     } catch (Throwable e) {
       throw new RuntimeException(e);
     }
@@ -160,9 +158,8 @@ final class WebviewNative {
    * @param title
    */
   public void webview_set_title(MemorySegment webview, String title) {
-    try (Arena tempArena = Arena.ofConfined()) {
-      MemorySegment titleSegment = tempArena.allocateFrom(title);
-      webview_set_title.invoke(webview, titleSegment);
+    try (var arena = Arena.ofConfined()) {
+      webview_set_title.invoke(webview, arena.allocateFrom(title));
     } catch (Throwable e) {
       throw new RuntimeException(e);
     }
@@ -232,9 +229,8 @@ final class WebviewNative {
    * @param js The script to execute
    */
   public void webview_eval(MemorySegment webview, String js) {
-    try (Arena tempArena = Arena.ofConfined()) {
-      MemorySegment jsSegment = tempArena.allocateFrom(js);
-      webview_eval.invoke(webview, jsSegment);
+    try (var arena = Arena.ofConfined()) {
+      webview_eval.invoke(webview, arena.allocateFrom(js));
     } catch (Throwable e) {
       throw new RuntimeException(e);
     }
@@ -248,9 +244,8 @@ final class WebviewNative {
    * @param js The script to execute
    */
   public void webview_init(MemorySegment webview, String js) {
-    try (Arena tempArena = Arena.ofConfined()) {
-      MemorySegment jsSegment = tempArena.allocateFrom(js);
-      webview_init.invoke(webview, jsSegment);
+    try (var arena = Arena.ofConfined()) {
+      webview_init.invoke(webview, arena.allocateFrom(js));
     } catch (Throwable e) {
       throw new RuntimeException(e);
     }
@@ -266,9 +261,8 @@ final class WebviewNative {
    * @param arg Unused
    */
   public void webview_bind(MemorySegment webview, String name, MemorySegment callback, long arg) {
-    try (Arena tempArena = Arena.ofConfined()) {
-      MemorySegment nameSegment = tempArena.allocateFrom(name);
-      webview_bind.invoke(webview, nameSegment, callback, arg);
+    try (var arena = Arena.ofConfined()) {
+      webview_bind.invoke(webview, arena.allocateFrom(name), callback, arg);
     } catch (Throwable e) {
       throw new RuntimeException(e);
     }
@@ -281,9 +275,8 @@ final class WebviewNative {
    * @param name The name of the callback
    */
   public void webview_unbind(MemorySegment webview, String name) {
-    try (Arena tempArena = Arena.ofConfined()) {
-      MemorySegment nameSegment = tempArena.allocateFrom(name);
-      webview_unbind.invoke(webview, nameSegment);
+    try (var arena = Arena.ofConfined()) {
+      webview_unbind.invoke(webview, arena.allocateFrom(name));
     } catch (Throwable e) {
       throw new RuntimeException(e);
     }
@@ -299,9 +292,8 @@ final class WebviewNative {
    * @param result The result (in json)
    */
   public void webview_return(MemorySegment webview, long seq, boolean isError, String result) {
-    try (Arena tempArena = Arena.ofConfined()) {
-      MemorySegment resultSegment = tempArena.allocateFrom(result);
-      webview_return.invoke(webview, seq, isError, resultSegment);
+    try (var arena = Arena.ofConfined()) {
+      webview_return.invoke(webview, seq, isError, arena.allocateFrom(result));
     } catch (Throwable e) {
       throw new RuntimeException(e);
     }
