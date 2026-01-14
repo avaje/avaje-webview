@@ -41,9 +41,11 @@ final class MacOSHelper {
               .map(addr -> LINKER.downcallHandle(addr, FunctionDescriptor.of(ADDRESS, ADDRESS)))
               .orElseThrow(() -> new UnsatisfiedLinkError("sel_registerName not found"));
       getpid =
-          LINKER.downcallHandle(
-              LINKER.defaultLookup().find("getpid").orElseThrow(),
-              FunctionDescriptor.of(ValueLayout.JAVA_INT));
+          System.getProperty("org.graalvm.nativeimage.imagecode") != null
+              ? null
+              : LINKER.downcallHandle(
+                  LINKER.defaultLookup().find("getpid").orElseThrow(),
+                  FunctionDescriptor.of(ValueLayout.JAVA_INT));
       // Base address for the dynamic message dispatcher
       MemorySegment msgSendAddr =
           OBJC.find("objc_msgSend")
