@@ -8,20 +8,23 @@ import module java.base;
 import io.avaje.webview.platform.LinuxLibC;
 
 /**
- * Builder for Webview.
+ * A fluent builder for configuring and instantiating {@link Webview} instances.
+ *
+ * <p>This builder handles native library extraction, window sizing, and initial content loading. *
+ *
+ * <h3>Example Usage:</h3>
  *
  * <pre>{@code
  * Webview wv = Webview.builder()
- *          .debug(true)
- *          .title("My App")
- *          .width(1000)
- *          .height(800)
- *          .url("http://localhost:" + port)
- *          .build();
+ * .title("My App")
+ * .width(1024)
+ * .height(768)
+ * .url("https://example.com")
+ * .enableDeveloperTools(true)
+ * .build();
  *
- *  wv.run(); // Run the webview event loop, the webview is fully disposed when this returns.
- *  wv.close(); // Free any resources allocated.
- *
+ * // Standard usage: This blocks until the window is closed
+ * wv.run();
  * }</pre>
  */
 public final class WebviewBuilder {
@@ -42,16 +45,20 @@ public final class WebviewBuilder {
 
   WebviewBuilder() {}
 
-  /** Return a new builder for a Webview. */
+  /**
+   * * Returns a new builder for a Webview.
+   *
+   * @return A new builder instance
+   */
   public static WebviewBuilder builder() {
     return new WebviewBuilder();
   }
 
   /**
-   * When true the libraries will be extracted to the systems temp directory.
+   * Configures the builder to extract native libraries to the system's temporary directory.
    *
-   * <p>When not set, defaults to extracting the embedded libraries into the current working
-   * directory.
+   * @param extractToTemp if {@code true}, uses {@code java.io.tmpdir}
+   * @return this builder
    */
   public WebviewBuilder extractToTemp(boolean extractToTemp) {
     this.extractToTemp = extractToTemp;
@@ -59,74 +66,129 @@ public final class WebviewBuilder {
   }
 
   /**
-   * When true the libraries will be extracted to a subdirectory under user home - {@code
-   * ${user.home}/.avaje-webview/0.2}.
+   * Configures the builder to extract native libraries to a persistent directory in the user's home
+   * folder ({@code ${user.home}/.avaje-webview/}).
    *
-   * <p>This has a slight performance improvement in that the libraries only need to be extracted
-   * once and not on every execution.
+   * <p><strong>Performance Note:</strong> When enabled, libraries are only extracted once,
+   * significantly reducing startup time for subsequent executions.
    *
-   * <p>When not set, defaults to extracting the embedded libraries into the current working
-   * directory.
+   * @param extractToUserHome if {@code true}, caches libraries in the user's home directory
+   * @return this builder
    */
   public WebviewBuilder extractToUserHome(boolean extractToUserHome) {
     this.extractToUserHome = extractToUserHome;
     return this;
   }
 
-  /** Set the window title. */
+  /**
+   * Sets the title of the webview window.
+   *
+   * @param title the window title
+   * @return this builder
+   */
   public WebviewBuilder title(String title) {
     this.title = title;
     return this;
   }
 
-  /** Set to true to enable Browser developer tools (if supported). */
+  /**
+   * Enables or disables browser developer tools (Right-click > Inspect).
+   *
+   * @param enableDeveloperTools {@code true} to enable tools (if supported by the platform)
+   * @return this builder
+   */
   public WebviewBuilder enableDeveloperTools(boolean enableDeveloperTools) {
     this.enableDeveloperTools = enableDeveloperTools;
     return this;
   }
 
-  /** Set the window to attach the Webview to (typically not set). */
+  /**
+   * Attaches the webview to an existing native window handle.
+   *
+   * @param windowPointer a {@link MemorySegment} pointing to a native window handle
+   * @return this builder
+   */
   public WebviewBuilder windowPointer(MemorySegment windowPointer) {
     this.windowPointer = windowPointer;
     return this;
   }
 
-  /** Set the window width (defaults to 800). */
+  /**
+   * Sets the initial width of the window. Defaults to 800.
+   *
+   * @param width width in pixels
+   * @return this builder
+   */
   public WebviewBuilder width(int width) {
     this.width = width;
     return this;
   }
 
-  /** Set the window height (defaults to 600). */
+  /**
+   * Sets the initial height of the window. Defaults to 600.
+   *
+   * @param height height in pixels
+   * @return this builder
+   */
   public WebviewBuilder height(int height) {
     this.height = height;
     return this;
   }
 
-  /** Set raw html content to render. */
+  /**
+   * Sets the initial HTML content to be rendered.
+   *
+   * @param html raw HTML string
+   * @return this builder
+   */
   public WebviewBuilder html(String html) {
     this.html = html;
     return this;
   }
 
-  /** Set the url for the Webview to load. */
+  /**
+   * Sets the initial URL for the webview to load.
+   *
+   * @param url the URL (e.g., "https://localhost:8080")
+   * @return this builder
+   */
   public WebviewBuilder url(String url) {
     this.url = url;
     return this;
   }
 
-  /** Set to false to disable the registration of a shutdown hook. */
+  /**
+   * Determines if a JVM shutdown hook should be registered to automatically clean up native
+   * resources. Defaults to {@code true}.
+   *
+   * @param shutdownHook {@code true} to enable automatic cleanup
+   * @return this builder
+   */
   public WebviewBuilder shutdownHook(boolean shutdownHook) {
     this.shutdownHook = shutdownHook;
     return this;
   }
 
-  /** Build the Webview. */
+  /**
+   * Builds a standard **Synchronous** Webview.
+   *
+   * <p>When {@link Webview#run()} is called, it will block the current thread until the window is
+   * closed.
+   *
+   * @return a configured Webview instance
+   */
   public Webview build() {
     return createView(false);
   }
 
-  /** Builds an Asynchronous Webview */
+  /**
+   * Builds an **Asynchronous** Webview.
+   *
+   * <p>In asynchronous mode, {@link Webview#run()} may return immediately or behave differently
+   * depending on the platform's event loop requirements.
+   *
+   * @return a configured asynchronous Webview instance
+   */
   public Webview buildAsync() {
     return createView(true);
   }

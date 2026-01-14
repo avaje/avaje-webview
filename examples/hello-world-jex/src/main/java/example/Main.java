@@ -61,10 +61,12 @@ public class Main {
             .url("http://localhost:" + port)
             .enableDeveloperTools(true)
             .build();
+
     // Bind function to start the timer
     webview.bind(
         "__timerStart__",
         _ -> {
+            System.out.println("Timer started " + Thread.currentThread());
           timerActive = true;
           startTime = LocalDateTime.now();
           return "\"ok\"";
@@ -74,6 +76,7 @@ public class Main {
     webview.bind(
         "__timerComplete__",
         _ -> {
+            System.out.println("Timer completed " + Thread.currentThread());
           timerActive = false;
           completedTasks++;
           return "\"ok\"";
@@ -83,6 +86,7 @@ public class Main {
     webview.bind(
         "__timerCancel__",
         _ -> {
+            System.out.println("Timer cancelled " + Thread.currentThread());
           timerActive = false;
           startTime = null;
           return "\"ok\"";
@@ -92,6 +96,7 @@ public class Main {
     webview.bind("__getCompletedSessions__", _ -> String.valueOf(completedTasks));
     webview.version();
     webview.run();
+    server.shutdown();
   }
 
   private static void countDown(Context ctx) {
