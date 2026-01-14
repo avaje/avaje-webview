@@ -54,14 +54,12 @@ final class DWebView implements Webview {
   private static final System.Logger log = System.getLogger("io.avaje.webview");
   private static final String MACOS_RELOAD =
       "Reload the application with -XstartOnFirstThread to fix this.";
-  private static final String MACOS_DEVELOPER_ERROR =
-      "Also, webview has to be run on JVM's main thread. This is a limitation of MacOS.";
 
-  private static final String ERROR_NO_XSTART_ON_FIRST_THREAD =
+  private static final String ERROR_MAC_NO_XSTART_ON_FIRST_THREAD =
       "Process was not started with -XstartOnFirstThread. ";
 
-  private static final String ERROR_MAC_OS_NOT_MAIN_THREAD =
-      "Cannot create webview on a non-main thread on macOS.";
+  private static final String ERROR_MAC_NOT_MAIN_THREAD =
+      "Cannot create webview on a non-main thread on MacOS.";
 
   private static final int WV_HINT_NONE = 0;
   private static final int WV_HINT_MIN = 1;
@@ -407,14 +405,11 @@ final class DWebView implements Webview {
   private void checkEnvironment() {
     if (OS_DISTRIBUTION == MACOS) {
       var mainThread = "main".equals(Thread.currentThread().getName());
-      if (System.getProperty("org.graalvm.nativeimage.imagecode") == null
-          && !MacOSHelper.startedOnFirstThread()) {
-        String extra = mainThread ? MACOS_RELOAD : MACOS_DEVELOPER_ERROR;
-        throw new UnsupportedOperationException(ERROR_NO_XSTART_ON_FIRST_THREAD + extra);
-      }
-
       if (!mainThread || async) {
-        throw new UnsupportedOperationException(ERROR_MAC_OS_NOT_MAIN_THREAD);
+        throw new UnsupportedOperationException(ERROR_MAC_NOT_MAIN_THREAD);
+      }
+      if (!MacOSHelper.startedOnFirstThread()) {
+        throw new UnsupportedOperationException(ERROR_MAC_NO_XSTART_ON_FIRST_THREAD + MACOS_RELOAD);
       }
     }
   }

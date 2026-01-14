@@ -19,7 +19,6 @@ final class MacOSHelper {
   // Method handles for core Objective-C runtime functions
   private static final MethodHandle objc_getClass;
   private static final MethodHandle sel_registerName;
-  private static final MethodHandle getpid;
 
   // objc_msgSend is the "everything" function in Obj-C.
   // We need different handles based on the number of arguments (arity).
@@ -40,12 +39,7 @@ final class MacOSHelper {
           OBJC.find("sel_registerName")
               .map(addr -> LINKER.downcallHandle(addr, FunctionDescriptor.of(ADDRESS, ADDRESS)))
               .orElseThrow(() -> new UnsatisfiedLinkError("sel_registerName not found"));
-      getpid =
-          System.getProperty("org.graalvm.nativeimage.imagecode") != null
-              ? null
-              : LINKER.downcallHandle(
-                  LINKER.defaultLookup().find("getpid").orElseThrow(),
-                  FunctionDescriptor.of(ValueLayout.JAVA_INT));
+
       // Base address for the dynamic message dispatcher
       MemorySegment msgSendAddr =
           OBJC.find("objc_msgSend")
@@ -68,10 +62,17 @@ final class MacOSHelper {
     }
   }
 
-  /** Checks if the application was started on the first thread */
+  /** Checks if the JVM application was started on the first thread */
   public static boolean startedOnFirstThread() {
+    if (System.getProperty("org.graalvm.nativeimage.imagecode") != null) {
+      // native image always starts on first thread
+      return true;
+    }
     try {
-      int pid = (int) getpid.invokeExact();
+      int pid = (int) LINKER.downcallHandle(
+                      LINKER.defaultLookup().find("getpid").orElseThrow(),
+                      FunctionDescriptor.of(ValueLayout.JAVA_INT))
+              .invokeExact();
       return "1".equals(System.getenv("JAVA_STARTED_ON_FIRST_THREAD_" + pid));
     } catch (Throwable t) {
       return false;
