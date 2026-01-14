@@ -68,6 +68,12 @@
                         <descriptor>src/main/assembly/windows-x86.xml</descriptor>
                         <descriptor>src/main/assembly/windows-x86_64.xml</descriptor>
                     </descriptors>
+
+					<archive>
+						<manifestEntries>
+							<Automatic-Module-Name>io.avaje.webview.nativelib</Automatic-Module-Name>
+						</manifestEntries>
+					</archive>
                 </configuration>
 
                 <executions>
