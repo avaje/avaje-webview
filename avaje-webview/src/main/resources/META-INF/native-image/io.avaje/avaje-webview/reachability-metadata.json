@@ -17,6 +17,15 @@
     }
   ],
   "foreign": {
+    "upcalls": [
+      {
+        "returnType": "void",
+        "parameterTypes": [
+          "jlong",
+          "void*"
+        ]
+      }
+    ],
     "downcalls": [
       {
         "returnType": "void",

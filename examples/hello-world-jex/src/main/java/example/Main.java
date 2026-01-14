@@ -65,6 +65,7 @@ public class Main {
     webview.bind(
         "__timerStart__",
         _ -> {
+            System.out.println("Timer started " + Thread.currentThread());
           timerActive = true;
           startTime = LocalDateTime.now();
           return "\"ok\"";
@@ -74,6 +75,7 @@ public class Main {
     webview.bind(
         "__timerComplete__",
         _ -> {
+            System.out.println("Timer completed " + Thread.currentThread());
           timerActive = false;
           completedTasks++;
           return "\"ok\"";
@@ -83,6 +85,7 @@ public class Main {
     webview.bind(
         "__timerCancel__",
         _ -> {
+            System.out.println("Timer cancelled " + Thread.currentThread());
           timerActive = false;
           startTime = null;
           return "\"ok\"";
