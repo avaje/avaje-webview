@@ -6,8 +6,7 @@ import static java.lang.foreign.ValueLayout.JAVA_BYTE;
 import static java.lang.foreign.ValueLayout.JAVA_INT;
 import static java.lang.foreign.ValueLayout.JAVA_LONG;
 
-import java.lang.foreign.*;
-import java.lang.invoke.MethodHandle;
+import module java.base;
 
 final class WebviewNative {
 
