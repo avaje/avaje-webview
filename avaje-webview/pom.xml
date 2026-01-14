@@ -41,4 +41,44 @@
         </dependency>
     </dependencies>
 
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <version>3.8.0</version>
+
+                <configuration>
+                    <descriptors>
+                        <descriptor>src/main/assembly/linux-aarch64-gnu.xml</descriptor>
+                        <descriptor>src/main/assembly/linux-aarch64-musl.xml</descriptor>
+
+                        <descriptor>src/main/assembly/linux-arm-gnu.xml</descriptor>
+                        <descriptor>src/main/assembly/linux-arm-musl.xml</descriptor>
+
+                        <descriptor>src/main/assembly/linux-x86-gnu.xml</descriptor>
+                        <descriptor>src/main/assembly/linux-x86-musl.xml</descriptor>
+
+                        <descriptor>src/main/assembly/linux-x86_64-gnu.xml</descriptor>
+                        <descriptor>src/main/assembly/linux-x86_64-musl.xml</descriptor>
+
+                        <descriptor>src/main/assembly/mac-aarch64.xml</descriptor>
+                        <descriptor>src/main/assembly/mac-x86_64.xml</descriptor>
+
+                        <descriptor>src/main/assembly/windows-x86.xml</descriptor>
+                        <descriptor>src/main/assembly/windows-x86_64.xml</descriptor>
+                    </descriptors>
+                </configuration>
+
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>
