@@ -16,9 +16,20 @@ final class WebviewNative {
 
   private final SymbolLookup library;
 
+  // Memory layouts for webview_version structures
+  private static final StructLayout WEBVIEW_VERSION_T_LAYOUT =
+      MemoryLayout.structLayout(
+          JAVA_INT.withName("major"), JAVA_INT.withName("minor"), JAVA_INT.withName("patch"));
+
+  private static final StructLayout WEBVIEW_VERSION_INFO_T_LAYOUT =
+      MemoryLayout.structLayout(
+          WEBVIEW_VERSION_T_LAYOUT.withName("version"),
+          MemoryLayout.sequenceLayout(32, JAVA_BYTE).withName("version_number"),
+          MemoryLayout.sequenceLayout(48, JAVA_BYTE).withName("pre_release"),
+          MemoryLayout.sequenceLayout(48, JAVA_BYTE).withName("build_metadata"));
+
   WebviewNative(String libraryName) {
     this.library = SymbolLookup.libraryLookup(libraryName, Arena.global());
-    Arena.ofAuto();
   }
 
   WebviewNative() {
@@ -28,49 +39,6 @@ final class WebviewNative {
             : System.getProperty("os.name").toLowerCase().contains("mac")
                 ? "libwebview.dylib"
                 : "libwebview.so");
-  }
-
-  /** Version information structure */
-  record VersionInfo(
-      int major,
-      int minor,
-      int patch,
-      String versionNumber,
-      String preRelease,
-      String buildMetadata) {
-
-    static final StructLayout LAYOUT =
-        MemoryLayout.structLayout(
-            JAVA_INT.withName("major"),
-            JAVA_INT.withName("minor"),
-            JAVA_INT.withName("patch"),
-            MemoryLayout.sequenceLayout(32, JAVA_BYTE).withName("version_number"),
-            MemoryLayout.sequenceLayout(48, JAVA_BYTE).withName("pre_release"),
-            MemoryLayout.sequenceLayout(48, JAVA_BYTE).withName("build_metadata"));
-
-    static VersionInfo fromMemorySegment(MemorySegment segment) {
-      int major = segment.get(JAVA_INT, 0);
-      int minor = segment.get(JAVA_INT, 4);
-      int patch = segment.get(JAVA_INT, 8);
-
-      String versionNumber = readCString(segment, 12, 32);
-      String preRelease = readCString(segment, 44, 48);
-      String buildMetadata = readCString(segment, 92, 48);
-
-      return new VersionInfo(major, minor, patch, versionNumber, preRelease, buildMetadata);
-    }
-
-    private static String readCString(MemorySegment segment, long offset, int maxLen) {
-      byte[] bytes = new byte[maxLen];
-      for (int i = 0; i < maxLen; i++) {
-        byte b = segment.get(JAVA_BYTE, offset + i);
-        if (b == 0) {
-          return new String(bytes, 0, i, StandardCharsets.UTF_8);
-        }
-        bytes[i] = b;
-      }
-      return new String(bytes, StandardCharsets.UTF_8);
-    }
   }
 
   /**
@@ -337,16 +305,37 @@ final class WebviewNative {
     }
   }
 
-  /** Returns the version info. */
-  public VersionInfo webview_version() {
-    try (Arena tempArena = Arena.ofConfined()) {
-      MethodHandle handle =
-          downcallHandle("webview_version", FunctionDescriptor.of(VersionInfo.LAYOUT));
-      MemorySegment result = (MemorySegment) handle.invoke(tempArena);
-      return VersionInfo.fromMemorySegment(result);
+  /** Get the library's version information. */
+  public String webview_version() {
+    try {
+      MethodHandle handle = downcallHandle("webview_version", FunctionDescriptor.of(ADDRESS));
+      MemorySegment result = (MemorySegment) handle.invoke();
+
+      // Reinterpret the returned pointer with the struct layout
+      MemorySegment versionInfo = result.reinterpret(WEBVIEW_VERSION_INFO_T_LAYOUT.byteSize());
+
+      // Extract version_number string
+      long versionNumberOffset =
+          WEBVIEW_VERSION_INFO_T_LAYOUT.byteOffset(
+              MemoryLayout.PathElement.groupElement("version_number"));
+      return readCString(versionInfo, versionNumberOffset, 32);
     } catch (Throwable e) {
-      throw new RuntimeException(e);
+      throw new RuntimeException("Failed to get webview version", e);
     }
+  }
+
+  /** Helper method to read a null-terminated C string from memory */
+  private static String readCString(MemorySegment segment, long offset, int maxLen) {
+    byte[] bytes = new byte[maxLen];
+    int len = 0;
+
+    for (int i = 0; i < maxLen; i++) {
+      byte b = segment.get(JAVA_BYTE, offset + i);
+      if (b == 0) break;
+      bytes[len++] = b;
+    }
+
+    return new String(bytes, 0, len);
   }
 
   private MethodHandle downcallHandle(String name, FunctionDescriptor descriptor) {

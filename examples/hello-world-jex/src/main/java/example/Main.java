@@ -90,7 +90,7 @@ public class Main {
 
     // Bind function to get completed sessions count
     webview.bind("__getCompletedSessions__", _ -> String.valueOf(completedTasks));
-    webview.maximizeWindow();
+    webview.version();
     webview.run();
   }
 

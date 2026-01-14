@@ -373,8 +373,7 @@ final class DWebView implements Webview {
 
   @Override
   public String version() {
-    var versionInfo = wbNative.webview_version();
-    return versionInfo.versionNumber();
+    return wbNative.webview_version();
   }
 
   /** Used in {@code webview_bind} */
