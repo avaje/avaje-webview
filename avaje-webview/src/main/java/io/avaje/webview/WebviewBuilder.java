@@ -233,10 +233,9 @@ public final class WebviewBuilder {
 
   private WebviewNative initNativeLibrary() {
     String prefix = "/io/avaje/webview/nativelib/";
-    String name = System.mapLibraryName("webview");
+    String lib = prefix + System.mapLibraryName("webview");
 
-    File target = createTarget(prefix + name);
-
+    File target = createTarget(lib);
     if (target.exists() && !keepExtractedFile && !target.delete()) {
       System.out.println("Failed to delete previously extracted: " + target);
     }
