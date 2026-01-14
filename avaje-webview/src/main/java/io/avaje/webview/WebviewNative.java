@@ -88,7 +88,7 @@ final class WebviewNative {
         downcallHandle("webview_dispatch", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, JAVA_LONG));
   }
 
-  private WebviewNative() {}
+  WebviewNative() {}
 
   /**
    * Creates a new webview instance. If debug is true - developer tools will be enabled (if the
