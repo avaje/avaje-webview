@@ -390,15 +390,6 @@ final class DWebView implements Webview {
   }
 
   /**
-   * Checks if the current thread is the main thread.
-   *
-   * @return {@code true} if the current thread is the main thread, {@code false} otherwise.
-   */
-  public static boolean isMainThread() {
-    return "main".equals(Thread.currentThread().getName());
-  }
-
-  /**
    * Checks the environment to ensure compatibility with the current platform.
    *
    * <p>This method performs platform-specific checks to verify that the application is running in a
@@ -408,13 +399,14 @@ final class DWebView implements Webview {
    */
   private void checkEnvironment() {
     if (OS_DISTRIBUTION == MACOS) {
+      var mainThread = "main".equals(Thread.currentThread().getName());
       if (System.getProperty("org.graalvm.nativeimage.imagecode") == null
           && !MacOSHelper.startedOnFirstThread()) {
-        String extra = isMainThread() ? MACOS_RELOAD : MACOS_DEVELOPER_ERROR;
+        String extra = mainThread ? MACOS_RELOAD : MACOS_DEVELOPER_ERROR;
         throw new UnsupportedOperationException(ERROR_NO_XSTART_ON_FIRST_THREAD + extra);
       }
 
-      if (!isMainThread() || async) {
+      if (!mainThread || async) {
         throw new UnsupportedOperationException(ERROR_MAC_OS_NOT_MAIN_THREAD);
       }
     }
