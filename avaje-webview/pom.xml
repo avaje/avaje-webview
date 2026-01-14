@@ -12,7 +12,7 @@
 
     <groupId>io.avaje</groupId>
     <artifactId>avaje-webview</artifactId>
-    <version>0.6</version>
+    <version>0.7</version>
 
     <name>avaje-webview</name>
     <description>FFM Wrapper over webview</description>
