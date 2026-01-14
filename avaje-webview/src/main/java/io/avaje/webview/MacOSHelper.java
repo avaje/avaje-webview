@@ -62,6 +62,23 @@ final class MacOSHelper {
     }
   }
 
+  /** Checks if the JVM application was started on the first thread */
+  public static boolean startedOnFirstThread() {
+    if (System.getProperty("org.graalvm.nativeimage.imagecode") != null) {
+      // native image always starts on first thread
+      return true;
+    }
+    try {
+      int pid = (int) LINKER.downcallHandle(
+                      LINKER.defaultLookup().find("getpid").orElseThrow(),
+                      FunctionDescriptor.of(ValueLayout.JAVA_INT))
+              .invokeExact();
+      return "1".equals(System.getenv("JAVA_STARTED_ON_FIRST_THREAD_" + pid));
+    } catch (Throwable t) {
+      return false;
+    }
+  }
+
   /**
    * Sets the window appearance to light or dark mode. Equivalent to: [window
    * setAppearance:[NSAppearance appearanceNamed:NSAppearanceNameDarkAqua]]
