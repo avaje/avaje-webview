@@ -15,16 +15,18 @@ import io.avaje.webview.platform.LinuxLibC;
  * <h3>Example Usage:</h3>
  *
  * <pre>{@code
- * Webview wv = Webview.builder()
- * .title("My App")
- * .width(1024)
- * .height(768)
- * .url("https://example.com")
- * .enableDeveloperTools(true)
- * .build();
  *
- * // Standard usage: This blocks until the window is closed
- * wv.run();
+ *   Webview wv = Webview.builder()
+ *     .title("My App")
+ *     .width(1024)
+ *     .height(768)
+ *     .url("https://example.com")
+ *     .enableDeveloperTools(true)
+ *     .build();
+ *
+ *     // Standard usage: This blocks until the window is closed
+ *   wv.run();
+ *
  * }</pre>
  */
 public final class WebviewBuilder {
@@ -178,24 +180,8 @@ public final class WebviewBuilder {
    * @return a configured Webview instance
    */
   public Webview build() {
-    return createView(false);
-  }
-
-  /**
-   * Builds an **Asynchronous** Webview.
-   *
-   * <p>In asynchronous mode, {@link Webview#run()} may return immediately or behave differently
-   * depending on the platform's event loop requirements.
-   *
-   * @return a configured asynchronous Webview instance
-   */
-  public Webview buildAsync() {
-    return createView(true);
-  }
-
-  private DWebView createView(boolean async) {
     var n = initNative(this);
-    var view = new DWebView(n, enableDeveloperTools, windowPointer, width, height, async);
+    var view = new DWebView(n, enableDeveloperTools, windowPointer, width, height);
     if (title != null) {
       view.setTitle(title);
     }
@@ -207,7 +193,7 @@ public final class WebviewBuilder {
       view.loadURL("about:blank");
     }
     if (shutdownHook) {
-      Runtime.getRuntime().addShutdownHook(new Hook(view::shutdown));
+      Runtime.getRuntime().addShutdownHook(new Hook(view::close));
     }
     return view;
   }
