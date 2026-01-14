@@ -408,7 +408,8 @@ final class DWebView implements Webview {
    */
   private void checkEnvironment() {
     if (OS_DISTRIBUTION == MACOS) {
-      if (!MacOSHelper.startedOnFirstThread()) {
+      if (System.getProperty("org.graalvm.nativeimage.imagecode") == null
+          && !MacOSHelper.startedOnFirstThread()) {
         String extra = isMainThread() ? MACOS_RELOAD : MACOS_DEVELOPER_ERROR;
         throw new UnsupportedOperationException(ERROR_NO_XSTART_ON_FIRST_THREAD + extra);
       }
@@ -416,8 +417,6 @@ final class DWebView implements Webview {
       if (!isMainThread() || async) {
         throw new UnsupportedOperationException(ERROR_MAC_OS_NOT_MAIN_THREAD);
       }
-      String extra = isMainThread() ? MACOS_RELOAD : MACOS_DEVELOPER_ERROR;
-      throw new UnsupportedOperationException(ERROR_NO_XSTART_ON_FIRST_THREAD + extra);
     }
   }
 
