@@ -39,4 +39,6 @@ public interface Platform {
 
   /** The family distribution of the host's OS, e.g Unix or Windows */
   OSDistribution OS_DISTRIBUTION = OSDistribution.get(OS_FAMILY);
+
+  String PREFIX = "/io/avaje/webview/nativelib/";
 }

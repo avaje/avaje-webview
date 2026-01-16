@@ -20,15 +20,11 @@
  * }</pre>
  */
 
-import io.avaje.webview.spi.NativeLoader;
-
 module io.avaje.webview {
 
   requires transitive org.jspecify;
   requires static java.desktop;
 
   exports io.avaje.webview;
-  exports io.avaje.webview.spi to io.avaje.webview.linux32, io.avaje.webview.linux64, io.avaje.webview.macos, io.avaje.webview.windows;
 
-  uses NativeLoader;
 }

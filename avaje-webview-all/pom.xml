@@ -24,7 +24,7 @@
     </dependency>
     <dependency>
       <groupId>io.avaje.webview</groupId>
-      <artifactId>avaje-webview-macos</artifactId>
+      <artifactId>avaje-webview-mac</artifactId>
       <version>0.9</version>
     </dependency>
     <dependency>

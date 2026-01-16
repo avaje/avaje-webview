@@ -1,14 +1,10 @@
 package io.avaje.webview;
 
-import static io.avaje.webview.platform.Platform.OS_DISTRIBUTION;
+import static io.avaje.webview.platform.Platform.*;
 import static io.avaje.webview.platform.Platform.archTarget;
 
 import module java.base;
-import java.util.ServiceLoader.Provider;
-
 import io.avaje.webview.platform.LinuxLibC;
-import io.avaje.webview.platform.NativeLoadType;
-import io.avaje.webview.spi.NativeLoader;
 
 /**
  * A fluent builder for configuring and instantiating {@link Webview} instances.
@@ -264,7 +260,7 @@ public final class WebviewBuilder {
 
   private static String platformLibrary() {
     try {
-      String prefix = NativeLoadType.PREFIX;
+      String prefix = PREFIX;
       switch (OS_DISTRIBUTION) {
         case LINUX -> {
           if (LinuxLibC.isGNU()) {
@@ -288,15 +284,14 @@ public final class WebviewBuilder {
   }
 
   private static boolean extractToFile(String lib, File target) {
-    NativeLoadType n = NativeLoadType.get(lib.split("/")[5]);
+    NativeLoadType n = NativeLoadType.get(lib);
     var loader =
-        ServiceLoader.load(NativeLoader.class).stream()
-            .filter(p -> p.type().getName().equals(n.className))
-            .findAny()
-            .map(Provider::get)
-            .orElseThrow(() -> new IllegalStateException("Missing native loader"));
+        ModuleLayer.boot()
+            .findModule(n.moduleName)
+            .map(m -> (Callable<InputStream>) () -> m.getResourceAsStream(lib))
+            .orElseGet(() -> () -> WebviewBuilder.class.getResourceAsStream(lib));
 
-    try (var in = loader.load(lib.toLowerCase());
+    try (var in = loader.call();
         var out = new FileOutputStream(target)) {
       if (in == null)
         throw new IllegalStateException("Failed to access resource of native: " + lib);

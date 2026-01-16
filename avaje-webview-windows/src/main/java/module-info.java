@@ -1,9 +1,9 @@
-import io.avaje.webview.spi.NativeLoader;
-
+/**
+ * Aggregator Module for windows native libraries
+ */
 module io.avaje.webview.windows {
 
   requires transitive io.avaje.webview;
-  requires static io.avaje.spi;
-
-  provides NativeLoader with io.avaje.webview.windows.WindowsDLL;
+  requires transitive io.avaje.webview.windows.x86;
+  requires transitive io.avaje.webview.windows.x86_64;
 }
