@@ -19,10 +19,20 @@ The main goals of this fork is to:
 
 ```xml
 <dependency>
-    <groupId>io.avaje</groupId>
-    <artifactId>avaje-webview</artifactId>
+    <groupId>io.avaje.webview</groupId>
+    <artifactId>avaje-webview-all</artifactId>
     <version>${version}</version>
 </dependency>
+
+<!-- or if just targeting a specific OS
+
+<dependency>
+    <groupId>io.avaje.webview</groupId>
+    <artifactId>avaje-webview-${windows|macos|linux64|linux32}</artifactId>
+    <version>${version}</version>
+</dependency>
+
+-->
 ```
 
 #### Build a Webview
