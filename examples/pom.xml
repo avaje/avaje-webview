@@ -8,6 +8,7 @@
         <artifactId>avaje-webview-parent</artifactId>
         <version>0.9</version>
     </parent>
+    <version>0.1</version>
 
     <artifactId>examples</artifactId>
     <packaging>pom</packaging>
