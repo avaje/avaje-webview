@@ -23,6 +23,7 @@
   </properties>
     <modules>
         <module>avaje-webview</module>
+        <module>avaje-webview-all</module>
         <module>avaje-webview-linux32</module>
         <module>avaje-webview-linux64</module>
         <module>avaje-webview-macos</module>

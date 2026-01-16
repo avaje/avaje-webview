@@ -20,7 +20,7 @@
     <dependencies>
         <dependency>
             <groupId>io.avaje.webview</groupId>
-            <artifactId>avaje-webview-windows</artifactId>
+            <artifactId>avaje-webview-all</artifactId>
             <version>0.9</version>
         </dependency>
 
