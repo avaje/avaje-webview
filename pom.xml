@@ -11,7 +11,7 @@
 
     <groupId>io.avaje</groupId>
     <artifactId>avaje-webview-parent</artifactId>
-    <version>0.7</version>
+    <version>0.9</version>
     <packaging>pom</packaging>
 
     <modules>
@@ -24,12 +24,12 @@
 			<dependency>
 				<groupId>io.avaje</groupId>
 				<artifactId>avaje-webview</artifactId>
-				<version>${project.version}</version>
+				<version>0.9</version>
 			</dependency>
 			<dependency>
 				<groupId>io.avaje</groupId>
 				<artifactId>avaje-webview-natives</artifactId>
-				<version>${project.version}</version>
+				<version>0.9</version>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>
