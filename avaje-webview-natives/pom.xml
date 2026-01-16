@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>io.avaje</groupId>
+        <artifactId>avaje-webview-parent</artifactId>
+        <version>0.7</version>
+		<relativePath>../pom.xml</relativePath>
+    </parent>
+    
+    <artifactId>avaje-webview-natives</artifactId>
+    <name>avaje-webview-natives</name>
+    <description>Natives for FFM Wrapper over webview</description>
+
+    <scm>
+        <developerConnection>scm:git:git@github.com:avaje/avaje-webview.git</developerConnection>
+    </scm>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <version>3.8.0</version>
+
+                <configuration>
+                    <descriptors>
+                        <descriptor>src/main/assembly/linux-aarch64-gnu.xml</descriptor>
+                        <descriptor>src/main/assembly/linux-aarch64-musl.xml</descriptor>
+
+                        <descriptor>src/main/assembly/linux-arm-gnu.xml</descriptor>
+                        <descriptor>src/main/assembly/linux-arm-musl.xml</descriptor>
+
+                        <descriptor>src/main/assembly/linux-x86-gnu.xml</descriptor>
+                        <descriptor>src/main/assembly/linux-x86-musl.xml</descriptor>
+
+                        <descriptor>src/main/assembly/linux-x86_64-gnu.xml</descriptor>
+                        <descriptor>src/main/assembly/linux-x86_64-musl.xml</descriptor>
+
+                        <descriptor>src/main/assembly/mac-aarch64.xml</descriptor>
+                        <descriptor>src/main/assembly/mac-x86_64.xml</descriptor>
+
+                        <descriptor>src/main/assembly/windows-x86.xml</descriptor>
+                        <descriptor>src/main/assembly/windows-x86_64.xml</descriptor>
+                    </descriptors>
+
+					<archive>
+						<manifestEntries>
+							<Automatic-Module-Name>io.avaje.webview.natives</Automatic-Module-Name>
+						</manifestEntries>
+					</archive>
+                </configuration>
+
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
