@@ -18,10 +18,9 @@
 
 
     <dependencies>
-
         <dependency>
-            <groupId>io.avaje</groupId>
-            <artifactId>avaje-webview</artifactId>
+            <groupId>io.avaje.webview</groupId>
+            <artifactId>avaje-webview-windows</artifactId>
             <version>0.9</version>
         </dependency>
 

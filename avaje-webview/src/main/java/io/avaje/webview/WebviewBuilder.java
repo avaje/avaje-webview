@@ -4,8 +4,11 @@ import static io.avaje.webview.platform.Platform.OS_DISTRIBUTION;
 import static io.avaje.webview.platform.Platform.archTarget;
 
 import module java.base;
+import java.util.ServiceLoader.Provider;
 
 import io.avaje.webview.platform.LinuxLibC;
+import io.avaje.webview.platform.NativeLoadType;
+import io.avaje.webview.spi.NativeLoader;
 
 /**
  * A fluent builder for configuring and instantiating {@link Webview} instances.
@@ -15,17 +18,16 @@ import io.avaje.webview.platform.LinuxLibC;
  * <h3>Example Usage:</h3>
  *
  * <pre>{@code
+ * Webview wv = Webview.builder()
+ *   .title("My App")
+ *   .width(1024)
+ *   .height(768)
+ *   .url("https://example.com")
+ *   .enableDeveloperTools(true)
+ *   .build();
  *
- *   Webview wv = Webview.builder()
- *     .title("My App")
- *     .width(1024)
- *     .height(768)
- *     .url("https://example.com")
- *     .enableDeveloperTools(true)
- *     .build();
- *
- *     // Standard usage: This blocks until the window is closed
- *   wv.run();
+ *   // Standard usage: This blocks until the window is closed
+ * wv.run();
  *
  * }</pre>
  */
@@ -218,18 +220,17 @@ public final class WebviewBuilder {
   }
 
   private WebviewNative initNativeLibrary() {
-    for (String lib : platformLibraries()) {
-      File target = createTarget(lib);
-      if (target.exists() && !keepExtractedFile && !target.delete()) {
-        System.out.println("Failed to delete previously extracted: " + target);
-      }
-      if (!keepExtractedFile) {
-        target.deleteOnExit();
-      }
+    var lib = platformLibrary();
+    File target = createTarget(lib);
+    if (target.exists() && !keepExtractedFile && !target.delete()) {
+      System.out.println("Failed to delete previously extracted: " + target);
+    }
+    if (!keepExtractedFile) {
+      target.deleteOnExit();
+    }
 
-      if (target.exists() || extractToFile(lib, target)) {
-        System.load(target.getAbsolutePath());
-      }
+    if (target.exists() || extractToFile(lib, target)) {
+      System.load(target.getAbsolutePath());
     }
 
     // Return the FFM-based native implementation
@@ -261,21 +262,21 @@ public final class WebviewBuilder {
     return new File(libName);
   }
 
-  private static List<String> platformLibraries() {
+  private static String platformLibrary() {
     try {
-      String prefix = "/io/avaje/webview/nativelib/";
+      String prefix = NativeLoadType.PREFIX;
       switch (OS_DISTRIBUTION) {
         case LINUX -> {
           if (LinuxLibC.isGNU()) {
-            return List.of(prefix + "linux/" + archTarget + "/gnu/libwebview.so");
+            return prefix + "linux/" + archTarget + "/gnu/libwebview.so";
           }
-          return List.of(prefix + "linux/" + archTarget + "/musl/libwebview.so");
+          return prefix + "linux/" + archTarget + "/musl/libwebview.so";
         }
         case MACOS -> {
-          return List.of(prefix + "macos/" + archTarget + "/libwebview.dylib");
+          return prefix + "macos/" + archTarget + "/libwebview.dylib";
         }
         case WINDOWS_NT -> {
-          return List.of(prefix + "windows_nt/" + archTarget + "/webview.dll");
+          return prefix + "windows_nt/" + archTarget + "/webview.dll";
         }
         default ->
             throw new IllegalStateException(
@@ -287,7 +288,15 @@ public final class WebviewBuilder {
   }
 
   private static boolean extractToFile(String lib, File target) {
-    try (var in = WebviewNative.class.getResourceAsStream(lib.toLowerCase());
+    NativeLoadType n = NativeLoadType.get(lib.split("/")[5]);
+    var loader =
+        ServiceLoader.load(NativeLoader.class).stream()
+            .filter(p -> p.type().getName().equals(n.className))
+            .findAny()
+            .map(Provider::get)
+            .orElseThrow(() -> new IllegalStateException("Missing native loader"));
+
+    try (var in = loader.load(lib.toLowerCase());
         var out = new FileOutputStream(target)) {
       if (in == null)
         throw new IllegalStateException("Failed to access resource of native: " + lib);

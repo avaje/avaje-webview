@@ -9,13 +9,24 @@
         <version>5.1</version>
     </parent>
 
-    <groupId>io.avaje</groupId>
+    <groupId>io.avaje.webview</groupId>
     <artifactId>avaje-webview-parent</artifactId>
-    <version>0.1</version>
+    <version>0.9</version>
     <packaging>pom</packaging>
+    <scm>
+        <developerConnection>scm:git:git@github.com:avaje/avaje-webview.git</developerConnection>
+    </scm>
 
+  <properties>
+    <maven.compiler.release>25</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
     <modules>
         <module>avaje-webview</module>
+        <module>avaje-webview-linux32</module>
+        <module>avaje-webview-linux64</module>
+        <module>avaje-webview-macos</module>
+        <module>avaje-webview-windows</module>
     </modules>
 
   <profiles>
