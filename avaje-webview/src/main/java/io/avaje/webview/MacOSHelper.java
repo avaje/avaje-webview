@@ -212,6 +212,34 @@ final class MacOSHelper {
     }
   }
 
+  public static void setIcon(Webview webview, Path iconPath) {
+
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment NSApplication = getClass(arena, "NSApplication");
+      MemorySegment sharedApp = send(NSApplication, getSelector(arena, "sharedApplication"));
+
+      String absolutePath = iconPath.toAbsolutePath().toString();
+      MemorySegment pathString = toNativeString(arena, absolutePath);
+
+      // Create an NSImage from the file path
+      // [[NSImage alloc] initWithContentsOfFile:pathString]
+      MemorySegment NSImage = getClass(arena, "NSImage");
+      MemorySegment image = send(NSImage, getSelector(arena, "alloc"));
+      image = send(image, getSelector(arena, "initWithContentsOfFile:"), pathString);
+
+      if (image.equals(MemorySegment.NULL)) {
+        throw new RuntimeException("Failed to load image from path: " + absolutePath);
+      }
+
+      // Set the application icon
+      // [sharedApp setApplicationIconImage:image]
+      send(sharedApp, getSelector(arena, "setApplicationIconImage:"), image);
+
+    } catch (Throwable e) {
+      throw new RuntimeException("Failed to set application icon", e);
+    }
+  }
+
   /** Registers a string as an Objective-C selector. */
   private static MemorySegment getSelector(Arena arena, String name) throws Throwable {
     return (MemorySegment) sel_registerName.invoke(arena.allocateFrom(name));

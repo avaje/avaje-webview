@@ -263,13 +263,9 @@ final class WindowsHelper {
 
   public static void setIcon(Webview webview, Path iconPath) {
 
-    if (!Files.exists(iconPath)) {
-      throw new IllegalArgumentException("Icon file not found: " + iconPath);
-    }
-
     var fileName = iconPath.getFileName().toString().toLowerCase();
     if (!fileName.endsWith(".ico")) {
-      throw new IllegalArgumentException("Windows window icons must be .ico files: " + fileName);
+      throw new IllegalArgumentException("Windows icons must be .ico files: " + fileName);
     }
 
     try (var arena = Arena.ofConfined()) {

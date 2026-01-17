@@ -318,9 +318,14 @@ final class DWebView implements Webview {
   }
 
   @Override
-  public void setIcon(Path p) {
+  public void setIcon(Path iconPath) {
+    if (!Files.exists(iconPath)) {
+      throw new IllegalArgumentException("Icon file not found: " + iconPath);
+    }
     if (WINDOWS == OS_FAMILY) {
-      WindowsHelper.setIcon(this, p);
+      WindowsHelper.setIcon(this, iconPath);
+    } else if (OS_DISTRIBUTION == MACOS) {
+      MacOSHelper.setIcon(this, iconPath);
     }
   }
 
