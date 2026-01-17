@@ -1,0 +1,17 @@
+<assembly>
+    <id>windows-x86_64</id>
+
+    <formats>
+        <format>jar</format>
+    </formats>
+
+    <includeBaseDirectory>false</includeBaseDirectory>
+
+    <files>
+        <file>
+            <source>src/main/assembly/windows-x86_64.dll</source>
+            <outputDirectory>/io/avaje/webview/nativelib</outputDirectory>
+            <destName>webview.dll</destName>
+        </file>
+    </files>
+</assembly>

@@ -4,16 +4,13 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
-        <groupId>org.avaje</groupId>
-        <artifactId>java11-oss</artifactId>
-        <version>5.1</version>
-        <relativePath/>
+        <groupId>io.avaje</groupId>
+        <artifactId>avaje-webview-parent</artifactId>
+        <version>0.9</version>
+		<relativePath>../pom.xml</relativePath>
     </parent>
 
-    <groupId>io.avaje</groupId>
     <artifactId>avaje-webview</artifactId>
-    <version>0.9</version>
-
     <name>avaje-webview</name>
     <description>FFM Wrapper over webview</description>
 
@@ -32,7 +29,14 @@
             <artifactId>jspecify</artifactId>
             <version>1.0.0</version>
         </dependency>
-        
+
+		<dependency>
+		    <groupId>io.avaje</groupId>
+            <artifactId>avaje-webview-natives</artifactId>
+            <scope>provided</scope>
+            <optional>true</optional>
+		</dependency>
+
         <dependency>
             <groupId>io.avaje</groupId>
             <artifactId>junit</artifactId>
@@ -40,5 +44,4 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
-
 </project>

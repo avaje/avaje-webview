@@ -48,13 +48,7 @@ final class WebviewNative {
   private static final MethodHandle webview_dispatch;
 
   static {
-    String libraryName =
-        System.getProperty("os.name").toLowerCase().contains("win")
-            ? "webview.dll"
-            : System.getProperty("os.name").toLowerCase().contains("mac")
-                ? "libwebview.dylib"
-                : "libwebview.so";
-
+    String libraryName = System.mapLibraryName("webview");
     LIBRARY = SymbolLookup.libraryLookup(libraryName, Arena.global());
 
     // Initialize all method handles

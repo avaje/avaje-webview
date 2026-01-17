@@ -1,0 +1,17 @@
+<assembly>
+    <id>mac-aarch64</id>
+
+    <formats>
+        <format>jar</format>
+    </formats>
+
+    <includeBaseDirectory>false</includeBaseDirectory>
+
+    <files>
+        <file>
+            <source>src/main/assembly/mac-aarch64.dylib</source>
+            <outputDirectory>/io/avaje/webview/nativelib</outputDirectory>
+            <destName>libwebview.dylib</destName>
+        </file>
+    </files>
+</assembly>

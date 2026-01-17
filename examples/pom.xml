@@ -6,8 +6,10 @@
     <parent>
         <groupId>io.avaje</groupId>
         <artifactId>avaje-webview-parent</artifactId>
-        <version>0.1</version>
+        <version>0.9</version>
+        <relativePath>../pom.xml</relativePath>
     </parent>
+    <version>0.1</version>
 
     <artifactId>examples</artifactId>
     <packaging>pom</packaging>
@@ -17,7 +19,5 @@
         <module>hello-world-jex</module>
         <module>htmx-jex-bootstrap</module>
         <module>todo-basecoat-vue</module>
-    </modules>
-
-
+    </modules> 
 </project>
