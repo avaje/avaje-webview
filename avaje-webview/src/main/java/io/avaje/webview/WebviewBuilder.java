@@ -2,6 +2,7 @@ package io.avaje.webview;
 
 import static io.avaje.webview.platform.Platform.OS_DISTRIBUTION;
 import static io.avaje.webview.platform.Platform.archTarget;
+import static java.util.Objects.requireNonNull;
 
 import module java.base;
 
@@ -228,7 +229,7 @@ public final class WebviewBuilder {
     if (!keepExtractedFile) {
       target.deleteOnExit();
     }
-    if (target.exists() || extractToFile(lib, target)) {
+    if (target.exists() || extractToFile(lib.toLowerCase(), target)) {
       System.load(target.getAbsolutePath());
     }
 
@@ -262,19 +263,33 @@ public final class WebviewBuilder {
   }
 
   private static boolean extractToFile(String lib, File target) {
-    try (var in = WebviewNative.class.getResourceAsStream(lib.toLowerCase());
-        var out = new FileOutputStream(target)) {
-      if (in == null)
-        throw new IllegalStateException("Failed to access resource of native: " + lib);
+    List<InputStream> natives = ModuleLayer.boot()
+        .modules()
+        .stream()
+        .map(module -> {
+            try {
+                return module.getResourceAsStream(lib);
+            } catch (IOException exception) {
+                throw new UncheckedIOException("Fatal error streaming '" + lib + "'", exception);
+            }
+        })
+        .filter(Objects::nonNull)
+        .toList();
+    if (natives.isEmpty()) {
+      InputStream stream = requireNonNull(WebviewBuilder.class.getResourceAsStream(lib));
+      natives = List.of(stream);
+    }
 
+    int size = natives.size();
+    if (size != 1) throw new IllegalStateException("Multiple natives found (" + size + ")");
+
+    try (InputStream in = natives.getFirst();
+        OutputStream out = new FileOutputStream(target)) {
       in.transferTo(out);
       return true;
-    } catch (Exception e) {
-      if (!e.getMessage().contains("used by another")) {
-        System.err.println("Unable to extract native: " + lib);
-        throw new RuntimeException(e);
-      }
-      return false;
+    } catch (IOException exception) {
+      if (exception.getMessage().contains("used by another")) return false;
+      throw new UncheckedIOException(exception);
     }
   }
 }
