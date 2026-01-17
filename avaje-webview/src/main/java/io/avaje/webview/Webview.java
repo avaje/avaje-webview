@@ -30,7 +30,6 @@ import module org.jspecify;
  * <p>A {@code Webview} instance allows for rendering HTML/URL content, executing JavaScript, and
  * binding Java callbacks to the JavaScript environment.
  *
- *
  * @see WebviewBuilder
  */
 public interface Webview extends Closeable, Runnable {
@@ -211,4 +210,18 @@ public interface Webview extends Closeable, Runnable {
    * @return the engine version
    */
   String version();
+
+  /**
+   * Sets the icon for the webview window
+   *
+   * @param path to the icon file
+   */
+  void setIcon(Path path);
+
+  /**
+   * Sets the icon for the webview window, use this for classpath resources
+   *
+   * @param URI to the icon file
+   */
+  void setIcon(URI uri);
 }

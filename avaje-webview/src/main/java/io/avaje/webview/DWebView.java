@@ -317,6 +317,27 @@ final class DWebView implements Webview {
     return wbNative.webview_version();
   }
 
+  @Override
+  public void setIcon(Path p) {
+    if (WINDOWS == OS_FAMILY) {
+      WindowsHelper.setIcon(this, p);
+    }
+  }
+
+  @Override
+  public void setIcon(URI classPath) {
+    try {
+      Path tempFile = Files.createTempFile("webview_icon_", ".ico");
+      tempFile.toFile().deleteOnExit();
+      try (InputStream is = classPath.toURL().openStream()) {
+        Files.copy(is, tempFile, StandardCopyOption.REPLACE_EXISTING);
+      }
+      setIcon(tempFile);
+    } catch (IOException e) {
+      throw new RuntimeException("Failed to extract resource to temp file", e);
+    }
+  }
+
   /**
    * Checks the environment to ensure compatibility with the current platform.
    *
