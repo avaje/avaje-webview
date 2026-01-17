@@ -27,6 +27,8 @@
             <groupId>io.avaje</groupId>
             <artifactId>avaje-webview-natives</artifactId>
             <version>0.9</version>
+			<scope>provided</scope>
+			<optional>true</optional>
         </dependency>
         
         <dependency>
