@@ -119,9 +119,6 @@ final class DWebView implements Webview {
   @Override
   public void setTitle(@NonNull String title) {
     wbNative.webview_set_title(webview, title);
-    if (OS_DISTRIBUTION == MACOS) {
-      MacOSHelper.setApplicationName(title);
-    }
   }
 
   @Override

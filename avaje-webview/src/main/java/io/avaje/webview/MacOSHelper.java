@@ -69,13 +69,10 @@ final class MacOSHelper {
       return true;
     }
     try {
-      int pid =
-          (int)
-              LINKER
-                  .downcallHandle(
+      int pid = (int) LINKER.downcallHandle(
                       LINKER.defaultLookup().find("getpid").orElseThrow(),
                       FunctionDescriptor.of(ValueLayout.JAVA_INT))
-                  .invokeExact();
+              .invokeExact();
       return "1".equals(System.getenv("JAVA_STARTED_ON_FIRST_THREAD_" + pid));
     } catch (Throwable t) {
       return false;
@@ -217,17 +214,17 @@ final class MacOSHelper {
 
   public static void setIcon(Webview webview, Path iconPath) {
 
-    try (var arena = Arena.ofConfined()) {
-      var NSApplication = getClass(arena, "NSApplication");
-      var sharedApp = send(NSApplication, getSelector(arena, "sharedApplication"));
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment NSApplication = getClass(arena, "NSApplication");
+      MemorySegment sharedApp = send(NSApplication, getSelector(arena, "sharedApplication"));
 
-      var absolutePath = iconPath.toAbsolutePath().toString();
-      var pathString = toNativeString(arena, absolutePath);
+      String absolutePath = iconPath.toAbsolutePath().toString();
+      MemorySegment pathString = toNativeString(arena, absolutePath);
 
       // Create an NSImage from the file path
       // [[NSImage alloc] initWithContentsOfFile:pathString]
-      var NSImage = getClass(arena, "NSImage");
-      var image = send(NSImage, getSelector(arena, "alloc"));
+      MemorySegment NSImage = getClass(arena, "NSImage");
+      MemorySegment image = send(NSImage, getSelector(arena, "alloc"));
       image = send(image, getSelector(arena, "initWithContentsOfFile:"), pathString);
 
       if (image.equals(MemorySegment.NULL)) {
@@ -240,41 +237,6 @@ final class MacOSHelper {
 
     } catch (Throwable e) {
       throw new RuntimeException("Failed to set application icon", e);
-    }
-  }
-
-  public static void setApplicationName(String name) {
-    try (var arena = Arena.ofConfined()) {
-      var NSProcessInfo = getClass(arena, "NSProcessInfo");
-      var processInfo = send(NSProcessInfo, getSelector(arena, "processInfo"));
-
-      var nameString = toNativeString(arena, name);
-
-      // Set the process name
-      // [processInfo setProcessName:nameString]
-      send(processInfo, getSelector(arena, "setProcessName:"), nameString);
-
-      // Also update the main menu if it exists to reflect the new name
-      var NSApplication = getClass(arena, "NSApplication");
-      var sharedApp = send(NSApplication, getSelector(arena, "sharedApplication"));
-      var mainMenu = send(sharedApp, getSelector(arena, "mainMenu"));
-
-      if (!mainMenu.equals(MemorySegment.NULL)) {
-        // Get the first menu item (app menu)
-        var itemAtIndex = getSelector(arena, "itemAtIndex:");
-        var appMenuItem = send(mainMenu, itemAtIndex, arena.allocate(ValueLayout.JAVA_LONG, 0L));
-
-        if (!appMenuItem.equals(MemorySegment.NULL)) {
-          // Update the submenu title
-          var submenu = send(appMenuItem, getSelector(arena, "submenu"));
-          if (!submenu.equals(MemorySegment.NULL)) {
-            send(submenu, getSelector(arena, "setTitle:"), nameString);
-          }
-        }
-      }
-
-    } catch (Throwable e) {
-      throw new RuntimeException("Failed to set application name", e);
     }
   }
 
