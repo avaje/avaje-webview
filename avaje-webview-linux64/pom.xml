@@ -5,7 +5,7 @@
   <parent>
     <groupId>io.avaje.webview</groupId>
     <artifactId>avaje-webview-parent</artifactId>
-    <version>0.9</version>
+    <version>0.10</version>
   </parent>
   <artifactId>avaje-webview-linux64</artifactId>
 
@@ -15,22 +15,22 @@
     <dependency>
       <groupId>io.avaje.webview</groupId>
       <artifactId>avaje-webview-linux-x86_64-gnu</artifactId>
-      <version>0.9</version>
+      <version>0.10</version>
     </dependency>
     <dependency>
       <groupId>io.avaje.webview</groupId>
       <artifactId>avaje-webview-linux-x86_64-musl</artifactId>
-      <version>0.9</version>
+      <version>0.10</version>
     </dependency>
     <dependency>
       <groupId>io.avaje.webview</groupId>
       <artifactId>avaje-webview-linux-aarch64-gnu</artifactId>
-      <version>0.9</version>
+      <version>0.10</version>
     </dependency>
     <dependency>
       <groupId>io.avaje.webview</groupId>
       <artifactId>avaje-webview-linux-aarch64-musl</artifactId>
-      <version>0.9</version>
+      <version>0.10</version>
     </dependency>
   </dependencies>
 </project>
