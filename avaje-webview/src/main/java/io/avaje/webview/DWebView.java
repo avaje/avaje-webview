@@ -320,18 +320,18 @@ final class DWebView implements Webview {
   @Override
   public void setDarkAppearance(boolean shouldAppearDark) {
     if (WINDOWS == OS_FAMILY) {
-      handleDispatch(() -> WindowsHelper.setWindowAppearance(this, shouldAppearDark));
+      WindowsHelper.setWindowAppearance(this, shouldAppearDark);
     } else if (OS_DISTRIBUTION == MACOS) {
-      handleDispatch(() -> MacOSHelper.setWindowAppearance(this, shouldAppearDark));
+      MacOSHelper.setWindowAppearance(this, shouldAppearDark);
     }
   }
 
   @Override
   public Webview maximizeWindow() {
     if (WINDOWS == OS_FAMILY) {
-      handleDispatch(() -> WindowsHelper.maximizeWindow(this));
+      WindowsHelper.maximizeWindow(this);
     } else if (OS_DISTRIBUTION == MACOS) {
-      handleDispatch(() -> MacOSHelper.maximizeWindow(this));
+      MacOSHelper.maximizeWindow(this);
     }
     return this;
   }
@@ -339,9 +339,9 @@ final class DWebView implements Webview {
   @Override
   public Webview fullscreen() {
     if (WINDOWS == OS_FAMILY) {
-      handleDispatch(() -> WindowsHelper.fullscreen(this));
+      WindowsHelper.fullscreen(this);
     } else if (OS_DISTRIBUTION == MACOS) {
-      handleDispatch(() -> MacOSHelper.fullscreen(this));
+      MacOSHelper.fullscreen(this);
     }
     return this;
   }
