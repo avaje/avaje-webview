@@ -131,6 +131,9 @@ final class DWebView implements Webview {
   @Override
   public void setTitle(@NonNull String title) {
     handleDispatch(() -> wbNative.webview_set_title(webview, title));
+    if (OS_DISTRIBUTION == MACOS) {
+      MacOSHelper.setApplicationName(title);
+    }
   }
 
   @Override
@@ -346,6 +349,32 @@ final class DWebView implements Webview {
   @Override
   public String version() {
     return wbNative.webview_version();
+  }
+
+  @Override
+  public void setIcon(Path iconPath) {
+    if (!Files.exists(iconPath)) {
+      throw new IllegalArgumentException("Icon file not found: " + iconPath);
+    }
+    if (WINDOWS == OS_FAMILY) {
+      WindowsHelper.setIcon(this, iconPath);
+    } else if (OS_DISTRIBUTION == MACOS) {
+      MacOSHelper.setIcon(this, iconPath);
+    }
+  }
+
+  @Override
+  public void setIcon(URI classPath) {
+    try {
+      Path tempFile = Files.createTempFile("webview_icon_", ".ico");
+      tempFile.toFile().deleteOnExit();
+      try (InputStream is = classPath.toURL().openStream()) {
+        Files.copy(is, tempFile, StandardCopyOption.REPLACE_EXISTING);
+      }
+      setIcon(tempFile);
+    } catch (IOException e) {
+      throw new RuntimeException("Failed to extract resource to temp file", e);
+    }
   }
 
   /**
