@@ -8,9 +8,9 @@ import static java.lang.System.Logger.Level.ERROR;
 // Code adapted from here:
 // https://github.com/lovell/detect-libc/blob/main/lib/detect-libc.js
 public final class LinuxLibC {
-  
+
   private static final System.Logger log = System.getLogger("io.avaje.webview");
-  
+
   /**
    * If this returns true then you know that this OS supports GNU LibC. It may also support MUSL or
    * other standards.
@@ -47,11 +47,13 @@ public final class LinuxLibC {
   }
 
   private static boolean isGNUViaCommand() throws IOException {
-    Process unameProc =
-        Runtime.getRuntime()
-            .exec("sh -c 'getconf GNU_LIBC_VERSION 2>&1 || true; ldd --version 2>&1 || true'");
+    var unameProc =
+        new ProcessBuilder(
+                "sh", "-c", "getconf GNU_LIBC_VERSION 2>&1 || true; ldd --version 2>&1 || true")
+            .start();
+
     String unameResult = PlatformUtil.readInputStreamString(unameProc.getInputStream());
 
-    return unameResult.contains("glibc");
+    return unameResult != null && unameResult.contains("glibc");
   }
 }

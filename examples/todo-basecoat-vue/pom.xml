@@ -17,13 +17,11 @@
     </properties>
 
     <dependencies>
-
         <dependency>
-            <groupId>io.avaje.experimental</groupId>
-            <artifactId>avaje-webview</artifactId>
-            <version>0.6</version>
+            <groupId>io.avaje.webview</groupId>
+            <artifactId>avaje-webview-all</artifactId>
+            <version>0.10</version>
         </dependency>
-
     </dependencies>
 
 </project>

@@ -9,13 +9,37 @@
         <version>5.1</version>
     </parent>
 
-    <groupId>io.avaje</groupId>
+    <groupId>io.avaje.webview</groupId>
     <artifactId>avaje-webview-parent</artifactId>
-    <version>0.1</version>
+    <version>0.10</version>
     <packaging>pom</packaging>
+    <scm>
+        <developerConnection>scm:git:git@github.com:avaje/avaje-webview.git</developerConnection>
+    </scm>
 
+  <properties>
+    <maven.compiler.release>25</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
     <modules>
         <module>avaje-webview</module>
+        <module>avaje-webview-all</module>
+        <module>avaje-webview-linux32</module>
+        <module>avaje-webview-linux-arm-gnu</module>
+        <module>avaje-webview-linux-arm-musl</module>
+        <module>avaje-webview-linux-x86-gnu</module>
+        <module>avaje-webview-linux-x86-musl</module>
+        <module>avaje-webview-linux64</module>
+        <module>avaje-webview-linux-aarch64-gnu</module>
+        <module>avaje-webview-linux-aarch64-musl</module>
+        <module>avaje-webview-linux-x86_64-gnu</module>
+        <module>avaje-webview-linux-x86_64-musl</module>
+        <module>avaje-webview-mac</module>
+        <module>avaje-webview-mac-aarch64</module>
+        <module>avaje-webview-mac-x86_64</module>
+        <module>avaje-webview-windows</module>
+        <module>avaje-webview-windows-x86</module>
+        <module>avaje-webview-windows-x86_64</module>
     </modules>
 
   <profiles>

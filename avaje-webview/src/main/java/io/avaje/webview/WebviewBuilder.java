@@ -1,6 +1,6 @@
 package io.avaje.webview;
 
-import static io.avaje.webview.platform.Platform.OS_DISTRIBUTION;
+import static io.avaje.webview.platform.Platform.*;
 import static io.avaje.webview.platform.Platform.archTarget;
 
 import module java.base;
@@ -147,18 +147,17 @@ final class WebviewBuilder implements Builder {
   }
 
   private WebviewNative initNativeLibrary() {
-    for (String lib : platformLibraries()) {
-      File target = createTarget(lib);
-      if (target.exists() && !keepExtractedFile && !target.delete()) {
-        System.out.println("Failed to delete previously extracted: " + target);
-      }
-      if (!keepExtractedFile) {
-        target.deleteOnExit();
-      }
+    var lib = platformLibrary();
+    File target = createTarget(lib);
+    if (target.exists() && !keepExtractedFile && !target.delete()) {
+      System.out.println("Failed to delete previously extracted: " + target);
+    }
+    if (!keepExtractedFile) {
+      target.deleteOnExit();
+    }
 
-      if (target.exists() || extractToFile(lib, target)) {
-        System.load(target.getAbsolutePath());
-      }
+    if (target.exists() || extractToFile(lib, target)) {
+      System.load(target.getAbsolutePath());
     }
 
     // Return the FFM-based native implementation
@@ -190,21 +189,21 @@ final class WebviewBuilder implements Builder {
     return new File(libName);
   }
 
-  private static List<String> platformLibraries() {
+  private static String platformLibrary() {
     try {
-      String prefix = "/io/avaje/webview/nativelib/";
+      String prefix = PREFIX;
       switch (OS_DISTRIBUTION) {
         case LINUX -> {
           if (LinuxLibC.isGNU()) {
-            return List.of(prefix + "linux/" + archTarget + "/gnu/libwebview.so");
+            return prefix + "linux/" + archTarget + "/gnu/libwebview.so";
           }
-          return List.of(prefix + "linux/" + archTarget + "/musl/libwebview.so");
+          return prefix + "linux/" + archTarget + "/musl/libwebview.so";
         }
         case MACOS -> {
-          return List.of(prefix + "macos/" + archTarget + "/libwebview.dylib");
+          return prefix + "macos/" + archTarget + "/libwebview.dylib";
         }
         case WINDOWS_NT -> {
-          return List.of(prefix + "windows_nt/" + archTarget + "/webview.dll");
+          return prefix + "windows_nt/" + archTarget + "/webview.dll";
         }
         default ->
             throw new IllegalStateException(
@@ -216,7 +215,14 @@ final class WebviewBuilder implements Builder {
   }
 
   private static boolean extractToFile(String lib, File target) {
-    try (var in = WebviewNative.class.getResourceAsStream(lib.toLowerCase());
+    NativeLoadType n = NativeLoadType.get(lib);
+    var loader =
+        ModuleLayer.boot()
+            .findModule(n.moduleName)
+            .map(m -> (Callable<InputStream>) () -> m.getResourceAsStream(lib))
+            .orElseGet(() -> () -> WebviewBuilder.class.getResourceAsStream(lib));
+
+    try (var in = loader.call();
         var out = new FileOutputStream(target)) {
       if (in == null)
         throw new IllegalStateException("Failed to access resource of native: " + lib);
