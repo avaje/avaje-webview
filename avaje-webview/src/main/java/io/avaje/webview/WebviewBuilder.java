@@ -4,6 +4,8 @@ import static io.avaje.webview.platform.Platform.*;
 import static io.avaje.webview.platform.Platform.archTarget;
 
 import module java.base;
+
+import io.avaje.webview.Webview.Builder;
 import io.avaje.webview.platform.LinuxLibC;
 
 /**
@@ -27,7 +29,7 @@ import io.avaje.webview.platform.LinuxLibC;
  *
  * }</pre>
  */
-public final class WebviewBuilder {
+final class WebviewBuilder implements Builder {
 
   private static WebviewNative NATIVE_LIB;
 
@@ -45,138 +47,67 @@ public final class WebviewBuilder {
 
   WebviewBuilder() {}
 
-  /**
-   * * Returns a new builder for a Webview.
-   *
-   * @return A new builder instance
-   */
-  public static WebviewBuilder builder() {
-    return new WebviewBuilder();
-  }
-
-  /**
-   * Configures the builder to extract native libraries to the system's temporary directory.
-   *
-   * @param extractToTemp if {@code true}, uses {@code java.io.tmpdir}
-   * @return this builder
-   */
+  @Override
   public WebviewBuilder extractToTemp(boolean extractToTemp) {
     this.extractToTemp = extractToTemp;
     return this;
   }
 
-  /**
-   * Configures the builder to extract native libraries to a persistent directory in the user's home
-   * folder ({@code ${user.home}/.avaje-webview/}).
-   *
-   * <p><strong>Performance Note:</strong> When enabled, libraries are only extracted once,
-   * significantly reducing startup time for subsequent executions.
-   *
-   * @param extractToUserHome if {@code true}, caches libraries in the user's home directory
-   * @return this builder
-   */
+  @Override
   public WebviewBuilder extractToUserHome(boolean extractToUserHome) {
     this.extractToUserHome = extractToUserHome;
     return this;
   }
 
-  /**
-   * Sets the title of the webview window.
-   *
-   * @param title the window title
-   * @return this builder
-   */
+  @Override
   public WebviewBuilder title(String title) {
     this.title = title;
     return this;
   }
 
-  /**
-   * Enables or disables browser developer tools (Right-click > Inspect).
-   *
-   * @param enableDeveloperTools {@code true} to enable tools (if supported by the platform)
-   * @return this builder
-   */
+  @Override
   public WebviewBuilder enableDeveloperTools(boolean enableDeveloperTools) {
     this.enableDeveloperTools = enableDeveloperTools;
     return this;
   }
 
-  /**
-   * Attaches the webview to an existing native window handle.
-   *
-   * @param windowPointer a {@link MemorySegment} pointing to a native window handle
-   * @return this builder
-   */
+  @Override
   public WebviewBuilder windowPointer(MemorySegment windowPointer) {
     this.windowPointer = windowPointer;
     return this;
   }
 
-  /**
-   * Sets the initial width of the window. Defaults to 800.
-   *
-   * @param width width in pixels
-   * @return this builder
-   */
+  @Override
   public WebviewBuilder width(int width) {
     this.width = width;
     return this;
   }
 
-  /**
-   * Sets the initial height of the window. Defaults to 600.
-   *
-   * @param height height in pixels
-   * @return this builder
-   */
+  @Override
   public WebviewBuilder height(int height) {
     this.height = height;
     return this;
   }
 
-  /**
-   * Sets the initial HTML content to be rendered.
-   *
-   * @param html raw HTML string
-   * @return this builder
-   */
+  @Override
   public WebviewBuilder html(String html) {
     this.html = html;
     return this;
   }
 
-  /**
-   * Sets the initial URL for the webview to load.
-   *
-   * @param url the URL (e.g., "https://localhost:8080")
-   * @return this builder
-   */
+  @Override
   public WebviewBuilder url(String url) {
     this.url = url;
     return this;
   }
 
-  /**
-   * Determines if a JVM shutdown hook should be registered to automatically clean up native
-   * resources. Defaults to {@code true}.
-   *
-   * @param shutdownHook {@code true} to enable automatic cleanup
-   * @return this builder
-   */
+  @Override
   public WebviewBuilder shutdownHook(boolean shutdownHook) {
     this.shutdownHook = shutdownHook;
     return this;
   }
 
-  /**
-   * Builds a standard **Synchronous** Webview.
-   *
-   * <p>When {@link Webview#run()} is called, it will block the current thread until the window is
-   * closed.
-   *
-   * @return a configured Webview instance
-   */
+  @Override
   public Webview build() {
     var n = initNative(this);
     var view = new DWebView(n, enableDeveloperTools, windowPointer, width, height);
