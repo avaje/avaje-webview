@@ -45,26 +45,6 @@ webview.run();
 macOS requires that all UI code be executed from the first thread, which means you will need to launch Java with -XstartOnFirstThread. This also means that the Webview AWT helper will NOT work at all.
 
 
-## Notable changes (from upstream)
-
-- Add support for GraalVM native image
-- Use FFM, replacing use of JNA, remove JNA dependencies
-- Add support for extracting the embedded libraries into temp or user home subdir
-- Add option to register Shutdown hook to cleanup resources on CTRL-C
-- Change run() to include webview_terminate(), so easier to ensure resources cleaned up
-- Add System.Logger use for resource cleanup (to ease debugging of resource cleanup)
-- Introduce WebviewBuilder, move native library bootstrap logic there
-- Use Builder pattern to replace constructors
-- Remove the dependency on co.casterlabs.commons:platform (local copy of necessary code only)
-- Remove the dependency on co.casterlabs.commons:io
-- Remove the dependency on Lombok and Jetbrains
-- Replace Lombok `@Getter/@Setter` with code
-- Remove Lombok `@SneakyThrows`
-- Replace Lombok `@NonNull` and Jetbrains `@Nullable` with JSpecify annotations
-
-
--------
-
 ## Options
 
 ### Extracting embedded libraries
@@ -106,3 +86,23 @@ Webview webview = Webview.builder()
 
 webview.run();
 ```
+
+## Notable changes (from upstream)
+
+- Add support for GraalVM native image
+- Use FFM instead of JNA
+- Add support for extracting the embedded libraries into temp or user home subdir
+- Shutdown hook to cleanup resources on CTRL-C
+- Change run() to include webview_terminate(), so easier to ensure resources cleaned up
+- Add System.Logger use for resource cleanup (to ease debugging of resource cleanup)
+- Introduce WebviewBuilder, move native library bootstrap logic there
+- Builder pattern to replace constructors
+- Remove the dependency on co.casterlabs.commons:platform (local copy of necessary code only)
+- Remove the dependency on co.casterlabs.commons:io
+- Remove the dependency on Lombok and Jetbrains
+- Replace Lombok with code
+- Replace Lombok `@NonNull` and Jetbrains `@Nullable` with JSpecify annotations
+
+
+-------
+
