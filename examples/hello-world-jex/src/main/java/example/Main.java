@@ -1,5 +1,6 @@
 package example;
 
+import java.net.URISyntaxException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -16,12 +17,20 @@ public class Main {
   static List<String> tasks = new ArrayList<>();
   static int completedTasks = 0;
 
-  static void main() {
+  static void main() throws URISyntaxException {
     // needs JVM argument -XstartOnFirstThread on Macos
     Jex.Server server =
         Jex.create()
-            .plugin(StaticContent.ofClassPath("/static/favicon.ico").route("/favicon.ico").build())
-            .plugin(StaticContent.ofClassPath("/static/index.html").route("/").build())
+            .plugin(
+                StaticContent.ofClassPath("/static/favicon.ico")
+                    .resourceLoader(Main.class)
+                    .route("/favicon.ico")
+                    .build())
+            .plugin(
+                StaticContent.ofClassPath("/static/index.html")
+                    .resourceLoader(Main.class)
+                    .route("/")
+                    .build())
             .get("/timer/status", Main::countDown)
             // Add Task
             .post(
@@ -46,14 +55,18 @@ public class Main {
             .start();
 
     int port = server.port();
+    try (Webview webview =
+        Webview.builder()
+            .title("Pulse Focus")
+            .url("http://localhost:" + port)
+            .enableDeveloperTools(true)
+            .build()) {
 
-    try {
-      Webview webview =
-          Webview.builder().title("Pulse Focus").url("http://localhost:" + port).enableDeveloperTools(true).build();
       // Bind function to start the timer
       webview.bind(
           "__timerStart__",
           _ -> {
+            System.out.println("Timer started " + Thread.currentThread());
             timerActive = true;
             startTime = LocalDateTime.now();
             return "\"ok\"";
@@ -63,6 +76,7 @@ public class Main {
       webview.bind(
           "__timerComplete__",
           _ -> {
+            System.out.println("Timer completed " + Thread.currentThread());
             timerActive = false;
             completedTasks++;
             return "\"ok\"";
@@ -72,6 +86,7 @@ public class Main {
       webview.bind(
           "__timerCancel__",
           _ -> {
+            System.out.println("Timer cancelled " + Thread.currentThread());
             timerActive = false;
             startTime = null;
             return "\"ok\"";
@@ -79,10 +94,12 @@ public class Main {
 
       // Bind function to get completed sessions count
       webview.bind("__getCompletedSessions__", _ -> String.valueOf(completedTasks));
-      webview.maximizeWindow();
+      webview.version();
+      webview.setIcon(Main.class.getResource("/static/favicon.ico").toURI());
       webview.run();
+
     } finally {
-     server.shutdown();
+      server.shutdown();
     }
   }
 

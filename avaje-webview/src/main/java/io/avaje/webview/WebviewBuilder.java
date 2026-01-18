@@ -5,26 +5,31 @@ import static io.avaje.webview.platform.Platform.archTarget;
 
 import module java.base;
 
+import io.avaje.webview.Webview.Builder;
 import io.avaje.webview.platform.LinuxLibC;
 
 /**
- * Builder for Webview.
+ * A fluent builder for configuring and instantiating {@link Webview} instances.
+ *
+ * <p>This builder handles native library extraction, window sizing, and initial content loading. *
+ *
+ * <h3>Example Usage:</h3>
  *
  * <pre>{@code
  * Webview wv = Webview.builder()
- *          .debug(true)
- *          .title("My App")
- *          .width(1000)
- *          .height(800)
- *          .url("http://localhost:" + port)
- *          .build();
+ *   .title("My App")
+ *   .width(1024)
+ *   .height(768)
+ *   .url("https://example.com")
+ *   .enableDeveloperTools(true)
+ *   .build();
  *
- *  wv.run(); // Run the webview event loop, the webview is fully disposed when this returns.
- *  wv.close(); // Free any resources allocated.
+ *   // Standard usage: This blocks until the window is closed
+ * wv.run();
  *
  * }</pre>
  */
-public final class WebviewBuilder {
+final class WebviewBuilder implements Builder {
 
   private static WebviewNative NATIVE_LIB;
 
@@ -42,98 +47,70 @@ public final class WebviewBuilder {
 
   WebviewBuilder() {}
 
-  /** Return a new builder for a Webview. */
-  public static WebviewBuilder builder() {
-    return new WebviewBuilder();
-  }
-
-  /**
-   * When true the libraries will be extracted to the systems temp directory.
-   *
-   * <p>When not set, defaults to extracting the embedded libraries into the current working
-   * directory.
-   */
+  @Override
   public WebviewBuilder extractToTemp(boolean extractToTemp) {
     this.extractToTemp = extractToTemp;
     return this;
   }
 
-  /**
-   * When true the libraries will be extracted to a subdirectory under user home - {@code
-   * ${user.home}/.avaje-webview/0.2}.
-   *
-   * <p>This has a slight performance improvement in that the libraries only need to be extracted
-   * once and not on every execution.
-   *
-   * <p>When not set, defaults to extracting the embedded libraries into the current working
-   * directory.
-   */
+  @Override
   public WebviewBuilder extractToUserHome(boolean extractToUserHome) {
     this.extractToUserHome = extractToUserHome;
     return this;
   }
 
-  /** Set the window title. */
+  @Override
   public WebviewBuilder title(String title) {
     this.title = title;
     return this;
   }
 
-  /** Set to true to enable Browser developer tools (if supported). */
+  @Override
   public WebviewBuilder enableDeveloperTools(boolean enableDeveloperTools) {
     this.enableDeveloperTools = enableDeveloperTools;
     return this;
   }
 
-  /** Set the window to attach the Webview to (typically not set). */
+  @Override
   public WebviewBuilder windowPointer(MemorySegment windowPointer) {
     this.windowPointer = windowPointer;
     return this;
   }
 
-  /** Set the window width (defaults to 800). */
+  @Override
   public WebviewBuilder width(int width) {
     this.width = width;
     return this;
   }
 
-  /** Set the window height (defaults to 600). */
+  @Override
   public WebviewBuilder height(int height) {
     this.height = height;
     return this;
   }
 
-  /** Set raw html content to render. */
+  @Override
   public WebviewBuilder html(String html) {
     this.html = html;
     return this;
   }
 
-  /** Set the url for the Webview to load. */
+  @Override
   public WebviewBuilder url(String url) {
     this.url = url;
     return this;
   }
 
-  /** Set to false to disable the registration of a shutdown hook. */
+  @Override
   public WebviewBuilder shutdownHook(boolean shutdownHook) {
     this.shutdownHook = shutdownHook;
     return this;
   }
 
-  /** Build the Webview. */
+  @Override
   public Webview build() {
-    return createView(false);
-  }
-
-  /** Builds an Asynchronous Webview */
-  public Webview buildAsync() {
-    return createView(true);
-  }
-
-  private DWebView createView(boolean async) {
     var n = initNative(this);
-    var view = new DWebView(n, enableDeveloperTools, windowPointer, width, height, async);
+    var view = new DWebView(n, enableDeveloperTools, windowPointer, width, height);
     if (title != null) {
       view.setTitle(title);
     }

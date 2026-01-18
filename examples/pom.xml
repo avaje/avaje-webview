@@ -9,7 +9,6 @@
         <version>0.1</version>
     </parent>
 
-    <groupId>io.avaje</groupId>
     <artifactId>examples</artifactId>
     <packaging>pom</packaging>
 
@@ -17,6 +16,7 @@
         <module>hello-world</module>
         <module>hello-world-jex</module>
         <module>htmx-jex-bootstrap</module>
+        <module>todo-basecoat-vue</module>
     </modules>
 
 
