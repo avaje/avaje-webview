@@ -20,9 +20,9 @@
     <dependencies>
 
         <dependency>
-            <groupId>io.avaje.experimental</groupId>
+            <groupId>io.avaje</groupId>
             <artifactId>avaje-webview</artifactId>
-            <version>0.6</version>
+            <version>0.10</version>
         </dependency>
 
         <dependency>
@@ -32,4 +32,77 @@
         </dependency>
 
     </dependencies>
+    	<build>
+    	<plugins>
+			<!-- Create the Runnable Jar with dependencies -->
+			<plugin>
+				<artifactId>maven-dependency-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>copy-modules</id>
+						<phase>package</phase>
+						<goals>
+							<goal>copy-dependencies</goal>
+						</goals>
+						<configuration>
+							<outputDirectory>${project.build.directory}/modules</outputDirectory>
+							<includeScope>runtime</includeScope>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-jar-plugin</artifactId>
+				<configuration>
+					<outputDirectory>${project.build.directory}/modules</outputDirectory>
+					<archive>
+            <manifest>
+              <addClasspath>true</addClasspath>
+              <mainClass>example.Main</mainClass>
+            </manifest>
+          </archive>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+
+	<profiles>
+		<profile>
+			<id>native</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.graalvm.buildtools</groupId>
+						<artifactId>native-maven-plugin</artifactId>
+						<version>0.11.3</version>
+						<executions>
+							<execution>
+								<id>build-native</id>
+								<goals>
+									<goal>compile-no-fork</goal>
+								</goals>
+								<phase>package</phase>
+								<configuration>
+									<mainClass>example.Main</mainClass>
+									<jvmArgs>
+										<jvmArg>--enable-native-access=ALL-UNNAMED</jvmArg>
+									</jvmArgs>
+									<buildArgs>
+										<buildArg>-Ob</buildArg> <!-- fast build -->
+										<buildArg>-R:MaxHeapSize=200m</buildArg>
+										<buildArg>--emit build-report</buildArg>
+										<buildArg>--no-fallback</buildArg>
+										<buildArg>--allow-incomplete-classpath</buildArg>
+										<buildArg>-march=compatibility</buildArg>
+									</buildArgs>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+
+		</profile>
+	</profiles>
 </project>

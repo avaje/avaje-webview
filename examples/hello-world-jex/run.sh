@@ -1,0 +1,1 @@
+mvnd clean package && java -p ./target/modules -m webview.example

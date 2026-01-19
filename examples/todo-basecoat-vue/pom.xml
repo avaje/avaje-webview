@@ -9,7 +9,7 @@
         <version>0.1</version>
     </parent>
 
-    <artifactId>hello-world</artifactId>
+    <artifactId>todo-basecoat-vue</artifactId>
 
     <properties>
         <maven.compiler.release>25</maven.compiler.release>
@@ -19,9 +19,9 @@
     <dependencies>
 
         <dependency>
-            <groupId>io.avaje</groupId>
+            <groupId>io.avaje.experimental</groupId>
             <artifactId>avaje-webview</artifactId>
-            <version>0.10</version>
+            <version>0.6</version>
         </dependency>
 
     </dependencies>
