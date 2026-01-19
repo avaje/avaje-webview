@@ -311,6 +311,9 @@ public interface Webview extends Closeable, Runnable {
      */
     Builder shutdownHook(boolean shutdownHook);
 
+    /** Redirect JavaScript console logs to also log to the Java {@link System.Logger}. */
+    Builder redirectConsole(boolean redirectConsole);
+
     /**
      * Builds a Webview using the configuration
      *

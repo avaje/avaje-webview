@@ -26,10 +26,12 @@ import static io.avaje.webview.platform.Platform.OS_DISTRIBUTION;
 import static io.avaje.webview.platform.Platform.OS_FAMILY;
 import static java.lang.System.Logger.Level.DEBUG;
 import static java.lang.System.Logger.Level.ERROR;
+import static java.lang.System.Logger.Level.INFO;
 import static java.lang.foreign.ValueLayout.ADDRESS;
 import static java.lang.foreign.ValueLayout.JAVA_LONG;
 
 import module java.base;
+
 import module org.jspecify;
 
 /**
@@ -84,6 +86,7 @@ final class DWebView implements Webview {
 
   DWebView(
       WebviewNative webNative,
+      boolean redirect,
       boolean debug,
       @Nullable MemorySegment windowPointer,
       int width,
@@ -92,12 +95,14 @@ final class DWebView implements Webview {
     checkEnvironment();
     wbNative = webNative;
     webview =
-        wbNative.webview_create(
-            debug, windowPointer == null ? MemorySegment.NULL : windowPointer);
+        wbNative.webview_create(debug, windowPointer == null ? MemorySegment.NULL : windowPointer);
 
     this.setSize(width, height);
     if (OS_DISTRIBUTION == MACOS) {
       MacOSHelper.createMenus();
+    }
+    if (redirect || debug) {
+      redirectConsole();
     }
   }
 
@@ -346,14 +351,31 @@ final class DWebView implements Webview {
     }
   }
 
-  /**
-   * Checks the environment to ensure compatibility with the current platform.
-   *
-   * <p>This method performs platform-specific checks to verify that the application is running in a
-   * supported environment.
-   *
-   * @throws UnsupportedOperationException if the environment does not meet the required conditions.
-   */
+  private void redirectConsole() {
+    this.bind("__$io_avaje_webview$log__", json -> {
+
+      log.log(INFO, json);
+
+      return "\"ok\"";
+	});
+    this.eval("""
+    (function() {
+      const original = { ...console };
+
+      function log(name, ...parameters) {
+        __$io_avaje_webview$log__(...parameters);
+        original[name](...parameters);
+      }
+
+      for (const [name, it] of Object.entries(console)) {
+        if (typeof it !== "function") continue;
+        console[name] = (...parameters) => log(name, ...parameters);
+      }
+    })();
+    """);
+  }
+
+
   private void checkEnvironment() {
     if (OS_DISTRIBUTION == MACOS) {
       var mainThread = "main".equals(Thread.currentThread().getName());

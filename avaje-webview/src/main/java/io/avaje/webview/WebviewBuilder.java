@@ -44,6 +44,7 @@ final class WebviewBuilder implements Builder {
   private String url;
   private boolean shutdownHook = true;
   private boolean keepExtractedFile;
+  private boolean redirectConsole;
 
   WebviewBuilder() {}
 
@@ -108,9 +109,15 @@ final class WebviewBuilder implements Builder {
   }
 
   @Override
+  public WebviewBuilder redirectConsole(boolean redirectConsole) {
+    this.redirectConsole = redirectConsole;
+    return this;
+  }
+
+  @Override
   public Webview build() {
     var n = initNative(this);
-    var view = new DWebView(n, enableDeveloperTools, windowPointer, width, height);
+    var view = new DWebView(n, redirectConsole, enableDeveloperTools, windowPointer, width, height);
     if (title != null) {
       view.setTitle(title);
     }
@@ -231,4 +238,5 @@ final class WebviewBuilder implements Builder {
       return false;
     }
   }
+
 }
