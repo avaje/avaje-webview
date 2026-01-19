@@ -83,15 +83,7 @@ final class DWebView implements Webview {
     }
     this.redirectConsole();
   }
-
-  private void handleDispatch(Runnable task) {
-    if (uiThread == Thread.currentThread()) {
-      task.run();
-    } else {
-      dispatch(task);
-    }
-  }
-
+  
   /**
    * Redirect {@code console.*} in the JavaScript context to delegate to
    * {@link System.Logger} using {@link #log}, also continuing to log to the
