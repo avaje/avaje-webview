@@ -64,7 +64,7 @@ public interface Webview extends Closeable, Runnable {
    *
    * @param url the URL to load (e.g., "https://google.com"), or {@code null}
    */
-  void loadURL(@Nullable String url);
+  void navigate(@Nullable String url);
 
   /**
    * Sets the title of the native window.
@@ -300,7 +300,7 @@ public interface Webview extends Closeable, Runnable {
      * @param url the URL (e.g., "https://localhost:8080")
      * @return this builder
      */
-    Builder url(String url);
+    Builder navigate(String url);
 
     /**
      * Determines if a JVM shutdown hook should be registered to automatically clean up native
