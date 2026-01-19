@@ -96,7 +96,7 @@ final class WebviewBuilder implements Builder {
   }
 
   @Override
-  public WebviewBuilder url(String url) {
+  public WebviewBuilder navigate(String url) {
     this.url = url;
     return this;
   }
@@ -115,11 +115,11 @@ final class WebviewBuilder implements Builder {
       view.setTitle(title);
     }
     if (url != null) {
-      view.loadURL(url);
+      view.navigate(url);
     } else if (html != null) {
       view.setHTML(html);
     } else {
-      view.loadURL("about:blank");
+      view.navigate("about:blank");
     }
     if (shutdownHook) {
       Runtime.getRuntime().addShutdownHook(new Hook(view::close));
