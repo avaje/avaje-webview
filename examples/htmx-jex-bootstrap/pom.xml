@@ -7,6 +7,7 @@
         <groupId>io.avaje</groupId>
         <artifactId>examples</artifactId>
         <version>0.1</version>
+        <relativePath>../pom.xml</relativePath>
     </parent>
 
     <artifactId>htmx-jex-bootstrap</artifactId>
@@ -19,16 +20,13 @@
     </properties>
 
     <dependencies>
-
         <dependency>
             <groupId>io.avaje</groupId>
             <artifactId>avaje-webview</artifactId>
-            <version>0.10</version>
         </dependency>
         <dependency>
             <groupId>io.avaje</groupId>
             <artifactId>avaje-webview-natives</artifactId>
-            <version>0.9</version>
             <scope>provided</scope>
             <optional>true</optional>
         </dependency>
@@ -49,7 +47,6 @@
             <version>0.11</version>
         </dependency>
 
-
         <!-- test dependencies -->
         <dependency>
             <groupId>io.avaje</groupId>
@@ -64,12 +61,10 @@
             <version>0.11</version>
             <scope>test</scope>
         </dependency>
-
     </dependencies>
 
     <build>
         <plugins>
-
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -138,8 +133,6 @@
                     </plugin>
                 </plugins>
             </build>
-
         </profile>
     </profiles>
-
 </project>

@@ -7,6 +7,7 @@
         <groupId>io.avaje</groupId>
         <artifactId>examples</artifactId>
         <version>0.1</version>
+        <relativePath>../pom.xml</relativePath>
     </parent>
 
     <artifactId>hello-world-jex</artifactId>
@@ -16,17 +17,14 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
-
     <dependencies>
         <dependency>
             <groupId>io.avaje</groupId>
             <artifactId>avaje-webview</artifactId>
-            <version>0.10</version>
         </dependency>
         <dependency>
             <groupId>io.avaje</groupId>
             <artifactId>avaje-webview-natives</artifactId>
-            <version>0.9</version>
 			<scope>provided</scope>
 			<optional>true</optional>
         </dependency>
@@ -36,9 +34,9 @@
             <artifactId>avaje-jex-static-content</artifactId>
             <version>3.3</version>
         </dependency>
-
     </dependencies>
-    	<build>
+
+	<build>
     	<plugins>
 			<!-- Create the Runnable Jar with dependencies -->
 			<plugin>
@@ -63,11 +61,11 @@
 				<configuration>
 					<outputDirectory>${project.build.directory}/modules</outputDirectory>
 					<archive>
-            <manifest>
-              <addClasspath>true</addClasspath>
-              <mainClass>example.Main</mainClass>
-            </manifest>
-          </archive>
+						<manifest>
+							<addClasspath>true</addClasspath>
+							<mainClass>example.Main</mainClass>
+						</manifest>
+					</archive>
 				</configuration>
 			</plugin>
 		</plugins>
@@ -108,7 +106,6 @@
 					</plugin>
 				</plugins>
 			</build>
-
 		</profile>
 	</profiles>
 </project>
