@@ -60,10 +60,6 @@ final class DWebView implements Webview {
 
   private final Arena arena = Arena.ofAuto();
 
-  public static WebviewBuilder builder() {
-    return new WebviewBuilder();
-  }
-
   DWebView(
       WebviewNative webNative,
       boolean debug,
