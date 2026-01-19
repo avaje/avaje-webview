@@ -29,18 +29,15 @@ import module org.jspecify;
  *
  * <p>A {@code Webview} instance allows for rendering HTML/URL content, executing JavaScript, and
  * binding Java callbacks to the JavaScript environment.
- *
- *
- * @see WebviewBuilder
  */
 public interface Webview extends Closeable, Runnable {
 
   /**
    * Creates a new builder to configure and instantiate a {@code Webview}.
    *
-   * @return a new WebviewBuilder instance
+   * @return a new Builder instance
    */
-  static WebviewBuilder builder() {
+  static Builder builder() {
     return new WebviewBuilder();
   }
 
@@ -211,4 +208,114 @@ public interface Webview extends Closeable, Runnable {
    * @return the engine version
    */
   String version();
+
+  /**
+   * Sets the icon for the webview window
+   *
+   * @param path to the icon file
+   */
+  void setIcon(Path path);
+
+  /**
+   * Sets the icon for the webview window, use this for classpath resources
+   *
+   * @param URI to the icon file
+   */
+  void setIcon(URI uri);
+
+  /** Interface for configuring and instantiating {@link Webview} instances. */
+  public interface Builder {
+
+    /**
+     * Configures the builder to extract native libraries to the system's temporary directory.
+     *
+     * @param extractToTemp if {@code true}, uses {@code java.io.tmpdir}
+     * @return this builder
+     */
+    Builder extractToTemp(boolean extractToTemp);
+
+    /**
+     * Configures the builder to extract native libraries to a persistent directory in the user's
+     * home folder ({@code ${user.home}/.avaje-webview/}).
+     *
+     * <p><strong>Performance Note:</strong> When enabled, libraries are only extracted once,
+     * significantly reducing startup time for subsequent executions.
+     *
+     * @param extractToUserHome if {@code true}, caches libraries in the user's home directory
+     * @return this builder
+     */
+    Builder extractToUserHome(boolean extractToUserHome);
+
+    /**
+     * Sets the title of the webview window.
+     *
+     * @param title the window title
+     * @return this builder
+     */
+    Builder title(String title);
+
+    /**
+     * Enables or disables browser developer tools (Right-click > Inspect).
+     *
+     * @param enableDeveloperTools {@code true} to enable tools (if supported by the platform)
+     * @return this builder
+     */
+    Builder enableDeveloperTools(boolean enableDeveloperTools);
+
+    /**
+     * Attaches the webview to an existing native window handle.
+     *
+     * @param windowPointer a {@link MemorySegment} pointing to a native window handle
+     * @return this builder
+     */
+    Builder windowPointer(MemorySegment windowPointer);
+
+    /**
+     * Sets the initial width of the window. Defaults to 800.
+     *
+     * @param width width in pixels
+     * @return this builder
+     */
+    Builder width(int width);
+
+    /**
+     * Sets the initial height of the window. Defaults to 600.
+     *
+     * @param height height in pixels
+     * @return this builder
+     */
+    Builder height(int height);
+
+    /**
+     * Sets the initial HTML content to be rendered.
+     *
+     * @param html raw HTML string
+     * @return this builder
+     */
+    Builder html(String html);
+
+    /**
+     * Sets the initial URL for the webview to load.
+     *
+     * @param url the URL (e.g., "https://localhost:8080")
+     * @return this builder
+     */
+    Builder url(String url);
+
+    /**
+     * Determines if a JVM shutdown hook should be registered to automatically clean up native
+     * resources. Defaults to {@code true}.
+     *
+     * @param shutdownHook {@code true} to enable automatic cleanup
+     * @return this builder
+     */
+    Builder shutdownHook(boolean shutdownHook);
+
+    /**
+     * Builds a Webview using the configuration
+     *
+     * @return a configured Webview instance
+     */
+    Webview build();
+  }
 }

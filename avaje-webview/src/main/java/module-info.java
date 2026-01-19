@@ -20,11 +20,8 @@
  * }</pre>
  */
 module io.avaje.webview {
-
   requires transitive org.jspecify;
   requires transitive io.avaje.webview.natives;
-  requires static java.desktop;
 
   exports io.avaje.webview;
-
 }
