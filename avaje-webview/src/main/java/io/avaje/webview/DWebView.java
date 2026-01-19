@@ -124,7 +124,7 @@ final class DWebView implements Webview {
   }
 
   @Override
-  public void loadURL(@Nullable String url) {
+  public void navigate(@Nullable String url) {
     handleDispatch(() -> wbNative.webview_navigate(webview, url == null ? "about:blank" : url));
   }
 
