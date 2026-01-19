@@ -29,7 +29,7 @@ public class Main {
             .title("My App")
             .width(1000)
             .height(800)
-            .url("http://localhost:" + port)
+            .navigate("http://localhost:" + port)
             .build();
 
     wv.run();

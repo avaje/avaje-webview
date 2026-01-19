@@ -58,7 +58,7 @@ public class Main {
     try (Webview webview =
         Webview.builder()
             .title("Pulse Focus")
-            .url("http://localhost:" + port)
+            .navigate("http://localhost:" + port)
             .enableDeveloperTools(true)
             .build()) {
 
