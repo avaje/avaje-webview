@@ -13,5 +13,10 @@
             <outputDirectory>/io/avaje/webview/nativelib</outputDirectory>
             <destName>webview.dll</destName>
         </file>
+        <file>
+            <source>src/main/graalvm/resource-config.json</source>
+            <outputDirectory>/META-INF/native-image/io.avaje/avaje-webview-natives/</outputDirectory>
+            <destName>resource-config.json</destName>
+        </file>
     </files>
 </assembly>
