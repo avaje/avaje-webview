@@ -44,6 +44,7 @@ final class WebviewBuilder implements Builder {
   private String url;
   private boolean shutdownHook = true;
   private boolean keepExtractedFile;
+  private boolean temp;
 
   WebviewBuilder() {}
 
@@ -156,7 +157,7 @@ final class WebviewBuilder implements Builder {
         target.deleteOnExit();
       }
 
-      if (target.exists() || extractToFile(lib, target)) {
+      if (target.exists() && !temp || extractToFile(lib, target)) {
         System.load(target.getAbsolutePath());
       }
     }
@@ -182,6 +183,7 @@ final class WebviewBuilder implements Builder {
     }
     if (extractToTemp) {
       try {
+        this.temp = true;
         return File.createTempFile("webview-", "-" + libName);
       } catch (IOException e) {
         throw new UncheckedIOException(e);
