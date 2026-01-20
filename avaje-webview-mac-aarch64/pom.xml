@@ -9,7 +9,7 @@
   </parent>
   <artifactId>avaje-webview-mac-aarch64</artifactId>
 
-  <name>avaje-webview-macos</name>
+  <name>avaje-webview-mac-aarch64</name>
   <description>FFM Wrapper over webview</description>
   <dependencies>
     <dependency>
