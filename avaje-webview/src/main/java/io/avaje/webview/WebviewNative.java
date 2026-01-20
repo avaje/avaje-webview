@@ -77,7 +77,7 @@ final class WebviewNative {
     webview_unbind = downcallHandle("webview_unbind", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
     webview_return =
         downcallHandle(
-            "webview_return", FunctionDescriptor.ofVoid(ADDRESS, JAVA_LONG, JAVA_BOOLEAN, ADDRESS));
+            "webview_return", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, JAVA_BOOLEAN, ADDRESS));
     webview_dispatch =
         downcallHandle("webview_dispatch", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, JAVA_LONG));
   }
@@ -285,7 +285,7 @@ final class WebviewNative {
    * @param isError Whether or not `result` should be thrown as an exception
    * @param result The result (in json)
    */
-  public void webview_return(MemorySegment webview, long seq, boolean isError, String result) {
+  public void webview_return(MemorySegment webview, MemorySegment seq, boolean isError, String result) {
     try (var arena = Arena.ofConfined()) {
       webview_return.invoke(webview, seq, isError, arena.allocateFrom(result));
     } catch (Throwable e) {
