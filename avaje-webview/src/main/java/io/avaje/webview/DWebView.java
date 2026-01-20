@@ -74,7 +74,7 @@ final class DWebView implements Webview {
 
   private final Arena arena = Arena.ofAuto();
   private boolean running;
-  private List<Runnable> evalList = new ArrayList<>();
+  private List<Runnable> evalList = Collections.synchronizedList(new ArrayList<>());
 
   DWebView(
       WebviewNative webNative,
