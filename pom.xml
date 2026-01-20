@@ -11,7 +11,8 @@
 
     <groupId>io.avaje.webview</groupId>
     <artifactId>avaje-webview-parent</artifactId>
-    <version>0.10</version>
+    <name>avaje-webview-parent</name>
+    <version>0.11</version>
     <packaging>pom</packaging>
     <scm>
         <developerConnection>scm:git:git@github.com:avaje/avaje-webview.git</developerConnection>
