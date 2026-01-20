@@ -1,4 +1,4 @@
-module io.avaje.webview.linux64 {
+module io.avaje.webview.linux_64bit {
   requires transitive io.avaje.webview;
   requires io.avaje.webview.linux.aarch64.gnu;
   requires io.avaje.webview.linux.aarch64.musl;
