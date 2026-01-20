@@ -73,6 +73,8 @@ final class DWebView implements Webview {
   private final WebviewNative wbNative;
 
   private final Arena arena = Arena.ofAuto();
+  private boolean running;
+  private List<Runnable> evalList = new ArrayList<>();
 
   DWebView(
       WebviewNative webNative,
@@ -167,6 +169,12 @@ final class DWebView implements Webview {
 
   @Override
   public void eval(@NonNull String script) {
+
+    if (!running) {
+      evalList.add(() -> eval(script));
+      return;
+    }
+
     wbNative.webview_eval(
         webview,
         String.format(
@@ -266,6 +274,10 @@ final class DWebView implements Webview {
 
   @Override
   public void run() {
+    running = true;
+    for (var r : evalList) {
+      r.run();
+    }
     wbNative.webview_run(webview);
     log.log(DEBUG, "destroy and terminate");
     wbNative.webview_destroy(webview);
