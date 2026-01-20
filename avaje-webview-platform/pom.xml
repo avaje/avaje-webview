@@ -55,14 +55,14 @@
             </dependencies>
         </profile>
         <profile>
-            <id>linux</id>
+            <id>linux64</id>
             <activation>
-                <os><family>linux</family></os>
+                <os><family>unix</family><arch>amd64</arch></os>
             </activation>
             <dependencies>
                 <dependency>
                     <groupId>io.avaje.webview</groupId>
-                    <artifactId>avaje-webview-linux</artifactId>
+                    <artifactId>avaje-webview-linux64</artifactId>
                     <version>0.10</version>
                     <scope>runtime</scope>
                 </dependency>
