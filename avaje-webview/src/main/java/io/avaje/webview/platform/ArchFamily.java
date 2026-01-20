@@ -14,18 +14,14 @@ package io.avaje.webview.platform;
 import java.util.regex.Pattern;
 
 public enum ArchFamily {
-  X86("x86", false, "x86|i[0-9]86|ia32|amd64|ia64|itanium64"),
-  ARM("arm", false, "arm|aarch"),
-  PPC("ppc", true, "ppc|power"),
-  SPARC("sparc", true, "sparc"),
-  MIPS("mips", true, "mips"),
-  S390("s390", true, "s390"),
-  RISCV("riscv", false, "riscv");
+  X86("x86", "x86|i[0-9]86|ia32|amd64|ia64|itanium64"),
+  ARM("arm", "arm|aarch"),
+  ;
 
   private final String name;
   private final Pattern regex;
 
-  ArchFamily(String name, boolean isUsuallyBigEndian, String regex) {
+  ArchFamily(String name, String regex) {
     this.name = name;
     this.regex = Pattern.compile(regex);
   }
@@ -33,10 +29,10 @@ public enum ArchFamily {
   static ArchFamily get() {
     String osArch = System.getProperty("os.arch", "<blank>").toLowerCase();
     for (ArchFamily arch : values()) {
-        if (!arch.regex.matcher(osArch).find()) continue;
-        return arch;
+      if (!arch.regex.matcher(osArch).find()) continue;
+      return arch;
     }
-    throw new UnsupportedOperationException("Unknown cpu arch: " + osArch);
+    throw new UnsupportedOperationException("Unsupported cpu arch: " + osArch);
   }
 
   /**
@@ -53,51 +49,10 @@ public enum ArchFamily {
    *     support this so this will be silently ignored.
    * @return A "standard" target name.
    */
-  public String getArchTarget(int wordSize, boolean isBigEndian) {
-    // https://github.com/llvm/llvm-project/blob/main/llvm/include/llvm/TargetParser/Triple.h
-    switch (this) {
-      case ARM:
-        return wordSize == 64
-            ? //
-            (isBigEndian ? "aarch64_be" : "aarch64")
-            : //
-            (isBigEndian ? "armeb" : "arm");
-
-      case MIPS:
-        return wordSize == 64
-            ? //
-            (isBigEndian ? "mips64" : "mips64el")
-            : //
-            (isBigEndian ? "mips" : "mipsel");
-
-      case PPC:
-        return wordSize == 64
-            ? //
-            (isBigEndian ? "ppc64" : "ppc64le")
-            : //
-            (isBigEndian ? "ppc" : "ppcle");
-
-      case RISCV:
-        return wordSize == 64 ? "riscv64" : "riscv32";
-
-      case S390:
-        return "systemz"; // TODO LLVM appears to not have a s390x variant?
-
-      case SPARC:
-        return wordSize == 64
-            ? //
-            ("sparcv9")
-            : //
-            (isBigEndian ? "sparc" : "sparcel");
-
-      case X86:
-        return wordSize == 64 ? "x86_64" : "x86";
-
-        // Don't create a `default:` entry.
-        // We want the compiler to warn us about missed values.
-
-    }
-
-    throw new RuntimeException("Unable to figure out LLVM for arch: " + Platform.archFamily);
+  public String getArchTarget(int wordSize) {
+    return switch (this) {
+      case ARM -> wordSize == 64 ? "aarch64" : "arm";
+      case X86 -> wordSize == 64 ? "x86_64" : "x86";
+    };
   }
 }

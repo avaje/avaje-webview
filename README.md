@@ -1,8 +1,8 @@
 [![Discord](https://img.shields.io/discord/1074074312421683250?color=%237289da&label=discord)](https://discord.gg/Qcqf9R27BR)
 [![Build](https://github.com/avaje/avaje-inject/actions/workflows/build.yml/badge.svg)](https://github.com/avaje/avaje-webview/actions/workflows/build.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](https://github.com/avaje/avaje-webview/blob/master/LICENSE)
-[![Maven Central](https://img.shields.io/maven-central/v/io.avaje/avaje-webview.svg?label=Maven%20Central)](https://mvnrepository.com/artifact/io.avaje/avaje-webview)
-[![javadoc](https://javadoc.io/badge2/io.avaje/avaje-webview/javadoc.svg?color=purple)](https://javadoc.io/doc/io.avaje/avaje-webview)
+[![Maven Central](https://img.shields.io/maven-central/v/io.avaje.webview/avaje-webview.svg?label=Maven%20Central)](https://mvnrepository.com/artifact/io.avaje.webview/avaje-webview)
+[![javadoc](https://javadoc.io/badge2/io.avaje.webview/avaje-webview/javadoc.svg?color=purple)](https://javadoc.io/doc/io.avaje.webview/avaje-webview)
 
 ## avaje-webview
 
@@ -19,10 +19,20 @@ The main goals of this fork is to:
 
 ```xml
 <dependency>
-    <groupId>io.avaje</groupId>
-    <artifactId>avaje-webview</artifactId>
+    <groupId>io.avaje.webview</groupId>
+    <artifactId>avaje-webview-all</artifactId>
     <version>${version}</version>
 </dependency>
+
+<!-- or if just targeting a specific OS
+
+<dependency>
+    <groupId>io.avaje.webview</groupId>
+    <artifactId>avaje-webview-${windows|macos|linux64|linux32}</artifactId>
+    <version>${version}</version>
+</dependency>
+
+-->
 ```
 
 #### Build a Webview
