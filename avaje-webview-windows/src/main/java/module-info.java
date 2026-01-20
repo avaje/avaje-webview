@@ -3,6 +3,6 @@
  */
 module io.avaje.webview.windows {
   requires transitive io.avaje.webview;
-  requires transitive io.avaje.webview.windows.x86;
-  requires transitive io.avaje.webview.windows.x86_64;
+  requires transitive io.avaje.webview.windows_32bit;
+  requires transitive io.avaje.webview.windows_64bit;
 }

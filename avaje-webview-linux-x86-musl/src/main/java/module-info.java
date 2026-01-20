@@ -1,3 +1,4 @@
-open module io.avaje.webview.linux.x86.musl{
+module io.avaje.webview.linux.x86_musl {
+
   requires transitive io.avaje.webview;
 }

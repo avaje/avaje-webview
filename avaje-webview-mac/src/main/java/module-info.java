@@ -3,6 +3,6 @@
  */
 module io.avaje.webview.mac {
   requires transitive io.avaje.webview;
-  requires transitive io.avaje.webview.mac.aarch64;
-  requires transitive io.avaje.webview.mac.x86_64;
+  requires transitive io.avaje.webview.mac.aarch64bit;
+  requires transitive io.avaje.webview.mac.amd64bit;
 }
