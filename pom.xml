@@ -40,6 +40,7 @@
         <module>avaje-webview-windows</module>
         <module>avaje-webview-windows-x86</module>
         <module>avaje-webview-windows-x86_64</module>
+        <module>avaje-webview-platform</module>
     </modules>
 
   <profiles>
