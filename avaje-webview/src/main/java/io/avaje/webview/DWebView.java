@@ -26,6 +26,7 @@ import static io.avaje.webview.platform.Platform.OS_DISTRIBUTION;
 import static io.avaje.webview.platform.Platform.OS_FAMILY;
 import static java.lang.System.Logger.Level.DEBUG;
 import static java.lang.System.Logger.Level.ERROR;
+import static java.lang.foreign.Linker.nativeLinker;
 import static java.lang.foreign.ValueLayout.ADDRESS;
 import static java.lang.foreign.ValueLayout.JAVA_LONG;
 
@@ -105,14 +106,6 @@ final class DWebView implements Webview {
     }
   }
 
-  private void handleDispatch(Runnable task) {
-    if (uiThread == Thread.currentThread()) {
-      task.run();
-    } else {
-      dispatch(task);
-    }
-  }
-
   @Override
   public MemorySegment nativeWindowPointer() {
     return wbNative.webview_get_window(webview);
@@ -120,17 +113,17 @@ final class DWebView implements Webview {
 
   @Override
   public void setHTML(@Nullable String html) {
-    handleDispatch(() -> wbNative.webview_set_html(webview, html));
+    dispatch(() -> wbNative.webview_set_html(webview, html));
   }
 
   @Override
   public void navigate(@Nullable String url) {
-    handleDispatch(() -> wbNative.webview_navigate(webview, url == null ? "about:blank" : url));
+    dispatch(() -> wbNative.webview_navigate(webview, url == null ? "about:blank" : url));
   }
 
   @Override
   public void setTitle(@NonNull String title) {
-    handleDispatch(() -> wbNative.webview_set_title(webview, title));
+    dispatch(() -> wbNative.webview_set_title(webview, title));
     if (OS_DISTRIBUTION == MACOS) {
       MacOSHelper.setApplicationName(title);
     }
@@ -138,22 +131,22 @@ final class DWebView implements Webview {
 
   @Override
   public void setMinSize(int width, int height) {
-    handleDispatch(() -> wbNative.webview_set_size(webview, width, height, WV_HINT_MIN));
+    dispatch(() -> wbNative.webview_set_size(webview, width, height, WV_HINT_MIN));
   }
 
   @Override
   public void setMaxSize(int width, int height) {
-    handleDispatch(() -> wbNative.webview_set_size(webview, width, height, WV_HINT_MAX));
+    dispatch(() -> wbNative.webview_set_size(webview, width, height, WV_HINT_MAX));
   }
 
   @Override
   public void setSize(int width, int height) {
-    handleDispatch(() -> wbNative.webview_set_size(webview, width, height, WV_HINT_NONE));
+    dispatch(() -> wbNative.webview_set_size(webview, width, height, WV_HINT_NONE));
   }
 
   @Override
   public void setFixedSize(int width, int height) {
-    handleDispatch(() -> wbNative.webview_set_size(webview, width, height, WV_HINT_FIXED));
+    dispatch(() -> wbNative.webview_set_size(webview, width, height, WV_HINT_FIXED));
   }
 
   @Override
@@ -163,7 +156,7 @@ final class DWebView implements Webview {
 
   @Override
   public void setInitScript(@NonNull String script, boolean allowNestedAccess) {
-    handleDispatch(
+    dispatch(
         () -> {
           var script1 =
               String.format(
@@ -202,7 +195,7 @@ final class DWebView implements Webview {
 
   @Override
   public void bind(@NonNull String name, @NonNull WebviewBindCallback handler) {
-    handleDispatch(() -> bindCallback(name, handler));
+    dispatch(() -> bindCallback(name, handler));
   }
 
   private void bindCallback(String name, WebviewBindCallback handler) {
@@ -229,7 +222,7 @@ final class DWebView implements Webview {
 
     // Create upcall stub for the callback
     MemorySegment callbackStub =
-        Linker.nativeLinker()
+        nativeLinker()
             .upcallStub(createBindCallbackHandle(callback), BIND_DESCRIPTOR, arena);
 
     wbNative.webview_bind(webview, name, callbackStub, 0);
@@ -258,19 +251,33 @@ final class DWebView implements Webview {
 
   @Override
   public void unbind(@NonNull String name) {
-    handleDispatch(() -> wbNative.webview_unbind(webview, name));
+    dispatch(() -> wbNative.webview_unbind(webview, name));
   }
 
   @Override
   public void dispatch(@NonNull Runnable handler) {
-
-    // Create upcall stub for the dispatch callback
-    MemorySegment callbackStub =
-        Linker.nativeLinker()
-            .upcallStub(
-                createDispatchCallbackHandle((_, _) -> handler.run()), DISPATCH_DESCRIPTOR, arena);
+    if (uiThread == Thread.currentThread()) {
+      handler.run();
+      return;
+    }
+    
+    Semaphore dispatching = new Semaphore(0);
+    MemorySegment callbackStub = nativeLinker()
+        .upcallStub(createDispatchCallbackHandle((_, _) -> {
+          try {
+            handler.run();
+          } finally {
+            dispatching.release();
+          }
+        }), DISPATCH_DESCRIPTOR, arena);
 
     wbNative.webview_dispatch(webview, callbackStub, 0);
+    
+    try {
+      dispatching.acquire();
+    } catch (InterruptedException exception) {
+      throw new RuntimeException("Failed awaiting dispatch execution", exception);
+	}
   }
 
   private static MethodHandle createDispatchCallbackHandle(DispatchCallback callback) {
@@ -305,7 +312,7 @@ final class DWebView implements Webview {
   @Override
   public void close() {
     log.log(DEBUG, "close");
-    handleDispatch(this::shutdown);
+    dispatch(this::shutdown);
   }
 
   void shutdown() {
