@@ -67,10 +67,15 @@ final class DWebView implements Webview {
   private static final FunctionDescriptor BIND_DESCRIPTOR = ofVoid(ADDRESS, ADDRESS);
   private static final FunctionDescriptor DISPATCH_DESCRIPTOR = ofVoid();
 
+  private final Thread uiThread;
   private final MemorySegment webview;
   private final WebviewNative wbNative;
 
   private final Arena arena = Arena.ofAuto();
+  private List<Runnable> evalList = Collections.synchronizedList(new ArrayList<>());
+
+  private boolean running;
+  private boolean closed;
 
   DWebView(
       WebviewNative webNative,
@@ -81,12 +86,21 @@ final class DWebView implements Webview {
 
     checkEnvironment();
     wbNative = webNative;
+    uiThread = Thread.currentThread();
     webview =
         wbNative.webview_create(debug, windowPointer == null ? MemorySegment.NULL : windowPointer);
 
     this.setSize(width, height);
     if (OS_DISTRIBUTION == MACOS) {
       MacOSHelper.createMenus();
+    }
+  }
+
+  private void handleDispatch(Runnable task) {
+    if (uiThread == Thread.currentThread()) {
+      task.run();
+    } else {
+      dispatch(task);
     }
   }
 
@@ -97,17 +111,17 @@ final class DWebView implements Webview {
 
   @Override
   public void setHTML(@Nullable String html) {
-    wbNative.webview_set_html(webview, html);
+    handleDispatch(() -> wbNative.webview_set_html(webview, html));
   }
 
   @Override
   public void navigate(@Nullable String url) {
-    wbNative.webview_navigate(webview, url == null ? "about:blank" : url);
+    handleDispatch(() -> wbNative.webview_navigate(webview, url == null ? "about:blank" : url));
   }
 
   @Override
   public void setTitle(@NonNull String title) {
-    wbNative.webview_set_title(webview, title);
+    handleDispatch(() -> wbNative.webview_set_title(webview, title));
     if (OS_DISTRIBUTION == MACOS) {
       MacOSHelper.setApplicationName(title);
     }
@@ -115,31 +129,24 @@ final class DWebView implements Webview {
 
   @Override
   public void setMinSize(int width, int height) {
-    wbNative.webview_set_size(webview, width, height, WV_HINT_MIN);
+    handleDispatch(() -> wbNative.webview_set_size(webview, width, height, WV_HINT_MIN));
   }
 
   @Override
   public void setMaxSize(int width, int height) {
-    wbNative.webview_set_size(webview, width, height, WV_HINT_MAX);
+    handleDispatch(() -> wbNative.webview_set_size(webview, width, height, WV_HINT_MAX));
   }
 
   @Override
   public void setSize(int width, int height) {
-    wbNative.webview_set_size(webview, width, height, WV_HINT_NONE);
+    handleDispatch(() -> wbNative.webview_set_size(webview, width, height, WV_HINT_NONE));
   }
 
   @Override
   public void setFixedSize(int width, int height) {
-    wbNative.webview_set_size(webview, width, height, WV_HINT_FIXED);
+    handleDispatch(() -> wbNative.webview_set_size(webview, width, height, WV_HINT_FIXED));
   }
 
-  /**
-   * Sets the script to be run on page load. Defaults to no nested access (false).
-   *
-   * @implNote This get's called AFTER window.load.
-   * @param script
-   * @see #setInitScript(String, boolean)
-   */
   @Override
   public void setInitScript(@NonNull String script) {
     setInitScript(script, false);
@@ -147,39 +154,50 @@ final class DWebView implements Webview {
 
   @Override
   public void setInitScript(@NonNull String script, boolean allowNestedAccess) {
-    var script1 = String.format(
-            """
-            (() => {
-            try {
-            if (window.top == window.self || %b) {
-            %s
-            }
-            } catch (e) {
-            console.error('[Webview]', 'An error occurred whilst evaluating init script:', %s, e);
-            }
-            })();""",
-              allowNestedAccess, script, '"' + WebviewUtil.jsonEscape(script) + '"');
+    handleDispatch(
+        () -> {
+          var script1 =
+              String.format(
+                  """
+      	(() => {
+      	try {
+      	if (window.top == window.self || %b) {
+      	%s
+      	}
+      	} catch (e) {
+      	console.error('[Webview]', 'An error occurred whilst evaluating init script:', %s, e);
+      	}
+      	})();""",
+                  allowNestedAccess, script, '"' + WebviewUtil.jsonEscape(script) + '"');
 
-      wbNative.webview_init(webview, script1);
+          wbNative.webview_init(webview, script1);
+        });
   }
 
   @Override
   public void eval(@NonNull String script) {
-    wbNative.webview_eval(
-        webview,
-        String.format(
-            """
-      try {
-      %s
-      } catch (e) {
-      console.error('[Webview]', 'An error occurred whilst evaluating script:', %s, e);
-      }""",
-            script, '"' + WebviewUtil.jsonEscape(script) + '"'));
+    if (!running) {
+      evalList.add(() -> eval(script));
+      return;
+    }
+    dispatch(
+        () -> {
+          wbNative.webview_eval(
+              webview,
+              String.format(
+                  """
+        	try {
+        	%s
+        	} catch (e) {
+        	console.error('[Webview]', 'An error occurred whilst evaluating script:', %s, e);
+        	}""",
+                  script, '"' + WebviewUtil.jsonEscape(script) + '"'));
+        });
   }
 
   @Override
-  public void bind(@NonNull String name, @NonNull WebviewBinding handler) {
-    bindCallback(name, handler);
+  public void bind(@NonNull String name, @NonNull WebviewBindCallback handler) {
+    handleDispatch(() -> bindCallback(name, handler));
   }
 
   private void bindCallback(String name, WebviewBinding handler) {
@@ -236,7 +254,7 @@ final class DWebView implements Webview {
 
   @Override
   public void unbind(@NonNull String name) {
-    wbNative.webview_unbind(webview, name);
+    handleDispatch(() -> wbNative.webview_unbind(webview, name));
   }
 
   @Override
@@ -264,15 +282,36 @@ final class DWebView implements Webview {
 
   @Override
   public void run() {
+    if (running) {
+      return;
+    }
+    running = true;
+    for (var r : evalList) {
+      r.run();
+    }
+    start();
+  }
+
+  private void start() {
     wbNative.webview_run(webview);
     log.log(DEBUG, "destroy and terminate");
     wbNative.webview_destroy(webview);
     wbNative.webview_terminate(webview);
+    closed = true;
   }
 
   @Override
   public void close() {
     log.log(DEBUG, "close");
+    handleDispatch(this::shutdown);
+  }
+
+  void shutdown() {
+    if (closed) {
+      return;
+    }
+    closed = true;
+    log.log(DEBUG, "shutdown");
     wbNative.webview_terminate(webview);
   }
 
