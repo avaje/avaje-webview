@@ -8,6 +8,8 @@
 
 Avaje Webview wraps native platform webview engines to provide a clean interface for building modern cross-platform GUIs.
 
+This is an enhanced fork of https://github.com/webview/webview_java
+
 ## How to use
 
 #### Add dependency
