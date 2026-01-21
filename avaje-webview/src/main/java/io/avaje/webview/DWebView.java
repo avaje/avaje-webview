@@ -196,7 +196,7 @@ final class DWebView implements Webview {
   }
 
   @Override
-  public void bind(@NonNull String name, @NonNull WebviewBindCallback handler) {
+  public void bind(@NonNull String name, @NonNull WebviewBinding handler) {
     handleDispatch(() -> bindCallback(name, handler));
   }
 
