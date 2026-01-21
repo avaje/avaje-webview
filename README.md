@@ -78,22 +78,27 @@ Webview webview = Webview.builder()
 ### Shutdown hook
 
 By default, a shutdown hook is registered to ensure that the resource
-cleanup occurs via a SIGINT/CTRL-C, so disable shutdownHook if desired
-via `.shutdownHook(false)` and then you must ensure `webview.close()`
-is called when the process is terminated via a SIGINT/CTRL-C
+cleanup occurs via a SIGINT/CTRL-C:
 
 ```java
 Webview webview = Webview.builder()
-    // you need to ensure resources are cleaned up on SIGINT     
-    .shutdownHook(false) 
-    .title("My App")
-    .width(1000)
-    .height(800)
-    .html("<h1>Hello World</h1>")
+    .shutdownHook(true) // Default
     .build();
 
 webview.run();
+// Native resources automatically cleaned up on JVM exit
 ```
+
+```java
+Webview webview = Webview.builder()
+    .shutdownHook(false) // Disables hook (Explicitly manage resources)
+    .build();
+    
+try (webview) { //closeable
+    webview.run();
+} 
+```
+
 
 ### Window Properties
 
