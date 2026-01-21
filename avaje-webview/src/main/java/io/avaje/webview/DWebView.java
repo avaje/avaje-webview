@@ -245,7 +245,7 @@ final class DWebView implements Webview {
     var callbackStub =
         Linker.nativeLinker()
             .upcallStub(
-                createDispatchCallbackHandle(handler::run), DISPATCH_DESCRIPTOR, arena);
+                createDispatchCallbackHandle(handler), DISPATCH_DESCRIPTOR, arena);
 
     wbNative.webview_dispatch(webview, callbackStub, 0);
   }
