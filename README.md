@@ -155,46 +155,36 @@ webview.run();
 Expose Java functionality to JavaScript as async functions:
 
 ```java
-import io.avaje.webview.Webview;
-import io.avaje.webview.WebviewBindCallback;
-
-public class App {
-    public static void main(String[] args) {
+Webview webview = Webview.builder()
+     .title("Java Bridge Example")
+     .html("""
+        <!DOCTYPE html>
+        <html>
+        <body>
+           <button onclick="callJava()">Call Java</button>
+           <div id="result"></div>
+           <script>
+               async function callJava() {
+                      try {
+                         // Calls Java method, returns Promise
+                         const result = await greet('World');
+                         document.getElementById('result').textContent = result;
+                      } catch (error) {
+                        console.error('Java error:', error);
+                      }
+                }
+           </script>
+        </body>
+        </html>
+       """)
+     .build();
         
-        Webview webview = Webview.builder()
-            .title("Java Bridge Example")
-            .html("""
-                <!DOCTYPE html>
-                <html>
-                <body>
-                    <button onclick="callJava()">Call Java</button>
-                    <div id="result"></div>
-                    
-                    <script>
-                        async function callJava() {
-                            try {
-                                // Calls Java method, returns Promise
-                                const result = await greet('World');
-                                document.getElementById('result').textContent = result;
-                            } catch (error) {
-                                console.error('Java error:', error);
-                            }
-                        }
-                    </script>
-                </body>
-                </html>
-            """)
-            .build();
-        
-        // Bind Java method to JavaScript
-        webview.bind("greet", (String jsonArgs) -> {
-            // do something with the args here
-            return "Recieved, " + jsonArgs + "!");
-        });
-        
-        webview.run();
-    }
-}
+// Bind Java method to JavaScript
+webview.bind("greet", (String jsonArgs) -> {
+       // do something with the args here
+      return "Recieved, " + jsonArgs + "!");
+   });
+webview.run();
 ```
 
 ### Example Complex Data Exchange
