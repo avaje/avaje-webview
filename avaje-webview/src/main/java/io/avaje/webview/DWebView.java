@@ -183,7 +183,7 @@ final class DWebView implements Webview {
   }
 
   private void bindCallback(String name, WebviewBindCallback handler) {
-    BindCallback callback =
+    BiConsumer<MemorySegment, String> callback =
         (seq, req) -> {
           try {
             req = WebviewUtil.forceSafeChars(req);
@@ -214,11 +214,11 @@ final class DWebView implements Webview {
 
   @SuppressWarnings("unused")
   private static void bindCallbackInvoke(
-      BindCallback callback, MemorySegment seq, MemorySegment req) {
-    callback.callback(seq, req.reinterpret(Long.MAX_VALUE).getString(0));
+		  BiConsumer<MemorySegment, String> callback, MemorySegment seq, MemorySegment req) {
+    callback.accept(seq, req.reinterpret(Long.MAX_VALUE).getString(0));
   }
 
-  private static MethodHandle createBindCallbackHandle(BindCallback callback) {
+  private static MethodHandle createBindCallbackHandle(BiConsumer<MemorySegment, String> callback) {
     try {
       return MethodHandles.insertArguments(
           MethodHandles.lookup()
@@ -226,7 +226,7 @@ final class DWebView implements Webview {
                   DWebView.class,
                   "bindCallbackInvoke",
                   MethodType.methodType(
-                      void.class, BindCallback.class, MemorySegment.class, MemorySegment.class)),
+                      void.class, BiConsumer.class, MemorySegment.class, MemorySegment.class)),
           0,
           callback);
     } catch (Exception e) {
@@ -242,7 +242,7 @@ final class DWebView implements Webview {
   @Override
   public void dispatch(@NonNull Runnable handler) {
 
-    MemorySegment callbackStub =
+    var callbackStub =
         Linker.nativeLinker()
             .upcallStub(
                 createDispatchCallbackHandle(handler::run), DISPATCH_DESCRIPTOR, arena);
@@ -250,9 +250,13 @@ final class DWebView implements Webview {
     wbNative.webview_dispatch(webview, callbackStub, 0);
   }
 
-  private static MethodHandle createDispatchCallbackHandle(Runnable callback) {
+  private static MethodHandle createDispatchCallbackHandle(Runnable runnable) {
     try {
-      return MethodHandles.lookup().bind(callback, "run", MethodType.methodType(void.class));
+      return MethodHandles.insertArguments(
+          MethodHandles.lookup()
+              .findVirtual(Runnable.class, "run", MethodType.methodType(void.class)),
+          0,
+          runnable);
     } catch (Exception e) {
       throw new RuntimeException("Failed to create callback handle", e);
     }
@@ -350,15 +354,5 @@ final class DWebView implements Webview {
         throw new UnsupportedOperationException(ERROR_MAC_NO_XSTART_ON_FIRST_THREAD + MACOS_RELOAD);
       }
     }
-  }
-
-  /** Used in {@code webview_bind} */
-  @FunctionalInterface
-  private interface BindCallback {
-    /**
-     * @param seq The request id, used in {@code webview_return}
-     * @param req The javascript arguments converted to a json array (string)
-     */
-    void callback(MemorySegment seq, String req);
   }
 }
