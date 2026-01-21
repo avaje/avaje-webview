@@ -18,6 +18,7 @@ The main goals of this fork is to:
 #### Add dependency
 
 ```xml
+<!-- if targeting all platforms -->
 <dependency>
     <groupId>io.avaje.webview</groupId>
     <artifactId>avaje-webview-all</artifactId>
@@ -28,10 +29,17 @@ The main goals of this fork is to:
 
 <dependency>
     <groupId>io.avaje.webview</groupId>
-    <artifactId>avaje-webview-${windows|mac|linux64|linux32}</artifactId>
+    <artifactId>avaje-webview-{windows|mac|linux64|linux32}</artifactId>
     <version>${version}</version>
 </dependency>
+-->
 
+<!-- or if just targeting a specific OS and architecture
+<dependency>
+    <groupId>io.avaje.webview</groupId>
+    <artifactId>avaje-webview-{windows-x86|windows-x86_64|you get the idea}</artifactId>
+    <version>${version}</version>
+</dependency>
 -->
 ```
 
