@@ -15,7 +15,6 @@ public class TwoWayCommunicationExample {
             .enableDeveloperTools(true)
             .html(createHTML())
             .build();
-
     // Bind: JavaScript sends a message to Java
     webview.bind(
         "sendMessage",

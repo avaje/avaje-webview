@@ -26,6 +26,7 @@ import static io.avaje.webview.platform.Platform.OS_DISTRIBUTION;
 import static io.avaje.webview.platform.Platform.OS_FAMILY;
 import static java.lang.System.Logger.Level.DEBUG;
 import static java.lang.System.Logger.Level.ERROR;
+import static java.lang.foreign.FunctionDescriptor.ofVoid;
 import static java.lang.foreign.ValueLayout.ADDRESS;
 import static java.lang.foreign.ValueLayout.JAVA_LONG;
 
@@ -65,13 +66,8 @@ final class DWebView implements Webview {
   private static final int WV_HINT_MIN = 1;
   private static final int WV_HINT_MAX = 2;
   private static final int WV_HINT_FIXED = 3;
-  private static final FunctionDescriptor BIND_DESCRIPTOR =
-      FunctionDescriptor.ofVoid(JAVA_LONG, ADDRESS);
-  private static final FunctionDescriptor DISPATCH_DESCRIPTOR =
-      FunctionDescriptor.ofVoid(
-          ADDRESS, // webview pointer
-          JAVA_LONG // arg
-          );
+  private static final FunctionDescriptor BIND_DESCRIPTOR = ofVoid(ADDRESS, ADDRESS);
+  private static final FunctionDescriptor DISPATCH_DESCRIPTOR = ofVoid(ADDRESS, JAVA_LONG);
 
   private final Thread uiThread;
   private final MemorySegment webview;
@@ -81,10 +77,6 @@ final class DWebView implements Webview {
 
   private boolean running;
   private boolean closed;
-
-  public static WebviewBuilder builder() {
-    return new WebviewBuilder();
-  }
 
   DWebView(
       WebviewNative webNative,
@@ -236,7 +228,8 @@ final class DWebView implements Webview {
   }
 
   @SuppressWarnings("unused")
-  private static void bindCallbackInvoke(BindCallback callback, long seq, MemorySegment req) {
+  private static void bindCallbackInvoke(
+      BindCallback callback, MemorySegment seq, MemorySegment req) {
     callback.callback(seq, req.reinterpret(Long.MAX_VALUE).getString(0));
   }
 
@@ -248,7 +241,7 @@ final class DWebView implements Webview {
                   DWebView.class,
                   "bindCallbackInvoke",
                   MethodType.methodType(
-                      void.class, BindCallback.class, long.class, MemorySegment.class)),
+                      void.class, BindCallback.class, MemorySegment.class, MemorySegment.class)),
           0,
           callback);
     } catch (Exception e) {
@@ -404,7 +397,7 @@ final class DWebView implements Webview {
      * @param seq The request id, used in {@code webview_return}
      * @param req The javascript arguments converted to a json array (string)
      */
-    void callback(long seq, String req);
+    void callback(MemorySegment seq, String req);
   }
 
   /** Used in {@code webview_dispatch} */
