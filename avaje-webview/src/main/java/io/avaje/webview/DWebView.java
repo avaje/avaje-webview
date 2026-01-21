@@ -28,8 +28,6 @@ import static java.lang.System.Logger.Level.DEBUG;
 import static java.lang.System.Logger.Level.ERROR;
 import static java.lang.foreign.FunctionDescriptor.ofVoid;
 import static java.lang.foreign.ValueLayout.ADDRESS;
-import static java.lang.foreign.ValueLayout.JAVA_LONG;
-
 import module java.base;
 import module org.jspecify;
 
@@ -67,7 +65,7 @@ final class DWebView implements Webview {
   private static final int WV_HINT_MAX = 2;
   private static final int WV_HINT_FIXED = 3;
   private static final FunctionDescriptor BIND_DESCRIPTOR = ofVoid(ADDRESS, ADDRESS);
-  private static final FunctionDescriptor DISPATCH_DESCRIPTOR = ofVoid(ADDRESS, JAVA_LONG);
+  private static final FunctionDescriptor DISPATCH_DESCRIPTOR = ofVoid();
 
   private final MemorySegment webview;
   private final WebviewNative wbNative;
@@ -243,22 +241,18 @@ final class DWebView implements Webview {
 
   @Override
   public void dispatch(@NonNull Runnable handler) {
-    // Create upcall stub for the dispatch callback
+
     MemorySegment callbackStub =
         Linker.nativeLinker()
             .upcallStub(
-                createDispatchCallbackHandle((_, _) -> handler.run()), DISPATCH_DESCRIPTOR, arena);
+                createDispatchCallbackHandle(handler::run), DISPATCH_DESCRIPTOR, arena);
 
     wbNative.webview_dispatch(webview, callbackStub, 0);
   }
 
-  private static MethodHandle createDispatchCallbackHandle(DispatchCallback callback) {
+  private static MethodHandle createDispatchCallbackHandle(Runnable callback) {
     try {
-      return MethodHandles.lookup()
-          .bind(
-              callback,
-              "callback",
-              MethodType.methodType(void.class, MemorySegment.class, long.class));
+      return MethodHandles.lookup().bind(callback, "run", MethodType.methodType(void.class));
     } catch (Exception e) {
       throw new RuntimeException("Failed to create callback handle", e);
     }
@@ -366,15 +360,5 @@ final class DWebView implements Webview {
      * @param req The javascript arguments converted to a json array (string)
      */
     void callback(MemorySegment seq, String req);
-  }
-
-  /** Used in {@code webview_dispatch} */
-  @FunctionalInterface
-  private interface DispatchCallback {
-    /**
-     * @param webview The pointer of the webview
-     * @param arg Unused
-     */
-    void callback(MemorySegment webview, long arg);
   }
 }
