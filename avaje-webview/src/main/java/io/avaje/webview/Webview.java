@@ -144,7 +144,7 @@ public interface Webview extends Closeable, Runnable {
    * @implNote Binds persist across page navigations. Callbacks are registered after {@code
    *     window.load}.
    */
-  void bind(@NonNull String name, @NonNull WebviewBindCallback handler);
+  void bind(@NonNull String name, @NonNull WebviewBinding handler);
 
   /**
    * Removes a previously bound JavaScript function.

@@ -178,11 +178,11 @@ final class DWebView implements Webview {
   }
 
   @Override
-  public void bind(@NonNull String name, @NonNull WebviewBindCallback handler) {
+  public void bind(@NonNull String name, @NonNull WebviewBinding handler) {
     bindCallback(name, handler);
   }
 
-  private void bindCallback(String name, WebviewBindCallback handler) {
+  private void bindCallback(String name, WebviewBinding handler) {
     BiConsumer<MemorySegment, String> callback =
         (seq, req) -> {
           try {
