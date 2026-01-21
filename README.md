@@ -6,12 +6,7 @@
 
 ## avaje-webview
 
-This is an enhanced fork of https://github.com/webview/webview_java
-
-The main goals of this fork is to:
-- Support GraalVM native image
-- Target Java 25 / GraalVM 25
-- Minimize dependencies 
+Avaje Webview wraps native platform webview engines to provide a clean interface for creating desktop apps without heavy dependencies.
 
 ## How to use
 
@@ -50,10 +45,7 @@ Webview webview = Webview.builder()
     // browser developer tools enabled    
     .enableDeveloperTools(true)
     .title("My App")
-    .width(1000)
-    .height(800)
     .html("<h1>Hello World</h1>")
-//  .url("http://localhost:" + port)
     .build();
 
 webview.run();
@@ -67,22 +59,20 @@ macOS requires that all UI code be executed from the first thread, you will need
 
 ### Extracting embedded libraries
 
-By default, the embedded native libs are extracted to the working dir and
-deleted on exit. We have the options to instead extract to temp via
-`.extractToTemp(true)` or to extract to `~/.avaje-webview` and keep them
-(only extract once) via `.extractToUserHome(true)`.
-
 ```java
+// Extract native libs to working dir directory (default, cleaned on exit)
 Webview webview = Webview.builder()
-    .extractToUserHome(true) 
-    // .extractToTemp(true)    
-    .title("My App")
-    .width(1000)
-    .height(800)
-    .html("<h1>Hello World</h1>")
     .build();
 
-webview.run();
+// Extract native libs to temp directory (also cleaned on exit)
+Webview webview = Webview.builder()
+    .extractToTemp(true)
+    .build();
+
+// Extract native libs to user home (persistent, faster subsequent startups)
+Webview webview = Webview.builder()
+    .extractToUserHome(true)
+    .build();
 ```
 
 ### Shutdown hook
@@ -105,6 +95,136 @@ Webview webview = Webview.builder()
 webview.run();
 ```
 
+### Window Properties
+
+```java
+Webview webview = Webview.builder()
+    .title("Configurable Window")
+    .width(1200)
+    .height(800)
+    .enableDeveloperTools(true) // Enable right-click > Inspect
+    .build();
+
+// Set window constraints after creation
+webview.setMinSize(600, 400);
+webview.setMaxSize(1920, 1080);
+
+// Or set a fixed size
+webview.setFixedSize(800, 600);
+
+// Maximize or fullscreen
+webview.maximizeWindow();
+webview.fullscreen();
+
+//set Dark Mode
+webview.setDarkAppearance(true);
+```
+
+### Set Window Icon
+
+```java
+// From file path
+webview.setIcon(Path.of("icon.ico"));
+
+// From classpath resource
+webview.setIcon(getClass().getResource("/icon.ico").toURI());
+```
+
+## Java-JavaScript Bridge
+
+### Executing JavaScript from Java
+
+```java
+Webview webview = Webview.builder()
+    .html("<html><body><h1 id='title'>Original</h1></body></html>")
+    .build();
+
+// Execute JavaScript immediately
+webview.eval("document.getElementById('title').textContent = 'Updated!';");
+
+webview.run();
+```
+
+### Executing Java from JavaScript
+
+Expose Java functionality to JavaScript as async functions:
+
+```java
+import io.avaje.webview.Webview;
+import io.avaje.webview.WebviewBindCallback;
+
+public class App {
+    public static void main(String[] args) {
+        
+        Webview webview = Webview.builder()
+            .title("Java Bridge Example")
+            .html("""
+                <!DOCTYPE html>
+                <html>
+                <body>
+                    <button onclick="callJava()">Call Java</button>
+                    <div id="result"></div>
+                    
+                    <script>
+                        async function callJava() {
+                            try {
+                                // Calls Java method, returns Promise
+                                const result = await greet('World');
+                                document.getElementById('result').textContent = result;
+                            } catch (error) {
+                                console.error('Java error:', error);
+                            }
+                        }
+                    </script>
+                </body>
+                </html>
+            """)
+            .build();
+        
+        // Bind Java method to JavaScript
+        webview.bind("greet", (String jsonArgs) -> {
+            // do something with the args here
+            return "Recieved, " + jsonArgs + "!");
+        });
+        
+        webview.run();
+    }
+}
+```
+
+### Example Complex Data Exchange
+
+```java
+record User(String name, int age) {}
+record UserRequest(String action, String userId) {}
+
+Webview webview = Webview.builder()
+    .html("""
+        <script>
+            async function getUser() {
+                const user = await fetchUser({
+                    action: 'get',
+                    userId: '123'
+                });
+                console.log(user.name, user.age);
+            }
+        </script>
+    """)
+    .build();
+
+webview.bind("fetchUser", (String jsonArgs) -> {
+    UserRequest request = Jsonb.instance().type(UserRequest.class).list().fromJson(jsonArgs).getFirst();
+    
+    // Simulate database lookup
+    User user = new User("Alice", 30);
+    
+    return Jsonb.instance().toJson(user);
+});
+
+webview.eval("getUser();");
+webview.run();
+```
+
 ## Notable changes (from upstream)
 
 - Add support for GraalVM native image
@@ -115,12 +235,9 @@ webview.run();
 - Add System.Logger use for resource cleanup (to ease debugging of resource cleanup)
 - Introduce WebviewBuilder, move native library bootstrap logic there
 - Builder pattern to replace constructors
+- More window functions
 - Remove the dependency on co.casterlabs.commons:platform (local copy of necessary code only)
 - Remove the dependency on co.casterlabs.commons:io
 - Remove the dependency on Lombok and Jetbrains
 - Replace Lombok with code
 - Replace Lombok `@NonNull` and Jetbrains `@Nullable` with JSpecify annotations
-
-
--------
-
