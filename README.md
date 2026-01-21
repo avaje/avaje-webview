@@ -6,7 +6,7 @@
 
 ## avaje-webview
 
-Avaje Webview wraps native platform webview engines to provide a clean interface for creating desktop apps without heavy dependencies.
+Avaje Webview wraps native platform webview engines to provide a clean interface for building modern cross-platform GUIs.
 
 ## How to use
 
