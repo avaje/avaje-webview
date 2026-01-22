@@ -172,7 +172,8 @@ final class WebviewBuilder implements Builder {
       String userHome = System.getProperty("user.home");
       var homeDir = new File(userHome);
       if (homeDir.exists()) {
-        File extractToDir = Path.of(userHome, ".avaje-webview", getClass().getPackage().getImplementationVersion()).toFile();
+        var version = getClass().getPackage().getImplementationVersion();
+        File extractToDir = Path.of(userHome, ".avaje-webview", version == null ? "" : version).toFile();
         if (!extractToDir.exists() && !extractToDir.mkdirs()) {
           System.err.println("Failed to create directory to extract libraries: " + extractToDir);
         }
