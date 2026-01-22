@@ -28,8 +28,6 @@ import static java.lang.System.Logger.Level.DEBUG;
 import static java.lang.System.Logger.Level.ERROR;
 import static java.lang.foreign.FunctionDescriptor.ofVoid;
 import static java.lang.foreign.ValueLayout.ADDRESS;
-import static java.lang.foreign.ValueLayout.JAVA_LONG;
-
 import module java.base;
 import module org.jspecify;
 
@@ -67,7 +65,7 @@ final class DWebView implements Webview {
   private static final int WV_HINT_MAX = 2;
   private static final int WV_HINT_FIXED = 3;
   private static final FunctionDescriptor BIND_DESCRIPTOR = ofVoid(ADDRESS, ADDRESS);
-  private static final FunctionDescriptor DISPATCH_DESCRIPTOR = ofVoid(ADDRESS, JAVA_LONG);
+  private static final FunctionDescriptor DISPATCH_DESCRIPTOR = ofVoid();
 
   private final Thread uiThread;
   private final MemorySegment webview;
@@ -198,12 +196,12 @@ final class DWebView implements Webview {
   }
 
   @Override
-  public void bind(@NonNull String name, @NonNull WebviewBindCallback handler) {
+  public void bind(@NonNull String name, @NonNull WebviewBinding handler) {
     handleDispatch(() -> bindCallback(name, handler));
   }
 
-  private void bindCallback(String name, WebviewBindCallback handler) {
-    BindCallback callback =
+  private void bindCallback(String name, WebviewBinding handler) {
+    BiConsumer<MemorySegment, String> callback =
         (seq, req) -> {
           try {
             req = WebviewUtil.forceSafeChars(req);
@@ -234,11 +232,11 @@ final class DWebView implements Webview {
 
   @SuppressWarnings("unused")
   private static void bindCallbackInvoke(
-      BindCallback callback, MemorySegment seq, MemorySegment req) {
-    callback.callback(seq, req.reinterpret(Long.MAX_VALUE).getString(0));
+		  BiConsumer<MemorySegment, String> callback, MemorySegment seq, MemorySegment req) {
+    callback.accept(seq, req.reinterpret(Long.MAX_VALUE).getString(0));
   }
 
-  private static MethodHandle createBindCallbackHandle(BindCallback callback) {
+  private static MethodHandle createBindCallbackHandle(BiConsumer<MemorySegment, String> callback) {
     try {
       return MethodHandles.insertArguments(
           MethodHandles.lookup()
@@ -246,7 +244,7 @@ final class DWebView implements Webview {
                   DWebView.class,
                   "bindCallbackInvoke",
                   MethodType.methodType(
-                      void.class, BindCallback.class, MemorySegment.class, MemorySegment.class)),
+                      void.class, BiConsumer.class, MemorySegment.class, MemorySegment.class)),
           0,
           callback);
     } catch (Exception e) {
@@ -262,22 +260,21 @@ final class DWebView implements Webview {
   @Override
   public void dispatch(@NonNull Runnable handler) {
 
-    // Create upcall stub for the dispatch callback
-    MemorySegment callbackStub =
+    var callbackStub =
         Linker.nativeLinker()
             .upcallStub(
-                createDispatchCallbackHandle((_, _) -> handler.run()), DISPATCH_DESCRIPTOR, arena);
+                createDispatchCallbackHandle(handler), DISPATCH_DESCRIPTOR, arena);
 
     wbNative.webview_dispatch(webview, callbackStub, 0);
   }
 
-  private static MethodHandle createDispatchCallbackHandle(DispatchCallback callback) {
+  private static MethodHandle createDispatchCallbackHandle(Runnable runnable) {
     try {
-      return MethodHandles.lookup()
-          .bind(
-              callback,
-              "callback",
-              MethodType.methodType(void.class, MemorySegment.class, long.class));
+      return MethodHandles.insertArguments(
+          MethodHandles.lookup()
+              .findVirtual(Runnable.class, "run", MethodType.methodType(void.class)),
+          0,
+          runnable);
     } catch (Exception e) {
       throw new RuntimeException("Failed to create callback handle", e);
     }
@@ -396,25 +393,5 @@ final class DWebView implements Webview {
         throw new UnsupportedOperationException(ERROR_MAC_NO_XSTART_ON_FIRST_THREAD + MACOS_RELOAD);
       }
     }
-  }
-
-  /** Used in {@code webview_bind} */
-  @FunctionalInterface
-  private interface BindCallback {
-    /**
-     * @param seq The request id, used in {@code webview_return}
-     * @param req The javascript arguments converted to a json array (string)
-     */
-    void callback(MemorySegment seq, String req);
-  }
-
-  /** Used in {@code webview_dispatch} */
-  @FunctionalInterface
-  private interface DispatchCallback {
-    /**
-     * @param webview The pointer of the webview
-     * @param arg Unused
-     */
-    void callback(MemorySegment webview, long arg);
   }
 }
