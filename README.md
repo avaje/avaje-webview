@@ -39,6 +39,19 @@ This is an enhanced fork of https://github.com/webview/webview_java with some [m
 </dependency>
 -->
 ```
+If using GraalVM native image and maven, we can use `avaje-webview-platform` as the 
+dependency which will use **_maven profiles_** to selectively include the platform 
+specific dependencies for Mac, Windows, Linux.
+
+```xml
+<!-- uses maven profiles to include platform specific dependencies -->
+<dependency>
+    <groupId>io.avaje.webview</groupId>
+    <artifactId>avaje-webview-platform</artifactId>
+    <version>${version}</version>
+</dependency>
+```
+
 
 #### Build a Webview
 
