@@ -16,7 +16,8 @@
  * .title("My Desktop App")
  * .url("https://example.com")
  * .build();
- * * webview.run();
+ *
+ * webview.run();
  * }</pre>
  */
 
