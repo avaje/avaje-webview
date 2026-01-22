@@ -33,7 +33,7 @@ final class WebviewBuilder implements Builder {
 
   private static final String UNKNOWN_VERSION = "_0.12";
   private static WebviewNative NATIVE_LIB;
-
+  static SymbolLookup LIBRARY;
   private boolean extractToUserHome;
   private boolean extractToTemp;
   private String title;
@@ -160,6 +160,7 @@ final class WebviewBuilder implements Builder {
 
     if (target.exists() && !temp || extractToFile(lib, target)) {
       System.load(target.getAbsolutePath());
+      LIBRARY = SymbolLookup.libraryLookup(target.getAbsolutePath(), Arena.global());
     }
 
     // Return the FFM-based native implementation

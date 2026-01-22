@@ -14,7 +14,7 @@ final class WebviewNative {
     return new WebviewBuilder();
   }
 
-  private static final SymbolLookup LIBRARY;
+  private static final SymbolLookup LIBRARY = WebviewBuilder.LIBRARY;
   private static final Linker LINKER = Linker.nativeLinker();
 
   // Memory layouts for webview_version structures
@@ -48,8 +48,6 @@ final class WebviewNative {
   private static final MethodHandle webview_dispatch;
 
   static {
-
-    LIBRARY = SymbolLookup.libraryLookup(System.mapLibraryName("webview"), Arena.global());
 
     // Initialize all method handles
     webview_version = downcallHandle("webview_version", FunctionDescriptor.of(ADDRESS));
