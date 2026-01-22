@@ -90,31 +90,6 @@ Webview webview = Webview.builder()
     .build();
 ```
 
-### Shutdown hook
-
-By default, a shutdown hook is registered to ensure that the resource
-cleanup occurs via a SIGINT/CTRL-C:
-
-```java
-Webview webview = Webview.builder()
-    .shutdownHook(true) // Default
-    .build();
-
-webview.run();
-// Native resources automatically cleaned up on JVM exit
-```
-
-```java
-Webview webview = Webview.builder()
-    .shutdownHook(false) // Disables hook (Explicitly manage resources)
-    .build();
-    
-try (webview) { //closeable
-    webview.run();
-} 
-```
-
-
 ### Window Properties
 
 ```java
@@ -241,7 +216,6 @@ webview.run();
 - Use FFM instead of JNA
 - Full JPMS support
 - Add support for extracting the embedded libraries into temp or user home subdir
-- Shutdown hook to cleanup resources on CTRL-C
 - Builder pattern to replace constructors
 - More window functions (setting icons, maximizing and fullscreen)
 - Mac window functions
