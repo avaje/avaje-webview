@@ -4,7 +4,7 @@
  * WebKitGTK on Linux, and WebKit on macOS).
  * <h3>Key Features:</h3>
  * <ul>
- * <li><b>Native Performance:</b> Uses the platform's native browser engine via FFM (Foreign Function & Memory API).</li>
+ * <li><b>Native Performance:</b> Uses the platform's native browser engine via FFM (Foreign Function and Memory API).</li>
  * <li><b>Bidirectional Bridge:</b> Call Java methods from JavaScript via Promises and execute JavaScript from Java.</li>
  * <li><b>MInimal Dependencies:</b> Minimal footprint with no heavy runtime dependencies.</li>
  * <li><b>Automatic Lifecycle:</b> Managed native library extraction and window event loop handling.</li>
