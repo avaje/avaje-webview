@@ -94,7 +94,7 @@ public class Main {
 
       // Bind function to get completed sessions count
       webview.bind("__getCompletedSessions__", _ -> String.valueOf(completedTasks));
-      webview.dispatch(() -> webview.version());
+      webview.version();
       webview.setIcon(Main.class.getResource("/static/favicon.ico").toURI());
       webview.run();
 

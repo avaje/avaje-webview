@@ -24,10 +24,6 @@
           "jlong",
           "void*"
         ]
-      },
-      {
-        "returnType": "void",
-        "parameterTypes": []
       }
     ],
     "downcalls": [

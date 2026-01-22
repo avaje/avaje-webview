@@ -28,7 +28,7 @@ package io.avaje.webview;
  * {@code apply} method.
  */
 @FunctionalInterface
-public interface WebviewBinding {
+public interface WebviewBindCallback {
 
   /**
    * Processes a call from the webview's JavaScript context.
