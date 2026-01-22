@@ -226,13 +226,12 @@ webview.run();
 
 - Add support for GraalVM native image
 - Use FFM instead of JNA
+- Full JPMS support
 - Add support for extracting the embedded libraries into temp or user home subdir
 - Shutdown hook to cleanup resources on CTRL-C
-- Change run() to include webview_terminate(), so easier to ensure resources cleaned up
-- Add System.Logger use for resource cleanup (to ease debugging of resource cleanup)
-- Introduce WebviewBuilder, move native library bootstrap logic there
+- Change run() to include webview_terminate() to ensure resources are cleaned up
 - Builder pattern to replace constructors
-- A lot More window functions
+- More window functions (setting icons, maximizing and fullscreen)
 - Mac window functions
 - Remove the dependency on co.casterlabs.commons:platform (local copy of necessary code only)
 - Remove the dependency on co.casterlabs.commons:io
