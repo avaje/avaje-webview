@@ -242,7 +242,6 @@ webview.run();
 - Full JPMS support
 - Add support for extracting the embedded libraries into temp or user home subdir
 - Shutdown hook to cleanup resources on CTRL-C
-- Change run() to include webview_terminate() to ensure resources are cleaned up
 - Builder pattern to replace constructors
 - More window functions (setting icons, maximizing and fullscreen)
 - Mac window functions

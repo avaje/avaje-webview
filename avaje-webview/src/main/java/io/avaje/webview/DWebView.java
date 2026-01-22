@@ -296,7 +296,6 @@ final class DWebView implements Webview {
     wbNative.webview_run(webview);
     log.log(DEBUG, "destroy and terminate");
     wbNative.webview_destroy(webview);
-    wbNative.webview_terminate(webview);
     closed = true;
   }
 
