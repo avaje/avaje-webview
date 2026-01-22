@@ -31,6 +31,7 @@ import io.avaje.webview.platform.LinuxLibC;
  */
 final class WebviewBuilder implements Builder {
 
+  private static final String UNKNOWN_VERSION = "_0.12";
   private static WebviewNative NATIVE_LIB;
 
   private boolean extractToUserHome;
@@ -123,7 +124,7 @@ final class WebviewBuilder implements Builder {
       view.navigate("about:blank");
     }
     if (shutdownHook) {
-      Runtime.getRuntime().addShutdownHook(new Hook(view::close));
+      Runtime.getRuntime().addShutdownHook(new Hook(view::shutdown));
     }
     return view;
   }
@@ -172,7 +173,8 @@ final class WebviewBuilder implements Builder {
       String userHome = System.getProperty("user.home");
       var homeDir = new File(userHome);
       if (homeDir.exists()) {
-        File extractToDir = Path.of(userHome, ".avaje-webview", getClass().getPackage().getImplementationVersion()).toFile();
+        var version = getClass().getPackage().getImplementationVersion();
+        File extractToDir = Path.of(userHome, ".avaje-webview", version == null ? UNKNOWN_VERSION : version).toFile();
         if (!extractToDir.exists() && !extractToDir.mkdirs()) {
           System.err.println("Failed to create directory to extract libraries: " + extractToDir);
         }

@@ -20,7 +20,7 @@
         <dependency>
             <groupId>io.avaje.webview</groupId>
             <artifactId>avaje-webview-all</artifactId>
-            <version>0.12</version>
+            <version>0.13</version>
         </dependency>
     </dependencies>
 
