@@ -6,10 +6,11 @@
     <groupId>io.avaje.webview</groupId>
     <artifactId>avaje-webview-parent</artifactId>
     <version>0.13</version>
+    <relativePath>../..</relativePath>
   </parent>
   <artifactId>avaje-webview-linux-x86-musl</artifactId>
 
-  <name>avaje-webview-linux32</name>
+  <name>avaje-webview-linux-x86-musl</name>
   <description>FFM Wrapper over webview</description>
   <dependencies>
     <dependency>

@@ -412,34 +412,34 @@ jobs:
         }
         
         # Linux GNU
-        copy_lib "linux-x86-gnu" "avaje-webview-linux-x86-gnu/src/main/resources/io/avaje/webview/nativelib/linux/x86/gnu" "so"
-        copy_lib "linux-x86_64-gnu" "avaje-webview-linux-x86_64-gnu/src/main/resources/io/avaje/webview/nativelib/linux/x86_64/gnu" "so"
-        copy_lib "linux-arm-gnu" "avaje-webview-linux-arm-gnu/src/main/resources/io/avaje/webview/nativelib/linux/arm/gnu" "so"
-        copy_lib "linux-aarch64-gnu" "avaje-webview-linux-aarch64-gnu/src/main/resources/io/avaje/webview/nativelib/linux/aarch64/gnu" "so"
-        
+        copy_lib "linux-x86-gnu" "natives/avaje-webview-linux-x86-gnu/src/main/resources/io/avaje/webview/nativelib/linux/x86/gnu" "so"
+        copy_lib "linux-x86_64-gnu" "natives/avaje-webview-linux-x86_64-gnu/src/main/resources/io/avaje/webview/nativelib/linux/x86_64/gnu" "so"
+        copy_lib "linux-arm-gnu" "natives/avaje-webview-linux-arm-gnu/src/main/resources/io/avaje/webview/nativelib/linux/arm/gnu" "so"
+        copy_lib "linux-aarch64-gnu" "natives/avaje-webview-linux-aarch64-gnu/src/main/resources/io/avaje/webview/nativelib/linux/aarch64/gnu" "so"
+
         # Linux MUSL
-        copy_lib "linux-x86-musl" "avaje-webview-linux-x86-musl/src/main/resources/io/avaje/webview/nativelib/linux/x86/musl" "so"
-        copy_lib "linux-x86_64-musl" "avaje-webview-linux-x86_64-musl/src/main/resources/io/avaje/webview/nativelib/linux/x86_64/musl" "so"
-        copy_lib "linux-arm-musl" "avaje-webview-linux-arm-musl/src/main/resources/io/avaje/webview/nativelib/linux/arm/musl" "so"
-        copy_lib "linux-aarch64-musl" "avaje-webview-linux-aarch64-musl/src/main/resources/io/avaje/webview/nativelib/linux/aarch64/musl" "so"
-        
+        copy_lib "linux-x86-musl" "natives/avaje-webview-linux-x86-musl/src/main/resources/io/avaje/webview/nativelib/linux/x86/musl" "so"
+        copy_lib "linux-x86_64-musl" "natives/avaje-webview-linux-x86_64-musl/src/main/resources/io/avaje/webview/nativelib/linux/x86_64/musl" "so"
+        copy_lib "linux-arm-musl" "natives/avaje-webview-linux-arm-musl/src/main/resources/io/avaje/webview/nativelib/linux/arm/musl" "so"
+        copy_lib "linux-aarch64-musl" "natives/avaje-webview-linux-aarch64-musl/src/main/resources/io/avaje/webview/nativelib/linux/aarch64/musl" "so"
+
         # macOS
-        copy_lib "mac-x86_64" "avaje-webview-mac-x86_64/src/main/resources/io/avaje/webview/nativelib/macos/x86_64" "dylib"
-        copy_lib "mac-aarch64" "avaje-webview-mac-aarch64/src/main/resources/io/avaje/webview/nativelib/macos/aarch64" "dylib"
-        
+        copy_lib "mac-x86_64" "natives/avaje-webview-mac-x86_64/src/main/resources/io/avaje/webview/nativelib/macos/x86_64" "dylib"
+        copy_lib "mac-aarch64" "natives/avaje-webview-mac-aarch64/src/main/resources/io/avaje/webview/nativelib/macos/aarch64" "dylib"
+
         # Windows
-        copy_lib "windows-x86" "avaje-webview-windows-x86/src/main/resources/io/avaje/webview/nativelib/windows_nt/x86" "dll"
-        copy_lib "windows-x86_64" "avaje-webview-windows-x86_64/src/main/resources/io/avaje/webview/nativelib/windows_nt/x86_64" "dll"
+        copy_lib "windows-x86" "natives/avaje-webview-windows-x86/src/main/resources/io/avaje/webview/nativelib/windows_nt/x86" "dll"
+        copy_lib "windows-x86_64" "natives/avaje-webview-windows-x86_64/src/main/resources/io/avaje/webview/nativelib/windows_nt/x86_64" "dll"
         rm -rf artifacts
     
     - name: Check for changes
       id: check_changes
       run: |
         # Only add the specific webview library files (so, dll, dylib)
-        git add avaje-webview-*/src/main/resources/io/avaje/webview/nativelib/**/libwebview.so
-        git add avaje-webview-*/src/main/resources/io/avaje/webview/nativelib/**/*.dll
-        git add avaje-webview-*/src/main/resources/io/avaje/webview/nativelib/**/*.dylib
-        
+        git add natives/avaje-webview-*/src/main/resources/io/avaje/webview/nativelib/**/libwebview.so
+        git add natives/avaje-webview-*/src/main/resources/io/avaje/webview/nativelib/**/*.dll
+        git add natives/avaje-webview-*/src/main/resources/io/avaje/webview/nativelib/**/*.dylib
+
         if git diff --staged --quiet; then
           echo "has_changes=false" >> $GITHUB_OUTPUT
           echo "No changes detected"

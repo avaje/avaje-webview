@@ -7,6 +7,7 @@
         <groupId>io.avaje.webview</groupId>
         <artifactId>avaje-webview-parent</artifactId>
         <version>0.13</version>
+        <relativePath>../..</relativePath>
     </parent>
 
     <artifactId>avaje-webview-platform</artifactId>
