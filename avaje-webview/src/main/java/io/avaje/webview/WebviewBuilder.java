@@ -43,7 +43,6 @@ final class WebviewBuilder implements Builder {
   private int height = 600;
   private String html;
   private String url;
-  private boolean shutdownHook = true;
   private boolean keepExtractedFile;
   private boolean temp;
 
@@ -104,12 +103,6 @@ final class WebviewBuilder implements Builder {
   }
 
   @Override
-  public WebviewBuilder shutdownHook(boolean shutdownHook) {
-    this.shutdownHook = shutdownHook;
-    return this;
-  }
-
-  @Override
   public Webview build() {
     var n = initNative(this);
     var view = new DWebView(n, enableDeveloperTools, windowPointer, width, height);
@@ -122,9 +115,6 @@ final class WebviewBuilder implements Builder {
       view.setHTML(html);
     } else {
       view.navigate("about:blank");
-    }
-    if (shutdownHook) {
-      Runtime.getRuntime().addShutdownHook(new Hook(view::shutdown));
     }
     return view;
   }

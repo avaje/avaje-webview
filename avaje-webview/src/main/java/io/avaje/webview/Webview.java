@@ -303,15 +303,6 @@ public interface Webview extends Closeable, Runnable {
     Builder navigate(String url);
 
     /**
-     * Determines if a JVM shutdown hook should be registered to automatically clean up native
-     * resources. Defaults to {@code true}.
-     *
-     * @param shutdownHook {@code true} to enable automatic cleanup
-     * @return this builder
-     */
-    Builder shutdownHook(boolean shutdownHook);
-
-    /**
      * Builds a Webview using the configuration
      *
      * @return a configured Webview instance
