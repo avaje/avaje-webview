@@ -31,8 +31,8 @@ import io.avaje.webview.platform.LinuxLibC;
  */
 final class WebviewBuilder implements Builder {
 
-  private static WebviewNative NATIVE_LIB;
-
+  static SymbolLookup LIBRARY;
+  private static final String UNKNOWN_VERSION = "_0.12";
   private boolean extractToUserHome;
   private boolean extractToTemp;
   private String title;
@@ -42,7 +42,6 @@ final class WebviewBuilder implements Builder {
   private int height = 600;
   private String html;
   private String url;
-  private boolean shutdownHook = true;
   private boolean keepExtractedFile;
   private boolean temp;
 
@@ -103,15 +102,9 @@ final class WebviewBuilder implements Builder {
   }
 
   @Override
-  public WebviewBuilder shutdownHook(boolean shutdownHook) {
-    this.shutdownHook = shutdownHook;
-    return this;
-  }
-
-  @Override
   public Webview build() {
-    var n = initNative(this);
-    var view = new DWebView(n, enableDeveloperTools, windowPointer, width, height);
+   initNative(this);
+    var view = new DWebView(enableDeveloperTools, windowPointer, width, height);
     if (title != null) {
       view.setTitle(title);
     }
@@ -121,9 +114,6 @@ final class WebviewBuilder implements Builder {
       view.setHTML(html);
     } else {
       view.navigate("about:blank");
-    }
-    if (shutdownHook) {
-      Runtime.getRuntime().addShutdownHook(new Hook(view::close));
     }
     return view;
   }
@@ -140,14 +130,13 @@ final class WebviewBuilder implements Builder {
     }
   }
 
-  private synchronized WebviewNative initNative(WebviewBuilder bootstrap) {
-    if (NATIVE_LIB == null) {
-      NATIVE_LIB = bootstrap.initNativeLibrary();
+  private synchronized void initNative(WebviewBuilder bootstrap) {
+    if (LIBRARY == null) {
+      LIBRARY = bootstrap.initNativeLibrary();
     }
-    return NATIVE_LIB;
   }
 
-  private WebviewNative initNativeLibrary() {
+  private SymbolLookup initNativeLibrary() {
     var lib = platformLibrary();
     File target = createTarget(lib);
     if (target.exists() && !keepExtractedFile && !target.delete()) {
@@ -162,7 +151,7 @@ final class WebviewBuilder implements Builder {
     }
 
     // Return the FFM-based native implementation
-    return new WebviewNative();
+    return SymbolLookup.libraryLookup(target.getAbsolutePath(), Arena.global());
   }
 
   private File createTarget(String lib) {
@@ -172,7 +161,8 @@ final class WebviewBuilder implements Builder {
       String userHome = System.getProperty("user.home");
       var homeDir = new File(userHome);
       if (homeDir.exists()) {
-        File extractToDir = Path.of(userHome, ".avaje-webview", "0.2").toFile();
+        var version = getClass().getPackage().getImplementationVersion();
+        File extractToDir = Path.of(userHome, ".avaje-webview", version == null ? UNKNOWN_VERSION : version).toFile();
         if (!extractToDir.exists() && !extractToDir.mkdirs()) {
           System.err.println("Failed to create directory to extract libraries: " + extractToDir);
         }

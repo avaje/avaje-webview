@@ -20,9 +20,6 @@
  */
 package io.avaje.webview;
 
-import module java.base;
-import module org.jspecify;
-
 import static io.avaje.webview.platform.OSDistribution.MACOS;
 import static io.avaje.webview.platform.OSFamily.WINDOWS;
 import static io.avaje.webview.platform.Platform.OS_DISTRIBUTION;
@@ -30,8 +27,27 @@ import static io.avaje.webview.platform.Platform.OS_FAMILY;
 import static java.lang.System.Logger.Level.*;
 import static java.lang.foreign.FunctionDescriptor.ofVoid;
 import static java.lang.foreign.ValueLayout.ADDRESS;
-import static java.lang.foreign.ValueLayout.JAVA_LONG;
 
+import module java.base;
+import module org.jspecify;
+
+/**
+ * Webview browser window.
+ *
+ * <pre>{@code
+ * Webview wv = Webview.builder()
+ *          .debug(true)
+ *          .title("My App")
+ *          .width(1000)
+ *          .height(800)
+ *          .url("http://localhost:" + port)
+ *          .build();
+ *
+ *  wv.run(); // Run the webview event loop, the webview is fully disposed when this returns.
+ *  wv.close(); // Free any resources allocated.
+ *
+ * }</pre>
+ */
 final class DWebView implements Webview {
 
   private static final System.Logger log = System.getLogger("io.avaje.webview");
@@ -49,24 +65,27 @@ final class DWebView implements Webview {
   private static final int WV_HINT_MAX = 2;
   private static final int WV_HINT_FIXED = 3;
   private static final FunctionDescriptor BIND_DESCRIPTOR = ofVoid(ADDRESS, ADDRESS);
-  private static final FunctionDescriptor DISPATCH_DESCRIPTOR = ofVoid(ADDRESS, JAVA_LONG);
+  private static final FunctionDescriptor DISPATCH_DESCRIPTOR = ofVoid();
 
+  private final Thread uiThread;
   private final MemorySegment webview;
-  private final WebviewNative wbNative;
 
   private final Arena arena = Arena.ofAuto();
+  private List<Runnable> evalList = Collections.synchronizedList(new ArrayList<>());
+
+  private boolean running;
+  private boolean closed;
 
   DWebView(
-      WebviewNative webNative,
       boolean debug,
       @Nullable MemorySegment windowPointer,
       int width,
       int height) {
 
     checkEnvironment();
-    wbNative = webNative;
+    uiThread = Thread.currentThread();
     webview =
-        wbNative.webview_create(debug, windowPointer == null ? MemorySegment.NULL : windowPointer);
+        WebviewNative.webview_create(debug, windowPointer == null ? MemorySegment.NULL : windowPointer);
 
     this.setSize(width, height);
     if (OS_DISTRIBUTION == MACOS) {
@@ -106,24 +125,32 @@ final class DWebView implements Webview {
     """);
   }
   
+  private void handleDispatch(Runnable task) {
+    if (uiThread == Thread.currentThread()) {
+      task.run();
+    } else {
+      dispatch(task);
+    }
+  }
+
   @Override
   public MemorySegment nativeWindowPointer() {
-    return wbNative.webview_get_window(webview);
+    return WebviewNative.webview_get_window(webview);
   }
 
   @Override
   public void setHTML(@Nullable String html) {
-    wbNative.webview_set_html(webview, html);
+    handleDispatch(() -> WebviewNative.webview_set_html(webview, html));
   }
 
   @Override
   public void navigate(@Nullable String url) {
-    wbNative.webview_navigate(webview, url == null ? "about:blank" : url);
+    handleDispatch(() -> WebviewNative.webview_navigate(webview, url == null ? "about:blank" : url));
   }
 
   @Override
   public void setTitle(@NonNull String title) {
-    wbNative.webview_set_title(webview, title);
+    handleDispatch(() -> WebviewNative.webview_set_title(webview, title));
     if (OS_DISTRIBUTION == MACOS) {
       MacOSHelper.setApplicationName(title);
     }
@@ -131,31 +158,24 @@ final class DWebView implements Webview {
 
   @Override
   public void setMinSize(int width, int height) {
-    wbNative.webview_set_size(webview, width, height, WV_HINT_MIN);
+    handleDispatch(() -> WebviewNative.webview_set_size(webview, width, height, WV_HINT_MIN));
   }
 
   @Override
   public void setMaxSize(int width, int height) {
-    wbNative.webview_set_size(webview, width, height, WV_HINT_MAX);
+    handleDispatch(() -> WebviewNative.webview_set_size(webview, width, height, WV_HINT_MAX));
   }
 
   @Override
   public void setSize(int width, int height) {
-    wbNative.webview_set_size(webview, width, height, WV_HINT_NONE);
+    handleDispatch(() -> WebviewNative.webview_set_size(webview, width, height, WV_HINT_NONE));
   }
 
   @Override
   public void setFixedSize(int width, int height) {
-    wbNative.webview_set_size(webview, width, height, WV_HINT_FIXED);
+    handleDispatch(() -> WebviewNative.webview_set_size(webview, width, height, WV_HINT_FIXED));
   }
 
-  /**
-   * Sets the script to be run on page load. Defaults to no nested access (false).
-   *
-   * @implNote This get's called AFTER window.load.
-   * @param script
-   * @see #setInitScript(String, boolean)
-   */
   @Override
   public void setInitScript(@NonNull String script) {
     setInitScript(script, false);
@@ -163,43 +183,54 @@ final class DWebView implements Webview {
 
   @Override
   public void setInitScript(@NonNull String script, boolean allowNestedAccess) {
-    var script1 = String.format(
-            """
-            (() => {
-            try {
-            if (window.top == window.self || %b) {
-            %s
-            }
-            } catch (e) {
-            console.error('[Webview]', 'An error occurred whilst evaluating init script:', %s, e);
-            }
-            })();""",
-              allowNestedAccess, script, '"' + WebviewUtil.jsonEscape(script) + '"');
+    handleDispatch(
+        () -> {
+          var script1 =
+              String.format(
+                  """
+      	(() => {
+      	try {
+      	if (window.top == window.self || %b) {
+      	%s
+      	}
+      	} catch (e) {
+      	console.error('[Webview]', 'An error occurred whilst evaluating init script:', %s, e);
+      	}
+      	})();""",
+                  allowNestedAccess, script, '"' + WebviewUtil.jsonEscape(script) + '"');
 
-      wbNative.webview_init(webview, script1);
+          WebviewNative.webview_init(webview, script1);
+        });
   }
 
   @Override
   public void eval(@NonNull String script) {
-    wbNative.webview_eval(
-        webview,
-        String.format(
-            """
-      try {
-      %s
-      } catch (e) {
-      console.error('[Webview]', 'An error occurred whilst evaluating script:', %s, e);
-      }""",
-            script, '"' + WebviewUtil.jsonEscape(script) + '"'));
+    if (!running) {
+      evalList.add(() -> eval(script));
+      return;
+    }
+    dispatch(
+        () -> {
+          WebviewNative.webview_eval(
+              webview,
+              String.format(
+                  """
+        	try {
+        	%s
+        	} catch (e) {
+        	console.error('[Webview]', 'An error occurred whilst evaluating script:', %s, e);
+        	}""",
+                  script, '"' + WebviewUtil.jsonEscape(script) + '"'));
+        });
   }
 
   @Override
-  public void bind(@NonNull String name, @NonNull WebviewBindCallback handler) {
-    bindCallback(name, handler);
+  public void bind(@NonNull String name, @NonNull WebviewBinding handler) {
+    handleDispatch(() -> bindCallback(name, handler));
   }
 
-  private void bindCallback(String name, WebviewBindCallback handler) {
-    BindCallback callback =
+  private void bindCallback(String name, WebviewBinding handler) {
+    BiConsumer<MemorySegment, String> callback =
         (seq, req) -> {
           try {
             req = WebviewUtil.forceSafeChars(req);
@@ -209,14 +240,14 @@ final class DWebView implements Webview {
               result = "null";
             }
 
-            wbNative.webview_return(webview, seq, false, WebviewUtil.forceSafeChars(result));
+            WebviewNative.webview_return(webview, seq, false, WebviewUtil.forceSafeChars(result));
           } catch (Throwable e) {
             String stacktrace = WebviewUtil.getExceptionStack(e);
             log.log(ERROR, stacktrace);
 
             String exceptionJson = '"' + WebviewUtil.jsonEscape(stacktrace) + '"';
 
-            wbNative.webview_return(webview, seq, true, exceptionJson);
+            WebviewNative.webview_return(webview, seq, true, exceptionJson);
           }
         };
 
@@ -225,16 +256,16 @@ final class DWebView implements Webview {
         Linker.nativeLinker()
             .upcallStub(createBindCallbackHandle(callback), BIND_DESCRIPTOR, arena);
 
-    wbNative.webview_bind(webview, name, callbackStub, 0);
+    WebviewNative.webview_bind(webview, name, callbackStub, 0);
   }
 
   @SuppressWarnings("unused")
   private static void bindCallbackInvoke(
-      BindCallback callback, MemorySegment seq, MemorySegment req) {
-    callback.callback(seq, req.reinterpret(Long.MAX_VALUE).getString(0));
+		  BiConsumer<MemorySegment, String> callback, MemorySegment seq, MemorySegment req) {
+    callback.accept(seq, req.reinterpret(Long.MAX_VALUE).getString(0));
   }
 
-  private static MethodHandle createBindCallbackHandle(BindCallback callback) {
+  private static MethodHandle createBindCallbackHandle(BiConsumer<MemorySegment, String> callback) {
     try {
       return MethodHandles.insertArguments(
           MethodHandles.lookup()
@@ -242,7 +273,7 @@ final class DWebView implements Webview {
                   DWebView.class,
                   "bindCallbackInvoke",
                   MethodType.methodType(
-                      void.class, BindCallback.class, MemorySegment.class, MemorySegment.class)),
+                      void.class, BiConsumer.class, MemorySegment.class, MemorySegment.class)),
           0,
           callback);
     } catch (Exception e) {
@@ -252,27 +283,27 @@ final class DWebView implements Webview {
 
   @Override
   public void unbind(@NonNull String name) {
-    wbNative.webview_unbind(webview, name);
+    handleDispatch(() -> WebviewNative.webview_unbind(webview, name));
   }
 
   @Override
   public void dispatch(@NonNull Runnable handler) {
-    // Create upcall stub for the dispatch callback
-    MemorySegment callbackStub =
+
+    var callbackStub =
         Linker.nativeLinker()
             .upcallStub(
-                createDispatchCallbackHandle((_, _) -> handler.run()), DISPATCH_DESCRIPTOR, arena);
+                createDispatchCallbackHandle(handler), DISPATCH_DESCRIPTOR, arena);
 
-    wbNative.webview_dispatch(webview, callbackStub, 0);
+    WebviewNative.webview_dispatch(webview, callbackStub, 0);
   }
 
-  private static MethodHandle createDispatchCallbackHandle(DispatchCallback callback) {
+  private static MethodHandle createDispatchCallbackHandle(Runnable runnable) {
     try {
-      return MethodHandles.lookup()
-          .bind(
-              callback,
-              "callback",
-              MethodType.methodType(void.class, MemorySegment.class, long.class));
+      return MethodHandles.insertArguments(
+          MethodHandles.lookup()
+              .findVirtual(Runnable.class, "run", MethodType.methodType(void.class)),
+          0,
+          runnable);
     } catch (Exception e) {
       throw new RuntimeException("Failed to create callback handle", e);
     }
@@ -280,16 +311,36 @@ final class DWebView implements Webview {
 
   @Override
   public void run() {
-    wbNative.webview_run(webview);
+    if (running) {
+      return;
+    }
+    running = true;
+    for (var r : evalList) {
+      r.run();
+    }
+    start();
+  }
+
+  private void start() {
+    WebviewNative.webview_run(webview);
     log.log(DEBUG, "destroy and terminate");
-    wbNative.webview_destroy(webview);
-    wbNative.webview_terminate(webview);
+    WebviewNative.webview_destroy(webview);
+    closed = true;
   }
 
   @Override
   public void close() {
     log.log(DEBUG, "close");
-    wbNative.webview_terminate(webview);
+    handleDispatch(this::shutdown);
+  }
+
+  void shutdown() {
+    if (closed) {
+      return;
+    }
+    closed = true;
+    log.log(DEBUG, "shutdown");
+    WebviewNative.webview_terminate(webview);
   }
 
   @Override
@@ -323,7 +374,7 @@ final class DWebView implements Webview {
 
   @Override
   public String version() {
-    return wbNative.webview_version();
+    return WebviewNative.webview_version();
   }
 
   @Override
@@ -370,25 +421,5 @@ final class DWebView implements Webview {
         throw new UnsupportedOperationException(ERROR_MAC_NO_XSTART_ON_FIRST_THREAD + MACOS_RELOAD);
       }
     }
-  }
-
-  /** Used in {@code webview_bind} */
-  @FunctionalInterface
-  private interface BindCallback {
-    /**
-     * @param seq The request id, used in {@code webview_return}
-     * @param req The javascript arguments converted to a json array (string)
-     */
-    void callback(MemorySegment seq, String req);
-  }
-
-  /** Used in {@code webview_dispatch} */
-  @FunctionalInterface
-  private interface DispatchCallback {
-    /**
-     * @param webview The pointer of the webview
-     * @param arg Unused
-     */
-    void callback(MemorySegment webview, long arg);
   }
 }

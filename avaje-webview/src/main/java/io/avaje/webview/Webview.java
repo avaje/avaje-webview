@@ -144,7 +144,7 @@ public interface Webview extends Closeable, Runnable {
    * @implNote Binds persist across page navigations. Callbacks are registered after {@code
    *     window.load}.
    */
-  void bind(@NonNull String name, @NonNull WebviewBindCallback handler);
+  void bind(@NonNull String name, @NonNull WebviewBinding handler);
 
   /**
    * Removes a previously bound JavaScript function.
@@ -301,15 +301,6 @@ public interface Webview extends Closeable, Runnable {
      * @return this builder
      */
     Builder navigate(String url);
-
-    /**
-     * Determines if a JVM shutdown hook should be registered to automatically clean up native
-     * resources. Defaults to {@code true}.
-     *
-     * @param shutdownHook {@code true} to enable automatic cleanup
-     * @return this builder
-     */
-    Builder shutdownHook(boolean shutdownHook);
 
     /**
      * Builds a Webview using the configuration
