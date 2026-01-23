@@ -360,7 +360,11 @@ final class DWebView implements Webview {
   @Override
   public void setIcon(URI classPath) {
     try {
-      Path tempFile = Files.createTempFile("webview_icon_", getExtension(classPath));
+      String extension =
+          classPath
+              .getPath()
+              .transform(p -> !p.contains(".") ? "" : p.substring(p.lastIndexOf('.')));
+      Path tempFile = Files.createTempFile("webview_icon_", extension);
       tempFile.toFile().deleteOnExit();
       try (InputStream is = classPath.toURL().openStream()) {
         Files.copy(is, tempFile, StandardCopyOption.REPLACE_EXISTING);
@@ -369,14 +373,6 @@ final class DWebView implements Webview {
     } catch (IOException e) {
       throw new RuntimeException("Failed to extract resource to temp file", e);
     }
-  }
-
-  private static String getExtension(URI uri) {
-    String path = uri.getPath();
-    if (!path.contains(".")) {
-      return "";
-    }
-    return path.substring(path.lastIndexOf('.'));
   }
 
   /**
