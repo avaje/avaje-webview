@@ -52,19 +52,15 @@ import static java.util.Collections.synchronizedList;
 final class DWebView implements Webview {
 
   private static final System.Logger log = System.getLogger("io.avaje.webview");
-  
+
   private static final String
       MACOS_RELOAD = "Reload the application with -XstartOnFirstThread to fix this.",
       ERROR_MAC_NO_XSTART_ON_FIRST_THREAD = "Process was not started with -XstartOnFirstThread. ",
       ERROR_MAC_NOT_MAIN_THREAD = "Cannot create webview on a non-main thread on MacOS.",
       JSON_OK = "\"ok\"";
-  private static final int
-      WV_HINT_NONE = 0,
-      WV_HINT_MIN = 1,
-      WV_HINT_MAX = 2,
-      WV_HINT_FIXED = 3;
-  private static final FunctionDescriptor
-      BIND_DESCRIPTOR = ofVoid(ADDRESS, ADDRESS),
+
+  private static final int WV_HINT_NONE = 0, WV_HINT_MIN = 1, WV_HINT_MAX = 2, WV_HINT_FIXED = 3;
+  private static final FunctionDescriptor BIND_DESCRIPTOR = ofVoid(ADDRESS, ADDRESS),
       DISPATCH_DESCRIPTOR = ofVoid();
 
   private final Thread uiThread;
@@ -76,16 +72,13 @@ final class DWebView implements Webview {
   private boolean running;
   private boolean closed;
 
-  DWebView(
-      boolean debug,
-      @Nullable MemorySegment windowPointer,
-      int width,
-      int height) {
+  DWebView(boolean debug, @Nullable MemorySegment windowPointer, int width, int height) {
 
     checkEnvironment();
     uiThread = Thread.currentThread();
     webview =
-        WebviewNative.webview_create(debug, windowPointer == null ? MemorySegment.NULL : windowPointer);
+        WebviewNative.webview_create(
+            debug, windowPointer == null ? MemorySegment.NULL : windowPointer);
 
     this.setSize(width, height);
     if (OS_DISTRIBUTION == MACOS) {
@@ -93,60 +86,52 @@ final class DWebView implements Webview {
     }
     this.redirectConsole();
   }
-  
+
   /**
-   * Redirect {@code console.*} in the JavaScript context to delegate to
-   * {@link System.Logger} using {@link #log}, also continuing to log to the
-   * original JavaScript logger e.g. for developer tools if available.
+   * Redirect {@code console.*} in the JavaScript context to delegate to {@link System.Logger} using
+   * {@link #log}, also continuing to log to the original JavaScript logger e.g. for developer tools
+   * if available.
    */
   private void redirectConsole() {
-    this.bind("__$io_avaje_webview$log__", json -> {
-      int comma = json.indexOf(",");
-      if (comma == -1 || json.charAt(0) != '[') {
-        log.log(ERROR, "[Webview] " + json);
-        return JSON_OK;
-      }
-      
-      String function = json.substring(2, comma - 1);
-      String contents = json.substring(comma + 1, json.length() - 1);
-      String message = "[Webview | console." + function + "] " + contents;
-      
-      switch (function) {
-      case "log":
-      case "info":
-        log.log(INFO, message);
-        break;
-      case "warn":
-        log.log(WARNING, message);
-        break;
-      case "error":
-        log.log(ERROR, message);
-        break;
-      case "debug":
-        log.log(DEBUG, message);
-        break;
-      default:
-        log.log(TRACE, "[unknown console function] " + message);
-        break;
-      }
-      
-      return JSON_OK;
-	});
-    
-    this.eval("""
+    this.bind(
+        "__$io_avaje_webview$log__",
+        json -> {
+          int comma = json.indexOf(",");
+          if (comma == -1 || json.charAt(0) != '[') {
+            log.log(ERROR, "[Webview] " + json);
+            return JSON_OK;
+          }
+
+          String function = json.substring(2, comma - 1);
+          String contents = json.substring(comma + 1, json.length() - 1);
+          String message = "[Webview | console." + function + "] " + contents;
+
+          switch (function) {
+            case "log", "info" -> log.log(INFO, message);
+            case "warn" -> log.log(WARNING, message);
+            case "error" -> log.log(ERROR, message);
+            case "debug" -> log.log(DEBUG, message);
+            default -> log.log(TRACE, "[unknown console function] " + message);
+          }
+
+          return JSON_OK;
+        });
+
+    this.eval(
+        """
     (function() {
       const original = { ...console };
-    
+
       function log(name, ...parameters) {
         __$io_avaje_webview$log__(name, ...parameters);
         original[name](...parameters);
       }
-    
+
       for (const [name, it] of Object.entries(console)) {
         if (typeof it !== "function") continue;
         console[name] = (...parameters) => log(name, ...parameters);
       }
-    
+
       window.addEventListener("error", event => {
           console.error(event.error);
           return false;
@@ -287,7 +272,7 @@ final class DWebView implements Webview {
 
   @SuppressWarnings("unused")
   private static void bindCallbackInvoke(
-		  BiConsumer<MemorySegment, String> callback, MemorySegment seq, MemorySegment req) {
+      BiConsumer<MemorySegment, String> callback, MemorySegment seq, MemorySegment req) {
     callback.accept(seq, req.reinterpret(Long.MAX_VALUE).getString(0));
   }
 
@@ -318,11 +303,10 @@ final class DWebView implements Webview {
       handler.run();
       return;
     }
-    
+
     var callbackStub =
         Linker.nativeLinker()
-            .upcallStub(
-                createDispatchCallbackHandle(handler), DISPATCH_DESCRIPTOR, arena);
+            .upcallStub(createDispatchCallbackHandle(handler), DISPATCH_DESCRIPTOR, arena);
 
     WebviewNative.webview_dispatch(webview, callbackStub, 0);
   }
