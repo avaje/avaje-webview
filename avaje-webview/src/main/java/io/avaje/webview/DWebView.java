@@ -20,6 +20,9 @@
  */
 package io.avaje.webview;
 
+import module java.base;
+import module org.jspecify;
+
 import static io.avaje.webview.platform.OSDistribution.MACOS;
 import static io.avaje.webview.platform.OSFamily.WINDOWS;
 import static io.avaje.webview.platform.Platform.OS_DISTRIBUTION;
@@ -27,9 +30,7 @@ import static io.avaje.webview.platform.Platform.OS_FAMILY;
 import static java.lang.System.Logger.Level.*;
 import static java.lang.foreign.FunctionDescriptor.ofVoid;
 import static java.lang.foreign.ValueLayout.ADDRESS;
-
-import module java.base;
-import module org.jspecify;
+import static java.util.Collections.synchronizedList;
 
 /**
  * Webview browser window.
@@ -57,20 +58,20 @@ final class DWebView implements Webview {
       ERROR_MAC_NO_XSTART_ON_FIRST_THREAD = "Process was not started with -XstartOnFirstThread. ",
       ERROR_MAC_NOT_MAIN_THREAD = "Cannot create webview on a non-main thread on MacOS.",
       JSON_OK = "\"ok\"";
-
-  private static final int WV_HINT_NONE = 0;
-  private static final int WV_HINT_MIN = 1;
-  private static final int WV_HINT_MAX = 2;
-  private static final int WV_HINT_FIXED = 3;
-  
-  private static final FunctionDescriptor BIND_DESCRIPTOR = ofVoid(ADDRESS, ADDRESS);
-  private static final FunctionDescriptor DISPATCH_DESCRIPTOR = ofVoid();
+  private static final int
+      WV_HINT_NONE = 0,
+      WV_HINT_MIN = 1,
+      WV_HINT_MAX = 2,
+      WV_HINT_FIXED = 3;
+  private static final FunctionDescriptor
+      BIND_DESCRIPTOR = ofVoid(ADDRESS, ADDRESS),
+      DISPATCH_DESCRIPTOR = ofVoid();
 
   private final Thread uiThread;
   private final MemorySegment webview;
 
   private final Arena arena = Arena.ofAuto();
-  private List<Runnable> evalList = Collections.synchronizedList(new ArrayList<>());
+  private final List<Runnable> evalList = synchronizedList(new ArrayList<>());
 
   private boolean running;
   private boolean closed;
