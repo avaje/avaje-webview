@@ -14,7 +14,7 @@ final class WebviewNative {
     return new WebviewBuilder();
   }
 
-  private static final SymbolLookup LIBRARY;
+  private static final SymbolLookup LIBRARY = WebviewBuilder.LIBRARY;
   private static final Linker LINKER = Linker.nativeLinker();
 
   // Memory layouts for webview_version structures
@@ -49,8 +49,6 @@ final class WebviewNative {
 
   static {
 
-    LIBRARY = SymbolLookup.libraryLookup(System.mapLibraryName("webview"), Arena.global());
-
     // Initialize all method handles
     webview_version = downcallHandle("webview_version", FunctionDescriptor.of(ADDRESS));
     webview_create =
@@ -82,7 +80,7 @@ final class WebviewNative {
         downcallHandle("webview_dispatch", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, JAVA_LONG));
   }
 
-  WebviewNative() {}
+  private WebviewNative() {}
 
   /**
    * Creates a new webview instance. If debug is true - developer tools will be enabled (if the
@@ -95,7 +93,7 @@ final class WebviewNative {
    * @param window A pointer to a native window handle, for embedding the webview in a window.
    *     (Either a GtkWindow, NSWindow, or HWND pointer)
    */
-  public MemorySegment webview_create(boolean debug, MemorySegment window) {
+  public static MemorySegment webview_create(boolean debug, MemorySegment window) {
     try {
       return (MemorySegment)
           webview_create.invoke(debug, window == null ? MemorySegment.NULL : window);
@@ -109,7 +107,7 @@ final class WebviewNative {
    * @param webview The instance pointer of the webview
    * @implNote This is either a pointer to a GtkWindow, NSWindow, or HWND.
    */
-  public MemorySegment webview_get_window(MemorySegment webview) {
+  public static MemorySegment webview_get_window(MemorySegment webview) {
     try {
       return (MemorySegment) webview_get_window.invoke(webview);
     } catch (Throwable e) {
@@ -123,7 +121,7 @@ final class WebviewNative {
    * @param webview The instance pointer of the webview
    * @param html The raw HTML string.
    */
-  public void webview_set_html(MemorySegment webview, String html) {
+  public static void webview_set_html(MemorySegment webview, String html) {
     try (var arena = Arena.ofConfined()) {
       webview_set_html.invoke(webview, arena.allocateFrom(html));
     } catch (Throwable e) {
@@ -137,7 +135,7 @@ final class WebviewNative {
    * @param webview The instance pointer of the webview
    * @param url The target url, can be a data uri.
    */
-  public void webview_navigate(MemorySegment webview, String url) {
+  public static void webview_navigate(MemorySegment webview, String url) {
     try (var arena = Arena.ofConfined()) {
       webview_navigate.invoke(webview, arena.allocateFrom(url));
     } catch (Throwable e) {
@@ -151,7 +149,7 @@ final class WebviewNative {
    * @param webview The instance pointer of the webview
    * @param title
    */
-  public void webview_set_title(MemorySegment webview, String title) {
+  public static void webview_set_title(MemorySegment webview, String title) {
     try (var arena = Arena.ofConfined()) {
       webview_set_title.invoke(webview, arena.allocateFrom(title));
     } catch (Throwable e) {
@@ -168,7 +166,7 @@ final class WebviewNative {
    * @param height
    * @param hint
    */
-  public void webview_set_size(MemorySegment webview, int width, int height, int hint) {
+  public static void webview_set_size(MemorySegment webview, int width, int height, int hint) {
     try {
       webview_set_size.invoke(webview, width, height, hint);
     } catch (Throwable e) {
@@ -182,7 +180,7 @@ final class WebviewNative {
    *
    * @param webview The instance pointer of the webview
    */
-  public void webview_run(MemorySegment webview) {
+  public static void webview_run(MemorySegment webview) {
     try {
       webview_run.invoke(webview);
     } catch (Throwable e) {
@@ -195,7 +193,7 @@ final class WebviewNative {
    *
    * @param webview The instance pointer of the webview
    */
-  public void webview_destroy(MemorySegment webview) {
+  public static void webview_destroy(MemorySegment webview) {
     try {
       webview_destroy.invoke(webview);
     } catch (Throwable e) {
@@ -208,7 +206,7 @@ final class WebviewNative {
    *
    * @param webview The instance pointer of the webview
    */
-  public void webview_terminate(MemorySegment webview) {
+  public static void webview_terminate(MemorySegment webview) {
     try {
       webview_terminate.invoke(webview);
     } catch (Throwable e) {
@@ -222,7 +220,7 @@ final class WebviewNative {
    * @param webview The instance pointer of the webview
    * @param js The script to execute
    */
-  public void webview_eval(MemorySegment webview, String js) {
+  public static void webview_eval(MemorySegment webview, String js) {
     try (var arena = Arena.ofConfined()) {
       webview_eval.invoke(webview, arena.allocateFrom(js));
     } catch (Throwable e) {
@@ -237,7 +235,7 @@ final class WebviewNative {
    * @param webview The instance pointer of the webview
    * @param js The script to execute
    */
-  public void webview_init(MemorySegment webview, String js) {
+  public static void webview_init(MemorySegment webview, String js) {
     try (var arena = Arena.ofConfined()) {
       webview_init.invoke(webview, arena.allocateFrom(js));
     } catch (Throwable e) {
@@ -254,7 +252,7 @@ final class WebviewNative {
    * @param callback The callback to be called
    * @param arg Unused
    */
-  public void webview_bind(MemorySegment webview, String name, MemorySegment callback, long arg) {
+  public static void webview_bind(MemorySegment webview, String name, MemorySegment callback, long arg) {
     try (var arena = Arena.ofConfined()) {
       webview_bind.invoke(webview, arena.allocateFrom(name), callback, arg);
     } catch (Throwable e) {
@@ -268,7 +266,7 @@ final class WebviewNative {
    * @param webview The instance pointer of the webview
    * @param name The name of the callback
    */
-  public void webview_unbind(MemorySegment webview, String name) {
+  public static void webview_unbind(MemorySegment webview, String name) {
     try (var arena = Arena.ofConfined()) {
       webview_unbind.invoke(webview, arena.allocateFrom(name));
     } catch (Throwable e) {
@@ -285,7 +283,7 @@ final class WebviewNative {
    * @param isError Whether or not `result` should be thrown as an exception
    * @param result The result (in json)
    */
-  public void webview_return(MemorySegment webview, MemorySegment seq, boolean isError, String result) {
+  public static void webview_return(MemorySegment webview, MemorySegment seq, boolean isError, String result) {
     try (var arena = Arena.ofConfined()) {
       webview_return.invoke(webview, seq, isError, arena.allocateFrom(result));
     } catch (Throwable e) {
@@ -301,7 +299,7 @@ final class WebviewNative {
    * @param callback The callback to be called
    * @param arg Unused
    */
-  public void webview_dispatch(MemorySegment webview, MemorySegment callback, long arg) {
+  public static void webview_dispatch(MemorySegment webview, MemorySegment callback, long arg) {
     try {
       webview_dispatch.invoke(webview, callback, arg);
     } catch (Throwable e) {
@@ -310,7 +308,7 @@ final class WebviewNative {
   }
 
   /** Get the library's version information. */
-  public String webview_version() {
+  public static String webview_version() {
     try {
       MemorySegment result = (MemorySegment) webview_version.invoke();
 

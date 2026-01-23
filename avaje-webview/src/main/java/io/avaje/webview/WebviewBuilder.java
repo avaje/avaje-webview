@@ -31,9 +31,8 @@ import io.avaje.webview.platform.LinuxLibC;
  */
 final class WebviewBuilder implements Builder {
 
+  static SymbolLookup LIBRARY;
   private static final String UNKNOWN_VERSION = "_0.12";
-  private static WebviewNative NATIVE_LIB;
-
   private boolean extractToUserHome;
   private boolean extractToTemp;
   private String title;
@@ -104,8 +103,8 @@ final class WebviewBuilder implements Builder {
 
   @Override
   public Webview build() {
-    var n = initNative(this);
-    var view = new DWebView(n, enableDeveloperTools, windowPointer, width, height);
+   initNative(this);
+    var view = new DWebView(enableDeveloperTools, windowPointer, width, height);
     if (title != null) {
       view.setTitle(title);
     }
@@ -131,14 +130,13 @@ final class WebviewBuilder implements Builder {
     }
   }
 
-  private synchronized WebviewNative initNative(WebviewBuilder bootstrap) {
-    if (NATIVE_LIB == null) {
-      NATIVE_LIB = bootstrap.initNativeLibrary();
+  private synchronized void initNative(WebviewBuilder bootstrap) {
+    if (LIBRARY == null) {
+      LIBRARY = bootstrap.initNativeLibrary();
     }
-    return NATIVE_LIB;
   }
 
-  private WebviewNative initNativeLibrary() {
+  private SymbolLookup initNativeLibrary() {
     var lib = platformLibrary();
     File target = createTarget(lib);
     if (target.exists() && !keepExtractedFile && !target.delete()) {
@@ -153,7 +151,7 @@ final class WebviewBuilder implements Builder {
     }
 
     // Return the FFM-based native implementation
-    return new WebviewNative();
+    return SymbolLookup.libraryLookup(target.getAbsolutePath(), Arena.global());
   }
 
   private File createTarget(String lib) {
