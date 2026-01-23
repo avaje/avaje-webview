@@ -121,6 +121,15 @@ final class DWebView implements Webview {
         if (typeof it !== "function") continue;
         console[name] = (...parameters) => log(name, ...parameters);
       }
+    
+      window.addEventListener("error", event => {
+          console.error(event.error);
+          return false;
+      });
+      window.addEventListener("unhandledrejection", event => {
+          console.error(event.reason);
+          return false;
+      });
     })();
     """);
   }
