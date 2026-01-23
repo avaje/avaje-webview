@@ -51,19 +51,18 @@ import module org.jspecify;
 final class DWebView implements Webview {
 
   private static final System.Logger log = System.getLogger("io.avaje.webview");
-  private static final String MACOS_RELOAD =
-      "Reload the application with -XstartOnFirstThread to fix this.";
-
-  private static final String ERROR_MAC_NO_XSTART_ON_FIRST_THREAD =
-      "Process was not started with -XstartOnFirstThread. ";
-
-  private static final String ERROR_MAC_NOT_MAIN_THREAD =
-      "Cannot create webview on a non-main thread on MacOS.";
+  
+  private static final String
+      MACOS_RELOAD = "Reload the application with -XstartOnFirstThread to fix this.",
+      ERROR_MAC_NO_XSTART_ON_FIRST_THREAD = "Process was not started with -XstartOnFirstThread. ",
+      ERROR_MAC_NOT_MAIN_THREAD = "Cannot create webview on a non-main thread on MacOS.",
+      JSON_OK = "\"ok\"";
 
   private static final int WV_HINT_NONE = 0;
   private static final int WV_HINT_MIN = 1;
   private static final int WV_HINT_MAX = 2;
   private static final int WV_HINT_FIXED = 3;
+  
   private static final FunctionDescriptor BIND_DESCRIPTOR = ofVoid(ADDRESS, ADDRESS);
   private static final FunctionDescriptor DISPATCH_DESCRIPTOR = ofVoid();
 
@@ -101,19 +100,44 @@ final class DWebView implements Webview {
    */
   private void redirectConsole() {
     this.bind("__$io_avaje_webview$log__", json -> {
-      // TODO - json is currently always an empty string ^ ("")?
+      int comma = json.indexOf(",");
+      if (comma == -1 || json.charAt(0) != '[') {
+        log.log(ERROR, "[Webview] " + json);
+        return JSON_OK;
+      }
       
-      // TODO - parse and provide nicer output
-      log.log(INFO, json);
+      String function = json.substring(2, comma - 1);
+      String contents = json.substring(comma + 1, json.length() - 1);
+      String message = "[Webview | console." + function + "] " + contents;
       
-      return "\"ok\"";
+      switch (function) {
+      case "log":
+      case "info":
+        log.log(INFO, message);
+        break;
+      case "warn":
+        log.log(WARNING, message);
+        break;
+      case "error":
+        log.log(ERROR, message);
+        break;
+      case "debug":
+        log.log(DEBUG, message);
+        break;
+      default:
+        log.log(TRACE, "[unknown console function] " + message);
+        break;
+      }
+      
+      return JSON_OK;
 	});
+    
     this.eval("""
     (function() {
       const original = { ...console };
     
       function log(name, ...parameters) {
-        __$io_avaje_webview$log__(...parameters);
+        __$io_avaje_webview$log__(name, ...parameters);
         original[name](...parameters);
       }
     
