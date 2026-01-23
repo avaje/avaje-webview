@@ -2,7 +2,44 @@ import io.avaje.webview.Webview;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
-DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss");
+DateTimeFormatter FORMATTER =
+    DateTimeFormatter.ofPattern("HH:mm:ss");
+
+String CSS = """
+body {
+    font-family: system-ui, sans-serif;
+    padding: 40px;
+}
+
+h1 {
+    color: #667eea;
+}
+
+input {
+    padding: 10px;
+    width: 100%;
+    margin: 10px 0;
+}
+
+button {
+    padding: 10px 20px;
+    background: #667eea;
+    color: white;
+    border: none;
+    cursor: pointer;
+}
+
+.response {
+    background: #f0f9ff;
+    padding: 15px;
+    margin-top: 20px;
+    display: none;
+}
+
+.response.show {
+    display: block;
+}
+""";
 
 String HTML = """
 <!DOCTYPE html>
@@ -11,12 +48,7 @@ String HTML = """
   <meta charset="UTF-8">
   <title>Message Demo</title>
   <style>
-    body { font-family: system-ui, sans-serif; padding: 40px; }
-    h1 { color: #667eea; }
-    input { padding: 10px; width: 100%; margin: 10px 0; }
-    button { padding: 10px 20px; background: #667eea; color: white; border: none; cursor: pointer; }
-    .response { background: #f0f9ff; padding: 15px; margin-top: 20px; display: none; }
-    .response.show { display: block; }
+  """ + CSS + """
   </style>
 </head>
 <body>
@@ -83,10 +115,10 @@ void main() {
             } catch (InterruptedException e) {
             }
         
-            String response = "Java received your message at " +
+            String response = escapeJS("Java received your message at " +
                     LocalDateTime.now().format(FORMATTER) +
-                    ": \"" + message + "\"";
-            webview.eval("displayResponse('" + escapeJS(response) + "')");
+                    ": \"" + message + "\"");
+            webview.eval("displayResponse('" + response + "')");
         });
         
         return "Message sent to Java";
