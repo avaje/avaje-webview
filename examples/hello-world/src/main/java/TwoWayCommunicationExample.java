@@ -1,12 +1,8 @@
-package example;
-
 import io.avaje.webview.Webview;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
-public class TwoWayCommunicationExample {
-
-  public static void main(String[] args) {
+void main() {
     Webview webview =
         Webview.builder()
             .title("Java ↔ JavaScript Communication")
@@ -21,7 +17,7 @@ public class TwoWayCommunicationExample {
         argsJson -> {
           String message = parseFirstArg(argsJson);
           System.out.println("[Java] Received: " + message);
-
+    
           // Java processes and responds back asynchronously using eval
           Thread.startVirtualThread(
               () -> {
@@ -38,12 +34,12 @@ public class TwoWayCommunicationExample {
                         + "\"";
                 webview.eval("displayResponse('" + escapeJS(response) + "')");
               });
-
+    
           return "Message sent to Java";
         });
-
+    
     webview.run();
-  }
+}
 
   private static String parseFirstArg(String json) {
     if (json.startsWith("[\"") && json.endsWith("\"]")) {
@@ -113,4 +109,3 @@ public class TwoWayCommunicationExample {
         </html>
         """;
   }
-}
