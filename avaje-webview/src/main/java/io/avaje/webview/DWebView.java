@@ -124,14 +124,6 @@ final class DWebView implements Webview {
     })();
     """);
   }
-  
-  private void handleDispatch(Runnable task) {
-    if (uiThread == Thread.currentThread()) {
-      task.run();
-    } else {
-      dispatch(task);
-    }
-  }
 
   @Override
   public MemorySegment nativeWindowPointer() {
@@ -140,17 +132,17 @@ final class DWebView implements Webview {
 
   @Override
   public void setHTML(@Nullable String html) {
-    handleDispatch(() -> WebviewNative.webview_set_html(webview, html));
+    dispatch(() -> WebviewNative.webview_set_html(webview, html));
   }
 
   @Override
   public void navigate(@Nullable String url) {
-    handleDispatch(() -> WebviewNative.webview_navigate(webview, url == null ? "about:blank" : url));
+    dispatch(() -> WebviewNative.webview_navigate(webview, url == null ? "about:blank" : url));
   }
 
   @Override
   public void setTitle(@NonNull String title) {
-    handleDispatch(() -> WebviewNative.webview_set_title(webview, title));
+    dispatch(() -> WebviewNative.webview_set_title(webview, title));
     if (OS_DISTRIBUTION == MACOS) {
       MacOSHelper.setApplicationName(title);
     }
@@ -158,22 +150,22 @@ final class DWebView implements Webview {
 
   @Override
   public void setMinSize(int width, int height) {
-    handleDispatch(() -> WebviewNative.webview_set_size(webview, width, height, WV_HINT_MIN));
+    dispatch(() -> WebviewNative.webview_set_size(webview, width, height, WV_HINT_MIN));
   }
 
   @Override
   public void setMaxSize(int width, int height) {
-    handleDispatch(() -> WebviewNative.webview_set_size(webview, width, height, WV_HINT_MAX));
+    dispatch(() -> WebviewNative.webview_set_size(webview, width, height, WV_HINT_MAX));
   }
 
   @Override
   public void setSize(int width, int height) {
-    handleDispatch(() -> WebviewNative.webview_set_size(webview, width, height, WV_HINT_NONE));
+    dispatch(() -> WebviewNative.webview_set_size(webview, width, height, WV_HINT_NONE));
   }
 
   @Override
   public void setFixedSize(int width, int height) {
-    handleDispatch(() -> WebviewNative.webview_set_size(webview, width, height, WV_HINT_FIXED));
+    dispatch(() -> WebviewNative.webview_set_size(webview, width, height, WV_HINT_FIXED));
   }
 
   @Override
@@ -183,7 +175,7 @@ final class DWebView implements Webview {
 
   @Override
   public void setInitScript(@NonNull String script, boolean allowNestedAccess) {
-    handleDispatch(
+    dispatch(
         () -> {
           var script1 =
               String.format(
@@ -226,7 +218,7 @@ final class DWebView implements Webview {
 
   @Override
   public void bind(@NonNull String name, @NonNull WebviewBinding handler) {
-    handleDispatch(() -> bindCallback(name, handler));
+    dispatch(() -> bindCallback(name, handler));
   }
 
   private void bindCallback(String name, WebviewBinding handler) {
@@ -283,12 +275,16 @@ final class DWebView implements Webview {
 
   @Override
   public void unbind(@NonNull String name) {
-    handleDispatch(() -> WebviewNative.webview_unbind(webview, name));
+    dispatch(() -> WebviewNative.webview_unbind(webview, name));
   }
 
   @Override
   public void dispatch(@NonNull Runnable handler) {
-
+    if (uiThread == Thread.currentThread()) {
+      handler.run();
+      return;
+    }
+    
     var callbackStub =
         Linker.nativeLinker()
             .upcallStub(
@@ -331,7 +327,7 @@ final class DWebView implements Webview {
   @Override
   public void close() {
     log.log(DEBUG, "close");
-    handleDispatch(this::shutdown);
+    dispatch(this::shutdown);
   }
 
   void shutdown() {
