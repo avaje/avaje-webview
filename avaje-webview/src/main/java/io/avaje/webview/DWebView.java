@@ -69,7 +69,6 @@ final class DWebView implements Webview {
 
   private final Thread uiThread;
   private final MemorySegment webview;
-  private final WebviewNative wbNative;
 
   private final Arena arena = Arena.ofAuto();
   private List<Runnable> evalList = Collections.synchronizedList(new ArrayList<>());
@@ -78,17 +77,15 @@ final class DWebView implements Webview {
   private boolean closed;
 
   DWebView(
-      WebviewNative webNative,
       boolean debug,
       @Nullable MemorySegment windowPointer,
       int width,
       int height) {
 
     checkEnvironment();
-    wbNative = webNative;
     uiThread = Thread.currentThread();
     webview =
-        wbNative.webview_create(debug, windowPointer == null ? MemorySegment.NULL : windowPointer);
+        WebviewNative.webview_create(debug, windowPointer == null ? MemorySegment.NULL : windowPointer);
 
     this.setSize(width, height);
     if (OS_DISTRIBUTION == MACOS) {
@@ -106,22 +103,22 @@ final class DWebView implements Webview {
 
   @Override
   public MemorySegment nativeWindowPointer() {
-    return wbNative.webview_get_window(webview);
+    return WebviewNative.webview_get_window(webview);
   }
 
   @Override
   public void setHTML(@Nullable String html) {
-    handleDispatch(() -> wbNative.webview_set_html(webview, html));
+    handleDispatch(() -> WebviewNative.webview_set_html(webview, html));
   }
 
   @Override
   public void navigate(@Nullable String url) {
-    handleDispatch(() -> wbNative.webview_navigate(webview, url == null ? "about:blank" : url));
+    handleDispatch(() -> WebviewNative.webview_navigate(webview, url == null ? "about:blank" : url));
   }
 
   @Override
   public void setTitle(@NonNull String title) {
-    handleDispatch(() -> wbNative.webview_set_title(webview, title));
+    handleDispatch(() -> WebviewNative.webview_set_title(webview, title));
     if (OS_DISTRIBUTION == MACOS) {
       MacOSHelper.setApplicationName(title);
     }
@@ -129,22 +126,22 @@ final class DWebView implements Webview {
 
   @Override
   public void setMinSize(int width, int height) {
-    handleDispatch(() -> wbNative.webview_set_size(webview, width, height, WV_HINT_MIN));
+    handleDispatch(() -> WebviewNative.webview_set_size(webview, width, height, WV_HINT_MIN));
   }
 
   @Override
   public void setMaxSize(int width, int height) {
-    handleDispatch(() -> wbNative.webview_set_size(webview, width, height, WV_HINT_MAX));
+    handleDispatch(() -> WebviewNative.webview_set_size(webview, width, height, WV_HINT_MAX));
   }
 
   @Override
   public void setSize(int width, int height) {
-    handleDispatch(() -> wbNative.webview_set_size(webview, width, height, WV_HINT_NONE));
+    handleDispatch(() -> WebviewNative.webview_set_size(webview, width, height, WV_HINT_NONE));
   }
 
   @Override
   public void setFixedSize(int width, int height) {
-    handleDispatch(() -> wbNative.webview_set_size(webview, width, height, WV_HINT_FIXED));
+    handleDispatch(() -> WebviewNative.webview_set_size(webview, width, height, WV_HINT_FIXED));
   }
 
   @Override
@@ -170,7 +167,7 @@ final class DWebView implements Webview {
       	})();""",
                   allowNestedAccess, script, '"' + WebviewUtil.jsonEscape(script) + '"');
 
-          wbNative.webview_init(webview, script1);
+          WebviewNative.webview_init(webview, script1);
         });
   }
 
@@ -182,7 +179,7 @@ final class DWebView implements Webview {
     }
     dispatch(
         () -> {
-          wbNative.webview_eval(
+          WebviewNative.webview_eval(
               webview,
               String.format(
                   """
@@ -211,14 +208,14 @@ final class DWebView implements Webview {
               result = "null";
             }
 
-            wbNative.webview_return(webview, seq, false, WebviewUtil.forceSafeChars(result));
+            WebviewNative.webview_return(webview, seq, false, WebviewUtil.forceSafeChars(result));
           } catch (Throwable e) {
             String stacktrace = WebviewUtil.getExceptionStack(e);
             log.log(ERROR, stacktrace);
 
             String exceptionJson = '"' + WebviewUtil.jsonEscape(stacktrace) + '"';
 
-            wbNative.webview_return(webview, seq, true, exceptionJson);
+            WebviewNative.webview_return(webview, seq, true, exceptionJson);
           }
         };
 
@@ -227,7 +224,7 @@ final class DWebView implements Webview {
         Linker.nativeLinker()
             .upcallStub(createBindCallbackHandle(callback), BIND_DESCRIPTOR, arena);
 
-    wbNative.webview_bind(webview, name, callbackStub, 0);
+    WebviewNative.webview_bind(webview, name, callbackStub, 0);
   }
 
   @SuppressWarnings("unused")
@@ -254,7 +251,7 @@ final class DWebView implements Webview {
 
   @Override
   public void unbind(@NonNull String name) {
-    handleDispatch(() -> wbNative.webview_unbind(webview, name));
+    handleDispatch(() -> WebviewNative.webview_unbind(webview, name));
   }
 
   @Override
@@ -265,7 +262,7 @@ final class DWebView implements Webview {
             .upcallStub(
                 createDispatchCallbackHandle(handler), DISPATCH_DESCRIPTOR, arena);
 
-    wbNative.webview_dispatch(webview, callbackStub, 0);
+    WebviewNative.webview_dispatch(webview, callbackStub, 0);
   }
 
   private static MethodHandle createDispatchCallbackHandle(Runnable runnable) {
@@ -293,9 +290,9 @@ final class DWebView implements Webview {
   }
 
   private void start() {
-    wbNative.webview_run(webview);
+    WebviewNative.webview_run(webview);
     log.log(DEBUG, "destroy and terminate");
-    wbNative.webview_destroy(webview);
+    WebviewNative.webview_destroy(webview);
     closed = true;
   }
 
@@ -311,7 +308,7 @@ final class DWebView implements Webview {
     }
     closed = true;
     log.log(DEBUG, "shutdown");
-    wbNative.webview_terminate(webview);
+    WebviewNative.webview_terminate(webview);
   }
 
   @Override
@@ -345,7 +342,7 @@ final class DWebView implements Webview {
 
   @Override
   public String version() {
-    return wbNative.webview_version();
+    return WebviewNative.webview_version();
   }
 
   @Override
