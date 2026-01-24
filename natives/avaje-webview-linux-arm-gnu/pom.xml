@@ -11,7 +11,7 @@
   <artifactId>avaje-webview-linux-arm-gnu</artifactId>
 
   <name>avaje-webview-linux-arm-gnu</name>
-  <description>FFM Wrapper over webview</description>
+  <description>Native library for Linux ARM GNU</description>
   <dependencies>
     <dependency>
       <groupId>io.avaje.webview</groupId>

@@ -12,7 +12,7 @@
 
     <artifactId>avaje-webview-platform</artifactId>
     <name>avaje-webview-platform</name>
-
+   <description>Automated native libraries for native image build</description>
     <dependencies>
         <dependency>
             <groupId>io.avaje.webview</groupId>

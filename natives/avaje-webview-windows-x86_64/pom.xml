@@ -10,8 +10,8 @@
   </parent>
   <artifactId>avaje-webview-windows-x86_64</artifactId>
 
-  <name>avaje-webview-windows</name>
-  <description>FFM Wrapper over webview</description>
+  <name>avaje-webview-windows-x86_64</name>
+  <description>Native library for Windows x86_64</description>
   <dependencies>
     <dependency>
       <groupId>io.avaje.webview</groupId>

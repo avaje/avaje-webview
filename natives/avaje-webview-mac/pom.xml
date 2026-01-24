@@ -11,7 +11,7 @@
   <artifactId>avaje-webview-mac</artifactId>
 
   <name>avaje-webview-mac</name>
-  <description>FFM Wrapper over webview</description>
+  <description>Aggregated native libraries for macOS systems</description>
   <dependencies>
     <dependency>
       <groupId>io.avaje.webview</groupId>

@@ -11,7 +11,7 @@
   <artifactId>avaje-webview-all</artifactId>
 
   <name>avaje-webview-all</name>
-  <description>FFM Wrapper over webview</description>
+  <description>Aggregated native libraries for all supported platforms</description>
   <dependencies>
     <dependency>
       <groupId>io.avaje.webview</groupId>

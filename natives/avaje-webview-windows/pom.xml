@@ -11,7 +11,7 @@
   <artifactId>avaje-webview-windows</artifactId>
 
   <name>avaje-webview-windows</name>
-  <description>FFM Wrapper over webview</description>
+  <description>Aggregated native libraries for Windows systems</description>
   <dependencies>
     <dependency>
       <groupId>io.avaje.webview</groupId>
