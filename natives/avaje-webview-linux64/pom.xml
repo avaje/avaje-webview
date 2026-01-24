@@ -11,7 +11,7 @@
   <artifactId>avaje-webview-linux64</artifactId>
 
   <name>avaje-webview-linux64</name>
-  <description>FFM Wrapper over webview</description>
+  <description>Aggregated native libraries for 64-bit Linux systems</description>
   <dependencies>
     <dependency>
       <groupId>io.avaje.webview</groupId>

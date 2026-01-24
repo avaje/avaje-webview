@@ -9,9 +9,8 @@
     <relativePath>../..</relativePath>
   </parent>
   <artifactId>avaje-webview-mac-x86_64</artifactId>
-
   <name>avaje-webview-mac-x86_64</name>
-  <description>FFM Wrapper over webview</description>
+  <description>Native library for macOS x86_64</description>
   <dependencies>
     <dependency>
       <groupId>io.avaje.webview</groupId>

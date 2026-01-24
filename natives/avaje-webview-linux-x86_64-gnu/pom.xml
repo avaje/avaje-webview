@@ -9,9 +9,8 @@
     <relativePath>../..</relativePath>
   </parent>
   <artifactId>avaje-webview-linux-x86_64-gnu</artifactId>
-
   <name>avaje-webview-linux-x86_64-gnu</name>
-  <description>FFM Wrapper over webview</description>
+  <description>Native library for Linux x86_64 GNU</description>
   <dependencies>
     <dependency>
       <groupId>io.avaje.webview</groupId>
