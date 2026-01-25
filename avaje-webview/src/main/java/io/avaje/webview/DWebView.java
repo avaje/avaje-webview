@@ -76,11 +76,7 @@ final class DWebView implements Webview {
   private boolean running;
   private boolean closed;
 
-  DWebView(
-      boolean debug,
-      @Nullable MemorySegment windowPointer,
-      int width,
-      int height) {
+  DWebView(boolean debug, @Nullable MemorySegment windowPointer, int width, int height) {
 
     checkEnvironment();
     uiThread = Thread.currentThread();
@@ -220,7 +216,7 @@ final class DWebView implements Webview {
         };
 
     // Create upcall stub for the callback
-    MemorySegment callbackStub =
+    var callbackStub =
         Linker.nativeLinker()
             .upcallStub(createBindCallbackHandle(callback), BIND_DESCRIPTOR, arena);
 
@@ -229,7 +225,7 @@ final class DWebView implements Webview {
 
   @SuppressWarnings("unused")
   private static void bindCallbackInvoke(
-		  BiConsumer<MemorySegment, String> callback, MemorySegment seq, MemorySegment req) {
+      BiConsumer<MemorySegment, String> callback, MemorySegment seq, MemorySegment req) {
     callback.accept(seq, req.reinterpret(Long.MAX_VALUE).getString(0));
   }
 
@@ -259,8 +255,7 @@ final class DWebView implements Webview {
 
     var callbackStub =
         Linker.nativeLinker()
-            .upcallStub(
-                createDispatchCallbackHandle(handler), DISPATCH_DESCRIPTOR, arena);
+            .upcallStub(createDispatchCallbackHandle(handler), DISPATCH_DESCRIPTOR, arena);
 
     WebviewNative.webview_dispatch(webview, callbackStub, 0);
   }
@@ -317,6 +312,8 @@ final class DWebView implements Webview {
       WindowsHelper.setWindowAppearance(this, shouldAppearDark);
     } else if (OS_DISTRIBUTION == MACOS) {
       MacOSHelper.setWindowAppearance(this, shouldAppearDark);
+    } else {
+      LinuxHelper.setWindowAppearance(this, shouldAppearDark);
     }
   }
 
@@ -326,6 +323,8 @@ final class DWebView implements Webview {
       WindowsHelper.maximizeWindow(this);
     } else if (OS_DISTRIBUTION == MACOS) {
       MacOSHelper.maximizeWindow(this);
+    } else {
+      LinuxHelper.maximizeWindow(this);
     }
     return this;
   }
@@ -336,6 +335,8 @@ final class DWebView implements Webview {
       WindowsHelper.fullscreen(this);
     } else if (OS_DISTRIBUTION == MACOS) {
       MacOSHelper.fullscreen(this);
+    } else {
+      LinuxHelper.fullscreen(this);
     }
     return this;
   }
@@ -354,6 +355,8 @@ final class DWebView implements Webview {
       WindowsHelper.setIcon(this, iconPath);
     } else if (OS_DISTRIBUTION == MACOS) {
       MacOSHelper.setIcon(this, iconPath);
+    } else {
+      LinuxHelper.setIcon(this, iconPath);
     }
   }
 
