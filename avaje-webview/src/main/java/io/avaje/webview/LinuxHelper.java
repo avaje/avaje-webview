@@ -19,8 +19,6 @@ final class LinuxHelper {
   private static final SymbolLookup GTK;
   private static final SymbolLookup GLIB;
 
-  // GTK Window and Application handles
-  private static final MethodHandle gtk_window_set_decorated;
   private static final MethodHandle gtk_window_fullscreen;
   private static final MethodHandle gtk_window_unfullscreen;
   private static final MethodHandle gtk_window_maximize;
@@ -32,22 +30,9 @@ final class LinuxHelper {
   private static final MethodHandle gtk_settings_get_default;
   private static final MethodHandle g_object_set;
 
-  // GTK Application and Menu
-  private static final MethodHandle gtk_application_set_menubar;
-  private static final MethodHandle g_menu_new;
-  private static final MethodHandle g_menu_append;
-  private static final MethodHandle g_menu_append_submenu;
-  private static final MethodHandle g_simple_action_new;
-  private static final MethodHandle g_action_map_add_action;
-  private static final MethodHandle g_signal_connect_data;
-
   // GTK Window icon
   private static final MethodHandle gdk_pixbuf_new_from_file;
   private static final MethodHandle gtk_window_set_icon;
-
-  // GTK Application name
-  private static final MethodHandle g_set_application_name;
-  private static final MethodHandle gtk_window_set_title;
 
   static {
     try {
@@ -77,10 +62,7 @@ final class LinuxHelper {
       }
       GLIB = glibLookup;
 
-      // GTK Window functions
-      gtk_window_set_decorated =
-          findFunction(
-              GTK, "gtk_window_set_decorated", FunctionDescriptor.ofVoid(ADDRESS, JAVA_INT));
+      findFunction(GTK, "gtk_window_set_decorated", FunctionDescriptor.ofVoid(ADDRESS, JAVA_INT));
 
       gtk_window_fullscreen =
           findFunction(GTK, "gtk_window_fullscreen", FunctionDescriptor.ofVoid(ADDRESS));
@@ -109,36 +91,23 @@ final class LinuxHelper {
           findFunction(
               GLIB, "g_object_set", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, JAVA_INT, ADDRESS));
 
-      // GTK Application
-      gtk_application_set_menubar =
-          findFunction(
-              GTK, "gtk_application_set_menubar", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
+      findFunction(GTK, "gtk_application_set_menubar", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
 
-      // GMenu
-      g_menu_new = findFunction(GLIB, "g_menu_new", FunctionDescriptor.of(ADDRESS));
+      findFunction(GLIB, "g_menu_new", FunctionDescriptor.of(ADDRESS));
 
-      g_menu_append =
-          findFunction(GLIB, "g_menu_append", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, ADDRESS));
+      findFunction(GLIB, "g_menu_append", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, ADDRESS));
 
-      g_menu_append_submenu =
-          findFunction(
-              GLIB, "g_menu_append_submenu", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, ADDRESS));
+      findFunction(
+          GLIB, "g_menu_append_submenu", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, ADDRESS));
 
-      // GAction
-      g_simple_action_new =
-          findFunction(
-              GLIB, "g_simple_action_new", FunctionDescriptor.of(ADDRESS, ADDRESS, ADDRESS));
+      findFunction(GLIB, "g_simple_action_new", FunctionDescriptor.of(ADDRESS, ADDRESS, ADDRESS));
 
-      g_action_map_add_action =
-          findFunction(
-              GLIB, "g_action_map_add_action", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
+      findFunction(GLIB, "g_action_map_add_action", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
 
-      g_signal_connect_data =
-          findFunction(
-              GLIB,
-              "g_signal_connect_data",
-              FunctionDescriptor.of(
-                  JAVA_LONG, ADDRESS, ADDRESS, ADDRESS, ADDRESS, ADDRESS, JAVA_INT));
+      findFunction(
+          GLIB,
+          "g_signal_connect_data",
+          FunctionDescriptor.of(JAVA_LONG, ADDRESS, ADDRESS, ADDRESS, ADDRESS, ADDRESS, JAVA_INT));
 
       // Icon functions
       gdk_pixbuf_new_from_file =
@@ -148,12 +117,9 @@ final class LinuxHelper {
       gtk_window_set_icon =
           findFunction(GTK, "gtk_window_set_icon", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
 
-      // Application name
-      g_set_application_name =
-          findFunction(GLIB, "g_set_application_name", FunctionDescriptor.ofVoid(ADDRESS));
+      findFunction(GLIB, "g_set_application_name", FunctionDescriptor.ofVoid(ADDRESS));
 
-      gtk_window_set_title =
-          findFunction(GTK, "gtk_window_set_title", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
+      findFunction(GTK, "gtk_window_set_title", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
 
     } catch (Exception e) {
       throw new ExceptionInInitializerError(e);
@@ -223,86 +189,6 @@ final class LinuxHelper {
     }
   }
 
-  /**
-   * Creates and attaches a standard application menu with File and Edit menus. GTK 4 uses GMenu for
-   * application menus.
-   */
-  public static void createMenus(MemorySegment application) {
-    try (var arena = Arena.ofConfined()) {
-
-      var menubar = (MemorySegment) g_menu_new.invoke();
-
-      // Create File menu
-      var fileMenu = (MemorySegment) g_menu_new.invoke();
-
-      // Add "Quit" action
-      var quitLabel = arena.allocateFrom("Quit");
-      var quitAction = arena.allocateFrom("app.quit");
-      g_menu_append.invoke(fileMenu, quitLabel, quitAction);
-
-      // Add File submenu to menubar
-      var fileLabel = arena.allocateFrom("File");
-      g_menu_append_submenu.invoke(menubar, fileLabel, fileMenu);
-
-      // Create Edit menu
-      var editMenu = (MemorySegment) g_menu_new.invoke();
-
-      var cutLabel = arena.allocateFrom("Cut");
-      var cutAction = arena.allocateFrom("app.cut");
-      g_menu_append.invoke(editMenu, cutLabel, cutAction);
-
-      var copyLabel = arena.allocateFrom("Copy");
-      var copyAction = arena.allocateFrom("app.copy");
-      g_menu_append.invoke(editMenu, copyLabel, copyAction);
-
-      var pasteLabel = arena.allocateFrom("Paste");
-      var pasteAction = arena.allocateFrom("app.paste");
-      g_menu_append.invoke(editMenu, pasteLabel, pasteAction);
-
-      var selectAllLabel = arena.allocateFrom("Select All");
-      var selectAllAction = arena.allocateFrom("app.select-all");
-      g_menu_append.invoke(editMenu, selectAllLabel, selectAllAction);
-
-      // Add Edit submenu to menubar
-      var editLabel = arena.allocateFrom("Edit");
-      g_menu_append_submenu.invoke(menubar, editLabel, editMenu);
-
-      // Set the menubar on the application
-      gtk_application_set_menubar.invoke(application, menubar);
-
-      // Register actions (these would need actual implementations)
-      registerAction(application, "quit", null);
-      registerAction(application, "cut", null);
-      registerAction(application, "copy", null);
-      registerAction(application, "paste", null);
-      registerAction(application, "select-all", null);
-
-    } catch (Throwable e) {
-      throw new RuntimeException("Failed to create menus", e);
-    }
-  }
-
-  /** Registers a simple action with the application. */
-  private static void registerAction(
-      MemorySegment application, String name, MemorySegment callback) {
-    try (var arena = Arena.ofConfined()) {
-      var actionName = arena.allocateFrom(name);
-      var action = (MemorySegment) g_simple_action_new.invoke(actionName, MemorySegment.NULL);
-
-      // Connect callback if provided
-      if (callback != null && !callback.equals(MemorySegment.NULL)) {
-        var signal = arena.allocateFrom("activate");
-        g_signal_connect_data.invoke(
-            action, signal, callback, MemorySegment.NULL, MemorySegment.NULL, 0);
-      }
-
-      g_action_map_add_action.invoke(application, action);
-
-    } catch (Throwable e) {
-      throw new RuntimeException("Failed to register action: " + name, e);
-    }
-  }
-
   /** Sets the window icon from a file path. */
   public static void setIcon(Webview webview, Path iconPath) {
     try (var arena = Arena.ofConfined()) {
@@ -323,23 +209,6 @@ final class LinuxHelper {
 
     } catch (Throwable e) {
       throw new RuntimeException("Failed to set application icon", e);
-    }
-  }
-
-  /** Sets the application name and updates the window title. */
-  public static void setApplicationName(Webview webview, String name) {
-    try (var arena = Arena.ofConfined()) {
-      var nameString = arena.allocateFrom(name);
-
-      // Set the application name globally
-      g_set_application_name.invoke(nameString);
-
-      // Update window title
-      var window = webview.nativeWindowPointer();
-      gtk_window_set_title.invoke(window, nameString);
-
-    } catch (Throwable e) {
-      throw new RuntimeException("Failed to set application name", e);
     }
   }
 }
