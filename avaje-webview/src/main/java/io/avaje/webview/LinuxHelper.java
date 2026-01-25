@@ -15,8 +15,7 @@ final class LinuxHelper {
   private static final MethodHandle gtk_window_fullscreen;
   private static final MethodHandle gtk_window_maximize;
   private static final MethodHandle gtk_settings_get_default;
-
-  static final int GTK_STYLE_PROVIDER_PRIORITY_APPLICATION = 600;
+  private static final MethodHandle g_object_set_valist;
 
   static {
     try {
@@ -38,6 +37,16 @@ final class LinuxHelper {
           GTK.find("gtk_settings_get_default")
               .map(addr -> LINKER.downcallHandle(addr, FunctionDescriptor.of(ADDRESS)))
               .orElseThrow(() -> new UnsatisfiedLinkError("gtk_settings_get_default not found"));
+
+      // g_object_set
+      g_object_set_valist =
+          loadLibrary("libgobject-2.0.so.0", "libgobject-2.0.so")
+              .find("g_object_set")
+              .map(
+                  addr ->
+                      LINKER.downcallHandle(
+                          addr, FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, JAVA_INT, ADDRESS)))
+              .orElseThrow(() -> new UnsatisfiedLinkError("g_object_set not found"));
 
     } catch (Exception e) {
       throw new ExceptionInInitializerError(e);
@@ -86,16 +95,7 @@ final class LinuxHelper {
       MemorySegment propertyName =
           arena.allocateFrom("gtk-application-prefer-dark-theme", StandardCharsets.UTF_8);
 
-      // g_object_set needs to be called with NULL terminator for varargs
-      var g_object_set_valist =
-          loadLibrary("libgobject-2.0.so.0", "libgobject-2.0.so")
-              .find("g_object_set")
-              .map(
-                  addr ->
-                      LINKER.downcallHandle(
-                          addr, FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, JAVA_INT, ADDRESS)))
-              .orElseThrow();
-
+      // g_object_set needs to be called with NULL terminator for __varargs__
       g_object_set_valist.invoke(
           settings, propertyName, shouldBeDark ? TRUE : FALSE, MemorySegment.NULL);
 
