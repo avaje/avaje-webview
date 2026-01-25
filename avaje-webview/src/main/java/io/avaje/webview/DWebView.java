@@ -109,7 +109,8 @@ final class DWebView implements Webview {
 
   @Override
   public void navigate(@Nullable String url) {
-    handleDispatch(() -> WebviewNative.webview_navigate(webview, url == null ? "about:blank" : url));
+    handleDispatch(
+        () -> WebviewNative.webview_navigate(webview, url == null ? "about:blank" : url));
   }
 
   @Override
@@ -356,7 +357,9 @@ final class DWebView implements Webview {
     } else if (OS_DISTRIBUTION == MACOS) {
       MacOSHelper.setIcon(this, iconPath);
     } else {
-      LinuxHelper.setIcon(this, iconPath);
+      log.log(
+          ERROR,
+          "GTK 4 doesn't support direct icon setting, Please configure icons via .desktop file.");
     }
   }
 
