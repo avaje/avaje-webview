@@ -1,3 +1,4 @@
+![Supported JVM Versions](https://img.shields.io/badge/JVM-25+-brightgreen.svg?&logo=openjdk)
 [![Discord](https://img.shields.io/discord/1074074312421683250?color=%237289da&label=discord)](https://discord.gg/Qcqf9R27BR)
 [![Build](https://github.com/avaje/avaje-inject/actions/workflows/build.yml/badge.svg)](https://github.com/avaje/avaje-webview/actions/workflows/build.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](https://github.com/avaje/avaje-webview/blob/master/LICENSE)

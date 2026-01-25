@@ -406,7 +406,11 @@ final class DWebView implements Webview {
   @Override
   public void setIcon(URI classPath) {
     try {
-      Path tempFile = Files.createTempFile("webview_icon_", ".ico");
+      String extension =
+          classPath
+              .getPath()
+              .transform(p -> !p.contains(".") ? "" : p.substring(p.lastIndexOf('.')));
+      Path tempFile = Files.createTempFile("webview_icon_", extension);
       tempFile.toFile().deleteOnExit();
       try (InputStream is = classPath.toURL().openStream()) {
         Files.copy(is, tempFile, StandardCopyOption.REPLACE_EXISTING);
