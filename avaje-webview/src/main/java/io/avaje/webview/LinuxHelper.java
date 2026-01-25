@@ -15,10 +15,6 @@ import java.nio.file.Path;
 final class LinuxHelper {
   private static final Linker LINKER = Linker.nativeLinker();
 
-  // Load GTK 4 and GLib libraries
-  private static final SymbolLookup GTK;
-  private static final SymbolLookup GLIB;
-
   private static final MethodHandle gtk_window_fullscreen;
   private static final MethodHandle gtk_window_unfullscreen;
   private static final MethodHandle gtk_window_maximize;
@@ -47,7 +43,6 @@ final class LinuxHelper {
           gtkLookup = SymbolLookup.libraryLookup("gtk-4", Arena.global());
         }
       }
-      GTK = gtkLookup;
 
       // Load GLib
       SymbolLookup glibLookup;
@@ -60,66 +55,79 @@ final class LinuxHelper {
           glibLookup = SymbolLookup.libraryLookup("glib-2.0", Arena.global());
         }
       }
-      GLIB = glibLookup;
 
-      findFunction(GTK, "gtk_window_set_decorated", FunctionDescriptor.ofVoid(ADDRESS, JAVA_INT));
+      findFunction(
+          gtkLookup, "gtk_window_set_decorated", FunctionDescriptor.ofVoid(ADDRESS, JAVA_INT));
 
       gtk_window_fullscreen =
-          findFunction(GTK, "gtk_window_fullscreen", FunctionDescriptor.ofVoid(ADDRESS));
+          findFunction(gtkLookup, "gtk_window_fullscreen", FunctionDescriptor.ofVoid(ADDRESS));
 
       gtk_window_unfullscreen =
-          findFunction(GTK, "gtk_window_unfullscreen", FunctionDescriptor.ofVoid(ADDRESS));
+          findFunction(gtkLookup, "gtk_window_unfullscreen", FunctionDescriptor.ofVoid(ADDRESS));
 
       gtk_window_maximize =
-          findFunction(GTK, "gtk_window_maximize", FunctionDescriptor.ofVoid(ADDRESS));
+          findFunction(gtkLookup, "gtk_window_maximize", FunctionDescriptor.ofVoid(ADDRESS));
 
       gtk_window_unmaximize =
-          findFunction(GTK, "gtk_window_unmaximize", FunctionDescriptor.ofVoid(ADDRESS));
+          findFunction(gtkLookup, "gtk_window_unmaximize", FunctionDescriptor.ofVoid(ADDRESS));
 
       gtk_window_is_fullscreen =
-          findFunction(GTK, "gtk_window_is_fullscreen", FunctionDescriptor.of(JAVA_INT, ADDRESS));
+          findFunction(
+              gtkLookup, "gtk_window_is_fullscreen", FunctionDescriptor.of(JAVA_INT, ADDRESS));
 
       gtk_window_is_maximized =
-          findFunction(GTK, "gtk_window_is_maximized", FunctionDescriptor.of(JAVA_INT, ADDRESS));
+          findFunction(
+              gtkLookup, "gtk_window_is_maximized", FunctionDescriptor.of(JAVA_INT, ADDRESS));
 
-      // GTK Settings
+      // gtkLookup Settings
       gtk_settings_get_default =
-          findFunction(GTK, "gtk_settings_get_default", FunctionDescriptor.of(ADDRESS));
+          findFunction(gtkLookup, "gtk_settings_get_default", FunctionDescriptor.of(ADDRESS));
 
       // GObject property setter (variadic, we'll use a specific signature)
       g_object_set =
           findFunction(
-              GLIB, "g_object_set", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, JAVA_INT, ADDRESS));
-
-      findFunction(GTK, "gtk_application_set_menubar", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
-
-      findFunction(GLIB, "g_menu_new", FunctionDescriptor.of(ADDRESS));
-
-      findFunction(GLIB, "g_menu_append", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, ADDRESS));
+              glibLookup,
+              "g_object_set",
+              FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, JAVA_INT, ADDRESS));
 
       findFunction(
-          GLIB, "g_menu_append_submenu", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, ADDRESS));
+          gtkLookup, "gtk_application_set_menubar", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
 
-      findFunction(GLIB, "g_simple_action_new", FunctionDescriptor.of(ADDRESS, ADDRESS, ADDRESS));
-
-      findFunction(GLIB, "g_action_map_add_action", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
+      findFunction(glibLookup, "g_menu_new", FunctionDescriptor.of(ADDRESS));
 
       findFunction(
-          GLIB,
+          glibLookup, "g_menu_append", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, ADDRESS));
+
+      findFunction(
+          glibLookup,
+          "g_menu_append_submenu",
+          FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, ADDRESS));
+
+      findFunction(
+          glibLookup, "g_simple_action_new", FunctionDescriptor.of(ADDRESS, ADDRESS, ADDRESS));
+
+      findFunction(
+          glibLookup, "g_action_map_add_action", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
+
+      findFunction(
+          glibLookup,
           "g_signal_connect_data",
           FunctionDescriptor.of(JAVA_LONG, ADDRESS, ADDRESS, ADDRESS, ADDRESS, ADDRESS, JAVA_INT));
 
       // Icon functions
       gdk_pixbuf_new_from_file =
           findFunction(
-              GTK, "gdk_pixbuf_new_from_file", FunctionDescriptor.of(ADDRESS, ADDRESS, ADDRESS));
+              gtkLookup,
+              "gdk_pixbuf_new_from_file",
+              FunctionDescriptor.of(ADDRESS, ADDRESS, ADDRESS));
 
       gtk_window_set_icon =
-          findFunction(GTK, "gtk_window_set_icon", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
+          findFunction(
+              gtkLookup, "gtk_window_set_icon", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
 
-      findFunction(GLIB, "g_set_application_name", FunctionDescriptor.ofVoid(ADDRESS));
+      findFunction(glibLookup, "g_set_application_name", FunctionDescriptor.ofVoid(ADDRESS));
 
-      findFunction(GTK, "gtk_window_set_title", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
+      findFunction(gtkLookup, "gtk_window_set_title", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
 
     } catch (Exception e) {
       throw new ExceptionInInitializerError(e);
