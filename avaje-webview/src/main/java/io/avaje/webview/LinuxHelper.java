@@ -7,15 +7,17 @@ import module java.base;
 
 final class LinuxHelper {
   private static final Linker LINKER = Linker.nativeLinker();
-  private static final SymbolLookup GTK =
-      loadLibrary("libgtk-4.so.1", "libgtk-4.so.0", "libgtk-4.so");
+  private static final SymbolLookup
+    GTK = loadLibrary("libgtk-4.so.1", "libgtk-4.so.0", "libgtk-4.so"),
+    GOBJECT = loadLibrary("libgobject-2.0.so.0", "libgobject-2.0.so");
+
   private static final int TRUE = 1;
   private static final int FALSE = 0;
 
   private static final MethodHandle gtk_window_fullscreen;
   private static final MethodHandle gtk_window_maximize;
   private static final MethodHandle gtk_settings_get_default;
-  private static final MethodHandle g_object_set_valist;
+  private static final MethodHandle g_object_set;
 
   static {
     try {
@@ -37,15 +39,12 @@ final class LinuxHelper {
           GTK.find("gtk_settings_get_default")
               .map(addr -> LINKER.downcallHandle(addr, FunctionDescriptor.of(ADDRESS)))
               .orElseThrow(() -> new UnsatisfiedLinkError("gtk_settings_get_default not found"));
-
+      
       // g_object_set
-      g_object_set_valist =
-          loadLibrary("libgobject-2.0.so.0", "libgobject-2.0.so")
-              .find("g_object_set")
-              .map(
-                  addr ->
-                      LINKER.downcallHandle(
-                          addr, FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, JAVA_INT, ADDRESS)))
+      g_object_set =
+          GOBJECT.find("g_object_set")
+              .map(addr -> LINKER.downcallHandle(addr, FunctionDescriptor.ofVoid(ADDRESS, ADDRESS)
+                  .appendArgumentLayouts(JAVA_INT, ADDRESS)))
               .orElseThrow(() -> new UnsatisfiedLinkError("g_object_set not found"));
 
     } catch (Exception e) {
@@ -96,7 +95,7 @@ final class LinuxHelper {
           arena.allocateFrom("gtk-application-prefer-dark-theme", StandardCharsets.UTF_8);
 
       // g_object_set needs to be called with NULL terminator for __varargs__
-      g_object_set_valist.invoke(
+      g_object_set.invoke(
           settings, propertyName, shouldBeDark ? TRUE : FALSE, MemorySegment.NULL);
 
     } catch (Throwable e) {
