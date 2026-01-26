@@ -220,6 +220,7 @@ webview.run();
 - Builder pattern to replace constructors
 - More window functions (setting icons, maximizing and fullscreen)
 - Mac window functions
+- Linux window functions
 - Remove the dependency on co.casterlabs.commons:platform (local copy of necessary code only)
 - Remove the dependency on co.casterlabs.commons:io
 - Remove the dependency on Lombok and Jetbrains
