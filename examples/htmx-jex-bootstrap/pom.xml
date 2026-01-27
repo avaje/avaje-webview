@@ -81,7 +81,7 @@
             <plugin>
                 <groupId>io.avaje</groupId>
                 <artifactId>avaje-inject-maven-plugin</artifactId>
-                <version>12.2</version>
+                <version>12.3</version>
                 <executions>
                     <execution>
                         <?m2e execute?>
@@ -103,7 +103,7 @@
                     <plugin>
                         <groupId>org.graalvm.buildtools</groupId>
                         <artifactId>native-maven-plugin</artifactId>
-                        <version>0.11.3</version>
+                        <version>0.11.4</version>
                         <executions>
                             <execution>
                                 <id>build-native</id>
