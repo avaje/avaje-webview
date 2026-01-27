@@ -19,7 +19,7 @@ jobs:
             libc: gnu
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: recursive
     
@@ -55,7 +55,7 @@ jobs:
         cmake --build . --config Release
     
     - name: Upload artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: webview-${{ matrix.target }}
         path: |
@@ -75,7 +75,7 @@ jobs:
             alpine_arch: amd64
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: recursive
     
@@ -125,7 +125,7 @@ jobs:
           '
     
     - name: Upload artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: webview-${{ matrix.target }}
         path: |
@@ -145,7 +145,7 @@ jobs:
             alpine_arch: arm/v7
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: recursive
     
@@ -195,7 +195,7 @@ jobs:
           '
     
     - name: Upload artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: webview-${{ matrix.target }}
         path: |
@@ -217,7 +217,7 @@ jobs:
             libc: gnu
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: recursive
     
@@ -273,7 +273,7 @@ jobs:
         cmake --build . --config Release
     
     - name: Upload artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: webview-${{ matrix.target }}
         path: |
@@ -291,7 +291,7 @@ jobs:
             arch: arm64
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: recursive
     
@@ -318,7 +318,7 @@ jobs:
         cmake --build . --config Release -- -j$(sysctl -n hw.ncpu)
     
     - name: Upload artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: webview-${{ matrix.target }}
         path: |
@@ -338,12 +338,12 @@ jobs:
             platform: x64
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: recursive
     
     - name: Setup MSVC
-      uses: microsoft/setup-msbuild@v1.1
+      uses: microsoft/setup-msbuild@v1.3
     
     - name: Install Graphviz (for Doxygen)
       run: choco install graphviz -y
@@ -363,7 +363,7 @@ jobs:
         cd  webview\build-${{ matrix.target }}  && ls && cd ../..
     
     - name: Upload artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: webview-${{ matrix.target }}
         path: |
@@ -376,12 +376,12 @@ jobs:
     
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         fetch-depth: 0
     
     - name: Download all artifacts
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v7
       with:
         path: artifacts
     
@@ -451,7 +451,7 @@ jobs:
     
     - name: Create Pull Request
       if: steps.check_changes.outputs.has_changes == 'true'
-      uses: peter-evans/create-pull-request@v6
+      uses: peter-evans/create-pull-request@v8
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         commit-message: 'update webview native libraries'
