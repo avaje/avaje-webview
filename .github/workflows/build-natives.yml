@@ -343,7 +343,7 @@ jobs:
         submodules: recursive
     
     - name: Setup MSVC
-      uses: microsoft/setup-msbuild@v1.1
+      uses: microsoft/setup-msbuild@v1.3
     
     - name: Install Graphviz (for Doxygen)
       run: choco install graphviz -y
