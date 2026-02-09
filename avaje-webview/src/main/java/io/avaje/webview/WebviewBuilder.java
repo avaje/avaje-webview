@@ -103,7 +103,7 @@ final class WebviewBuilder implements Builder {
 
   @Override
   public Webview build() {
-   initNative(this);
+    initNative(this);
     var view = new DWebView(enableDeveloperTools, windowPointer, width, height);
     if (title != null) {
       view.setTitle(title);
@@ -216,8 +216,20 @@ final class WebviewBuilder implements Builder {
 
     try (var in = loader.call();
         var out = new FileOutputStream(target)) {
-      if (in == null)
-        throw new IllegalStateException("Failed to access resource of native: " + lib);
+
+      if (in == null) {
+        ModuleLayer.boot()
+            .findModule("io.avaje.webview")
+            .ifPresentOrElse(
+                _ -> {
+                  throw new IllegalStateException(
+                      "Failed to access resource of native: %s - you may need to add a 'requires %s;' clause to your module-info.java"
+                          .formatted(lib, n.moduleName));
+                },
+                () -> {
+                  throw new IllegalStateException("Failed to access resource of native: " + lib);
+                });
+      }
 
       in.transferTo(out);
       return true;
