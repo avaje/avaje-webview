@@ -55,7 +55,7 @@ jobs:
         cmake --build . --config Release
     
     - name: Upload artifacts
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: webview-${{ matrix.target }}
         path: |
@@ -125,7 +125,7 @@ jobs:
           '
     
     - name: Upload artifacts
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: webview-${{ matrix.target }}
         path: |
@@ -195,7 +195,7 @@ jobs:
           '
     
     - name: Upload artifacts
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: webview-${{ matrix.target }}
         path: |
@@ -273,7 +273,7 @@ jobs:
         cmake --build . --config Release
     
     - name: Upload artifacts
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: webview-${{ matrix.target }}
         path: |
@@ -318,7 +318,7 @@ jobs:
         cmake --build . --config Release -- -j$(sysctl -n hw.ncpu)
     
     - name: Upload artifacts
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: webview-${{ matrix.target }}
         path: |
@@ -363,7 +363,7 @@ jobs:
         cd  webview\build-${{ matrix.target }}  && ls && cd ../..
     
     - name: Upload artifacts
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: webview-${{ matrix.target }}
         path: |
