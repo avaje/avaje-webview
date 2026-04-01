@@ -417,7 +417,7 @@ final class DWebView implements Webview {
   public void setIcon(URI classPath) {
     try {
       String extension = Optional.ofNullable(classPath.getPath())
-          .or(() -> Optional.ofNullable(classPath.getSchemeSpecificPart()))
+          .or(() -> Optional.ofNullable(classPath.toString()))
           .filter(p -> p.contains("."))
           .map(p -> p.substring(p.lastIndexOf('.')))
           .orElse("");
