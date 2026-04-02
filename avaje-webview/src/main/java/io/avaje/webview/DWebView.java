@@ -67,7 +67,7 @@ final class DWebView implements Webview {
   private final MemorySegment webview;
 
   private final Arena arena = Arena.ofAuto();
-  private final List<Runnable> evalList = synchronizedList(new ArrayList<>());
+  private final List<Runnable> startTasks = synchronizedList(new ArrayList<>());
 
   private boolean running;
   private boolean closed;
@@ -194,6 +194,10 @@ final class DWebView implements Webview {
 
   @Override
   public void setInitScript(@NonNull String script, boolean allowNestedAccess) {
+    if (!running) {
+      startTasks.add(() -> setInitScript(script, allowNestedAccess));
+      return;
+    }
     dispatch(
         () -> {
           var script1 =
@@ -217,7 +221,7 @@ final class DWebView implements Webview {
   @Override
   public void eval(@NonNull String script) {
     if (!running) {
-      evalList.add(() -> eval(script));
+      startTasks.add(() -> eval(script));
       return;
     }
     dispatch(
@@ -329,7 +333,7 @@ final class DWebView implements Webview {
       return;
     }
     running = true;
-    for (var r : evalList) {
+    for (var r : startTasks) {
       r.run();
     }
     start();
