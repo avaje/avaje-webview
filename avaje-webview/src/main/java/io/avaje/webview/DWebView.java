@@ -220,10 +220,6 @@ final class DWebView implements Webview {
 
   @Override
   public void eval(@NonNull String script) {
-    if (!running) {
-      startTasks.add(() -> eval(script));
-      return;
-    }
     dispatch(
         () -> {
           WebviewNative.webview_eval(
