@@ -27,7 +27,7 @@
 		<dependency>
 			<groupId>io.avaje</groupId>
 			<artifactId>avaje-jex-static-content</artifactId>
-			<version>3.5</version>
+			<version>3.6</version>
 		</dependency>
 
 	</dependencies>
@@ -74,7 +74,7 @@
 					<plugin>
 						<groupId>org.graalvm.buildtools</groupId>
 						<artifactId>native-maven-plugin</artifactId>
-						<version>1.1.1</version>
+						<version>1.1.2</version>
 						<executions>
 							<execution>
 								<id>build-native</id>
