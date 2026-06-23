@@ -19,7 +19,7 @@ jobs:
             libc: gnu
     
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: recursive
     
@@ -75,7 +75,7 @@ jobs:
             alpine_arch: amd64
     
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: recursive
     
@@ -145,7 +145,7 @@ jobs:
             alpine_arch: arm/v7
     
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: recursive
     
@@ -217,7 +217,7 @@ jobs:
             libc: gnu
     
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: recursive
     
@@ -291,7 +291,7 @@ jobs:
             arch: arm64
     
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: recursive
     
@@ -338,7 +338,7 @@ jobs:
             platform: x64
     
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: recursive
     
@@ -376,7 +376,7 @@ jobs:
     
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         fetch-depth: 0
     
