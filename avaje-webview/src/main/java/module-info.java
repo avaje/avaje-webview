@@ -27,4 +27,6 @@ module io.avaje.webview {
 
   exports io.avaje.webview;
 
+  uses io.avaje.webview.WebviewProvider;
+
 }

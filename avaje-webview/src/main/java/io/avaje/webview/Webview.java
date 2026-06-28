@@ -42,6 +42,15 @@ public interface Webview extends Closeable, Runnable {
   }
 
   /**
+   * Creates a {@code Webview} using the first {@link WebviewProvider} available for the current OS.
+   *
+   * @param debug {@code true} enables developer tools
+   */
+  static Webview create(boolean debug) {
+    return builder().enableDeveloperTools(debug).build();
+  }
+
+  /**
    * Returns the native window handle/pointer.
    *
    * <p><strong>Caution:</strong> This provides direct access to the underlying native memory. Use
