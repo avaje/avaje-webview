@@ -25,16 +25,6 @@ final class WebviewBuilder implements Builder {
   WebviewBuilder() {}
 
   @Override
-  public WebviewBuilder extractToTemp(boolean extractToTemp) {
-    return this; // no-op — no native extraction needed
-  }
-
-  @Override
-  public WebviewBuilder extractToUserHome(boolean extractToUserHome) {
-    return this; // no-op — no native extraction needed
-  }
-
-  @Override
   public WebviewBuilder title(String title) {
     this.title = title;
     return this;

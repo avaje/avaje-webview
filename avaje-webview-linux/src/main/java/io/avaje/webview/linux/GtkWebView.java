@@ -112,11 +112,6 @@ final class GtkWebView extends WebviewBase {
     return window != null ? window : MemorySegment.NULL;
   }
 
-  @Override
-  public String version() {
-    return "WebKitGTK 6.0";
-  }
-
   // -------------------------------------------------------------------------
   // WebviewBase — platform-specific impls (called on GTK thread)
   // -------------------------------------------------------------------------

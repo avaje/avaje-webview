@@ -140,6 +140,11 @@ final class ObjC {
     catch (Throwable t) { throw new RuntimeException(t); }
   }
 
+  static MemorySegment send3(MemorySegment recv, MemorySegment sel, MemorySegment a1, MemorySegment a2, MemorySegment a3) {
+    try { return (MemorySegment) MSG_SEND_3.invokeExact(recv, sel, a1, a2, a3); }
+    catch (Throwable t) { throw new RuntimeException(t); }
+  }
+
   static void sendVoid0(MemorySegment recv, MemorySegment sel) {
     try { MSG_SEND_VOID_0.invokeExact(recv, sel); }
     catch (Throwable t) { throw new RuntimeException(t); }

@@ -111,11 +111,6 @@ final class Win32WebView extends WebviewBase {
     return hwnd != null ? hwnd : MemorySegment.NULL;
   }
 
-  @Override
-  public String version() {
-    return "WebView2 (Windows)";
-  }
-
   // -------------------------------------------------------------------------
   // WebviewBase — platform impls (called on Win32 message-loop thread via dispatch)
   // -------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 package io.avaje.webview;
 
-import module java.base;
+import java.lang.foreign.MemorySegment;
 
 /**
  * SPI for platform-specific {@link Webview} implementations discovered via {@link ServiceLoader}.

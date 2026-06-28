@@ -170,9 +170,6 @@ public abstract class WebviewBase implements Webview {
   public abstract void close();
 
   @Override
-  public abstract String version();
-
-  @Override
   public abstract void setDarkAppearance(boolean shouldAppearDark);
 
   @Override

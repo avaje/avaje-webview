@@ -8,6 +8,6 @@ class WebviewNativeTest {
 
 //  @Test
   void test() {
-    assertEquals("0.11.0", Webview.builder().build().version());
+    Webview.builder().build();
   }
 }
