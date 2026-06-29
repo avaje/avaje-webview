@@ -63,7 +63,7 @@ final class CocoaWebView extends WebviewBase {
 
   static {
     SymbolLookup.libraryLookup(
-        "/System/Library/Frameworks/Webkit.framework/Webkit", Arena.global());
+        "/System/Library/Frameworks/WebKit.framework/WebKit", Arena.global());
 
     var linker = Linker.nativeLinker();
     var lookup = SymbolLookup.loaderLookup().or(linker.defaultLookup());
