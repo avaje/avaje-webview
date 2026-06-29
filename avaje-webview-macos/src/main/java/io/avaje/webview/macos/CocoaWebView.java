@@ -60,17 +60,20 @@ final class CocoaWebView extends WebviewBase {
   private static final AtomicInteger openWindows = new AtomicInteger(0);
 
   static {
-    var libDispatch = SymbolLookup.libraryLookup("libdispatch.dylib", Arena.global());
+
+	SymbolLookup.libraryLookup("/System/Library/Frameworks/Webkit.framework/Webkit", Arena.global());
+
     var linker = Linker.nativeLinker();
+    var lookup = SymbolLookup.loaderLookup().or(linker.defaultLookup());
     DISPATCH_MAIN_QUEUE =
-        libDispatch
+        lookup
             .find("_dispatch_main_q")
             .orElseThrow(() -> new UnsatisfiedLinkError("_dispatch_main_q"));
     // dispatch_async_f(queue, context, work) — work is void(*)(void*)
     // We pass NULL context; drainStub already captures `this` via the upcall binding.
     DISPATCH_ASYNC_F =
         linker.downcallHandle(
-            libDispatch.find("dispatch_async_f").orElseThrow(),
+            lookup.find("dispatch_async_f").orElseThrow(),
             FunctionDescriptor.ofVoid(
                 ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
   }
@@ -227,11 +230,7 @@ final class CocoaWebView extends WebviewBase {
   protected void setHtmlImpl(String html) {
     if (closed) return;
     try (Arena a = Arena.ofConfined()) {
-      // loadHTMLString:baseURL: is a two-arg call but we drop the baseURL (pass NULL implicitly).
-      sendVoid1(
-          wkWebView,
-          sel(a, "loadHTMLString:baseURL:"),
-          nsString(a, html)); // passing just html; 2-arg form needs special MSG_SEND_2
+      send2(wkWebView, sel(a, "loadHTMLString:baseURL:"), nsString(a, html), MemorySegment.NULL);
     }
   }
 
@@ -349,7 +348,7 @@ final class CocoaWebView extends WebviewBase {
       MemorySegment self, MemorySegment cmd, MemorySegment controller, MemorySegment message) {
     try (Arena a = Arena.ofConfined()) {
       MemorySegment body = send0(message, sel(a, "body"));
-      String json = fromNSString(a, send0(body, sel(a, "description")));
+      String json = fromNSString(a, body);
       onMessage(json);
     }
   }
@@ -393,7 +392,7 @@ final class CocoaWebView extends WebviewBase {
       Linker.nativeLinker()
           .downcallHandle(
               MSG_SEND_ADDR,
-              FunctionDescriptor.of(
+              FunctionDescriptor.ofVoid(
                   ValueLayout.JAVA_BYTE,
                   ValueLayout.ADDRESS,
                   ValueLayout.ADDRESS,
