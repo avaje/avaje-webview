@@ -75,9 +75,9 @@ final class CocoaWebView extends WebviewBase {
                 ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
   }
 
-  private MemorySegment nsWindow;      // NSWindow*
-  private MemorySegment wkWebView;     // WKWebView*
-  private MemorySegment ucController;  // WKUserContentController*
+  private volatile MemorySegment nsWindow;      // NSWindow*
+  private volatile MemorySegment wkWebView;     // WKWebView*
+  private volatile MemorySegment ucController;  // WKUserContentController*
 
   private volatile boolean closed = false;
   private final CountDownLatch windowClosedLatch = new CountDownLatch(1);
@@ -120,7 +120,8 @@ final class CocoaWebView extends WebviewBase {
     // Dispatch to main thread — Cocoa objects can only be touched there.
     dispatchImpl(() -> {
       try (Arena a = Arena.ofConfined()) {
-        sendVoid1(nsWindow, sel(a, "close"), MemorySegment.NULL);
+        // -close takes no args; -close with isReleasedWhenClosed=YES (default) destroys the window.
+        sendVoid0(nsWindow, sel(a, "close"));
         // When the last window closes, stop the event loop so run() returns.
         if (openWindows.decrementAndGet() == 0) {
           MemorySegment app = send0(ObjC.getClass(a,"NSApplication"), sel(a, "sharedApplication"));
@@ -146,6 +147,7 @@ final class CocoaWebView extends WebviewBase {
 
   @Override
   protected void navigateImpl(String url) {
+    if (closed) return;
     try (Arena a = Arena.ofConfined()) {
       // NSURL → NSURLRequest → [WKWebView loadRequest:]
       MemorySegment nsUrl =
@@ -158,6 +160,7 @@ final class CocoaWebView extends WebviewBase {
 
   @Override
   protected void setTitleImpl(String title) {
+    if (closed) return;
     try (Arena a = Arena.ofConfined()) {
       MSG_SEND_SET_TITLE.invokeExact(nsWindow, sel(a, "setTitle:"), nsString(a, title));
     } catch (Throwable t) {
@@ -167,6 +170,7 @@ final class CocoaWebView extends WebviewBase {
 
   @Override
   protected void setSizeImpl(int width, int height) {
+    if (closed) return;
     try (Arena a = Arena.ofConfined()) {
       // setContentSize: takes NSSize (two doubles) — hence the specialised handle
       MSG_SEND_SET_CONTENT_SIZE.invokeExact(
@@ -178,6 +182,7 @@ final class CocoaWebView extends WebviewBase {
 
   @Override
   protected void setMinSizeImpl(int width, int height) {
+    if (closed) return;
     try (Arena a = Arena.ofConfined()) {
       MSG_SEND_SET_SIZE.invokeExact(
           nsWindow, sel(a, "setMinSize:"), (double) width, (double) height);
@@ -188,6 +193,7 @@ final class CocoaWebView extends WebviewBase {
 
   @Override
   protected void setMaxSizeImpl(int width, int height) {
+    if (closed) return;
     try (Arena a = Arena.ofConfined()) {
       MSG_SEND_SET_SIZE.invokeExact(
           nsWindow, sel(a, "setMaxSize:"), (double) width, (double) height);
@@ -198,6 +204,7 @@ final class CocoaWebView extends WebviewBase {
 
   @Override
   protected void setFixedSizeImpl(int width, int height) {
+    if (closed) return;
     try (Arena a = Arena.ofConfined()) {
       MSG_SEND_SET_CONTENT_SIZE.invokeExact(
           nsWindow, sel(a, "setContentSize:"), (double) width, (double) height);
@@ -218,6 +225,7 @@ final class CocoaWebView extends WebviewBase {
 
   @Override
   protected void setHtmlImpl(String html) {
+    if (closed) return;
     try (Arena a = Arena.ofConfined()) {
       // loadHTMLString:baseURL: is a two-arg call but we drop the baseURL (pass NULL implicitly).
       sendVoid1(
@@ -229,6 +237,7 @@ final class CocoaWebView extends WebviewBase {
 
   @Override
   protected void evalImpl(String js) {
+    if (closed) return;
     try (Arena a = Arena.ofConfined()) {
       // NULL completionHandler = fire-and-forget; we don't need the return value.
       MSG_SEND_EVAL_JS.invokeExact(
@@ -254,6 +263,7 @@ final class CocoaWebView extends WebviewBase {
 
   @Override
   protected void nativeAddUserScript(String js) {
+    if (closed) return;
     try (Arena a = Arena.ofConfined()) {
       MemorySegment WKUserScript = ObjC.getClass(a, "WKUserScript");
       MemorySegment script =
@@ -272,6 +282,7 @@ final class CocoaWebView extends WebviewBase {
 
   @Override
   protected void nativeRemoveAllUserScripts() {
+    if (closed) return;
     try (Arena a = Arena.ofConfined()) {
       sendVoid0(ucController, sel(a, "removeAllUserScripts"));
     }
