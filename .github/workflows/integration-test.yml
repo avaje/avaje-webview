@@ -1,0 +1,47 @@
+name: Integration Tests
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+jobs:
+  integration-test:
+    name: Integration Test on ${{ matrix.config.os }}
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - os: ubuntu-24.04
+            module: avaje-webview-linux
+          - os: macos-latest
+            module: avaje-webview-macos
+          - os: windows-latest
+            module: avaje-webview-windows
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '25'
+          distribution: 'graalvm'
+          cache: 'maven'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install GTK4 + WebKitGTK (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y xvfb libgtk-4-1 libwebkitgtk-6.0-4 libjavascriptcoregtk-6.0-1
+
+      - name: Build API
+        run: mvn -pl avaje-webview install -DskipTests -P'!default'
+
+      - name: Run integration tests (Linux — headless via Xvfb)
+        if: runner.os == 'Linux'
+        run: xvfb-run mvn -pl ${{ matrix.config.module }} test
+
+      - name: Run integration tests
+        if: runner.os != 'Linux'
+        run: mvn -pl ${{ matrix.config.module }} test
