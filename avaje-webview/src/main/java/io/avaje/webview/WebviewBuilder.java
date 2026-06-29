@@ -1,18 +1,13 @@
 package io.avaje.webview;
 
-import module java.base;
-
 import io.avaje.webview.Webview.Builder;
+import io.avaje.webview.linux.GtkWebView;
+import io.avaje.webview.macos.CocoaWebView;
+import io.avaje.webview.windows.Win32WebView;
+
+import java.lang.foreign.MemorySegment;
 
 final class WebviewBuilder implements Builder {
-
-  private static final WebviewProvider PROVIDER =
-      ServiceLoader.load(WebviewProvider.class).stream()
-          .map(ServiceLoader.Provider::get)
-          .filter(WebviewProvider::isSupported)
-          .findFirst()
-          .orElseThrow(() -> new UnsupportedOperationException(
-              "No WebviewProvider found for platform: " + System.getProperty("os.name")));
 
   private String title;
   private boolean enableDeveloperTools;
@@ -68,7 +63,7 @@ final class WebviewBuilder implements Builder {
 
   @Override
   public Webview build() {
-    var view = PROVIDER.create(enableDeveloperTools, width, height, windowPointer);
+    Webview view = createForPlatform();
     if (title != null) view.setTitle(title);
     if (url != null) {
       view.navigate(url);
@@ -78,5 +73,13 @@ final class WebviewBuilder implements Builder {
       view.navigate("about:blank");
     }
     return view;
+  }
+
+  private Webview createForPlatform() {
+    String os = System.getProperty("os.name", "").toLowerCase();
+    if (os.contains("linux")) return new GtkWebView(enableDeveloperTools, width, height);
+    if (os.contains("mac"))   return new CocoaWebView(enableDeveloperTools, width, height);
+    if (os.contains("win"))   return new Win32WebView(enableDeveloperTools, width, height);
+    throw new UnsupportedOperationException("Unsupported platform: " + System.getProperty("os.name"));
   }
 }

@@ -24,9 +24,6 @@
   </properties>
     <modules>
         <module>avaje-webview</module>
-        <module>avaje-webview-linux</module>
-        <module>avaje-webview-macos</module>
-        <module>avaje-webview-windows</module>
     </modules>
 
   <profiles>
