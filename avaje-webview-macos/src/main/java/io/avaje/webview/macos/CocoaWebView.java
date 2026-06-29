@@ -18,18 +18,18 @@ import static io.avaje.webview.macos.ObjC.*;
 /**
  * macOS Cocoa + WKWebView implementation via Objective-C runtime Panama FFI.
  *
- * Thread model: all Cocoa calls must happen on the OS main thread. The JVM's main thread
- * isn't automatically the OS main thread, so callers must pass -XstartOnFirstThread.
- * Cross-thread calls (dispatch()) queue a Runnable then use dispatch_async_f to wake the
- * main thread, which drains the queue via the drainStub C function pointer.
+ * <p>Thread model: all Cocoa calls must happen on the OS main thread. The JVM's main thread isn't
+ * automatically the OS main thread, so callers must pass -XstartOnFirstThread. Cross-thread calls
+ * (dispatch()) queue a Runnable then use dispatch_async_f to wake the main thread, which drains the
+ * queue via the drainStub C function pointer.
  *
- * JS→Java: WKWebView requires a WKScriptMessageHandler ObjC object. Since we can't implement
+ * <p>JS→Java: WKWebView requires a WKScriptMessageHandler ObjC object. Since we can't implement
  * ObjC protocols in Java, we fabricate a class at runtime using objc_allocateClassPair +
- * class_addMethod, wiring the method implementation to a Panama upcall stub that calls back
- * into onScriptMessage(). See createScriptHandler() for the full setup.
+ * class_addMethod, wiring the method implementation to a Panama upcall stub that calls back into
+ * onScriptMessage(). See createScriptHandler() for the full setup.
  *
- * Must be created and {@link #run()} called on the first thread
- * (pass {@code -XstartOnFirstThread} to the JVM).
+ * <p>Must be created and {@link #run()} called on the first thread (pass {@code
+ * -XstartOnFirstThread} to the JVM).
  */
 final class CocoaWebView extends WebviewBase {
 
@@ -39,18 +39,20 @@ final class CocoaWebView extends WebviewBase {
       "function(message){return window.webkit.messageHandlers.__webview__.postMessage(message);}";
 
   // NSWindow style mask bits (from NSWindow.h)
-  private static final long NS_TITLED               = 1L;
-  private static final long NS_CLOSABLE             = 2L;
-  private static final long NS_MINIATURIZABLE        = 4L;
-  private static final long NS_RESIZABLE            = 8L;
-  private static final long NS_STANDARD_WINDOW_MASK = NS_TITLED | NS_CLOSABLE | NS_MINIATURIZABLE | NS_RESIZABLE;
-  private static final long NS_BACKING_BUFFERED     = 2L;  // only valid backing type on modern macOS
+  private static final long NS_TITLED = 1L;
+  private static final long NS_CLOSABLE = 2L;
+  private static final long NS_MINIATURIZABLE = 4L;
+  private static final long NS_RESIZABLE = 8L;
+  private static final long NS_STANDARD_WINDOW_MASK =
+      NS_TITLED | NS_CLOSABLE | NS_MINIATURIZABLE | NS_RESIZABLE;
+  private static final long NS_BACKING_BUFFERED = 2L; // only valid backing type on modern macOS
 
   // WKUserScriptInjectionTimeAtDocumentStart = 0
   // Scripts injected here run before any page JS, so window.__webview__ is ready immediately.
   private static final long WK_INJECT_AT_DOCUMENT_START = 0L;
 
-  // dispatch_async_f posts a C function pointer to the main queue, running it on the OS main thread.
+  // dispatch_async_f posts a C function pointer to the main queue, running it on the OS main
+  // thread.
   // _dispatch_main_q is the global main queue (an exported symbol, not a function).
   private static final MemorySegment DISPATCH_MAIN_QUEUE;
   private static final MethodHandle DISPATCH_ASYNC_F;
@@ -60,8 +62,8 @@ final class CocoaWebView extends WebviewBase {
   private static final AtomicInteger openWindows = new AtomicInteger(0);
 
   static {
-
-	SymbolLookup.libraryLookup("/System/Library/Frameworks/Webkit.framework/Webkit", Arena.global());
+    SymbolLookup.libraryLookup(
+        "/System/Library/Frameworks/Webkit.framework/Webkit", Arena.global());
 
     var linker = Linker.nativeLinker();
     var lookup = SymbolLookup.loaderLookup().or(linker.defaultLookup());
@@ -78,9 +80,9 @@ final class CocoaWebView extends WebviewBase {
                 ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
   }
 
-  private volatile MemorySegment nsWindow;      // NSWindow*
-  private volatile MemorySegment wkWebView;     // WKWebView*
-  private volatile MemorySegment ucController;  // WKUserContentController*
+  private volatile MemorySegment nsWindow; // NSWindow*
+  private volatile MemorySegment wkWebView; // WKWebView*
+  private volatile MemorySegment ucController; // WKUserContentController*
 
   private volatile boolean closed = false;
   private final CountDownLatch windowClosedLatch = new CountDownLatch(1);
@@ -111,7 +113,7 @@ final class CocoaWebView extends WebviewBase {
   public void run() {
     // [NSApplication run] starts the Cocoa event loop; blocks until [app stop:] is sent.
     try (Arena a = Arena.ofConfined()) {
-      MemorySegment app = send0(ObjC.getClass(a,"NSApplication"), sel(a, "sharedApplication"));
+      MemorySegment app = send0(ObjC.getClass(a, "NSApplication"), sel(a, "sharedApplication"));
       sendVoid0(app, sel(a, "run"));
     }
   }
@@ -121,18 +123,21 @@ final class CocoaWebView extends WebviewBase {
     if (closed) return;
     closed = true;
     // Dispatch to main thread — Cocoa objects can only be touched there.
-    dispatchImpl(() -> {
-      try (Arena a = Arena.ofConfined()) {
-        // -close takes no args; -close with isReleasedWhenClosed=YES (default) destroys the window.
-        sendVoid0(nsWindow, sel(a, "close"));
-        // When the last window closes, stop the event loop so run() returns.
-        if (openWindows.decrementAndGet() == 0) {
-          MemorySegment app = send0(ObjC.getClass(a,"NSApplication"), sel(a, "sharedApplication"));
-          sendVoid1(app, sel(a, "stop:"), MemorySegment.NULL);
-        }
-      }
-      windowClosedLatch.countDown();
-    });
+    dispatchImpl(
+        () -> {
+          try (Arena a = Arena.ofConfined()) {
+            // -close takes no args; -close with isReleasedWhenClosed=YES (default) destroys the
+            // window.
+            sendVoid0(nsWindow, sel(a, "close"));
+            // When the last window closes, stop the event loop so run() returns.
+            if (openWindows.decrementAndGet() == 0) {
+              MemorySegment app =
+                  send0(ObjC.getClass(a, "NSApplication"), sel(a, "sharedApplication"));
+              sendVoid1(app, sel(a, "stop:"), MemorySegment.NULL);
+            }
+          }
+          windowClosedLatch.countDown();
+        });
   }
 
   // -------------------------------------------------------------------------
@@ -326,8 +331,8 @@ final class CocoaWebView extends WebviewBase {
   // -------------------------------------------------------------------------
 
   /**
-   * Called by libdispatch on the OS main thread when dispatchImpl fires.
-   * Signature void(*)(void*) matches dispatch_function_t; ctx is always NULL here.
+   * Called by libdispatch on the OS main thread when dispatchImpl fires. Signature void(*)(void*)
+   * matches dispatch_function_t; ctx is always NULL here.
    */
   @SuppressWarnings("unused")
   public void drainDispatchQueue(MemorySegment ctx) {
@@ -338,10 +343,9 @@ final class CocoaWebView extends WebviewBase {
   /**
    * Called by our synthetic WKScriptMessageHandler class when JS posts a message.
    *
-   * ObjC method:  - (void)userContentController:(WKUserContentController*)ucc
-   *                       didReceiveScriptMessage:(WKScriptMessage*)message
-   * As a C function: (id self, SEL cmd, id controller, id message)
-   * Type encoding:  "v@:@@"
+   * <p>ObjC method: - (void)userContentController:(WKUserContentController*)ucc
+   * didReceiveScriptMessage:(WKScriptMessage*)message As a C function: (id self, SEL cmd, id
+   * controller, id message) Type encoding: "v@:@@"
    */
   @SuppressWarnings("unused")
   public void onScriptMessage(
@@ -358,8 +362,8 @@ final class CocoaWebView extends WebviewBase {
   // -------------------------------------------------------------------------
 
   /**
-   * Wraps drainDispatchQueue in a Panama upcall stub — a real C function pointer that
-   * libdispatch can call. bindTo(this) locks the stub to this instance's queue.
+   * Wraps drainDispatchQueue in a Panama upcall stub — a real C function pointer that libdispatch
+   * can call. bindTo(this) locks the stub to this instance's queue.
    */
   private void buildDrainStub() {
     try {
@@ -379,9 +383,9 @@ final class CocoaWebView extends WebviewBase {
   }
 
   /**
-   * One-time NSApplication setup.
-   * setActivationPolicy:NSApplicationActivationPolicyRegular (=0) makes this a normal
-   * foreground app with a Dock icon; without it the process is a background agent.
+   * One-time NSApplication setup. setActivationPolicy:NSApplicationActivationPolicyRegular (=0)
+   * makes this a normal foreground app with a Dock icon; without it the process is a background
+   * agent.
    */
   private static void initNSApp() {
     if (nsAppInitDone) return;
@@ -393,10 +397,7 @@ final class CocoaWebView extends WebviewBase {
           .downcallHandle(
               MSG_SEND_ADDR,
               FunctionDescriptor.ofVoid(
-                  ValueLayout.JAVA_BYTE,
-                  ValueLayout.ADDRESS,
-                  ValueLayout.ADDRESS,
-                  ValueLayout.JAVA_LONG))
+                  ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG))
           .invokeExact(app, sel(a, "setActivationPolicy:"), 0L); // 0 = Regular
       MacOSHelper.createMenus();
     } catch (Throwable t) {
@@ -408,8 +409,8 @@ final class CocoaWebView extends WebviewBase {
   /**
    * Creates NSWindow + WKWebView and wires the JS message handler.
    *
-   * Order matters: the WKScriptMessageHandler must be registered on the
-   * WKUserContentController *before* WKWebView is created so it's present from the first load.
+   * <p>Order matters: the WKScriptMessageHandler must be registered on the WKUserContentController
+   * *before* WKWebView is created so it's present from the first load.
    */
   private void initWindowAndWebView(boolean debug, int width, int height) {
     try (Arena a = Arena.ofConfined()) {
@@ -433,7 +434,10 @@ final class CocoaWebView extends WebviewBase {
               MSG_SEND_WKWEBVIEW_INIT.invokeExact(
                   send0(ObjC.getClass(a, "WKWebView"), sel(a, "alloc")),
                   sel(a, "initWithFrame:configuration:"),
-                  0d, 0d, (double) width, (double) height,
+                  0d,
+                  0d,
+                  (double) width,
+                  (double) height,
                   config);
 
       // NS_BACKING_BUFFERED is the only backing type that works on modern macOS.
@@ -443,8 +447,12 @@ final class CocoaWebView extends WebviewBase {
               MSG_SEND_NSWINDOW_INIT.invokeExact(
                   send0(ObjC.getClass(a, "NSWindow"), sel(a, "alloc")),
                   sel(a, "initWithContentRect:styleMask:backing:defer:"),
-                  0d, 0d, (double) width, (double) height,
-                  NS_STANDARD_WINDOW_MASK, NS_BACKING_BUFFERED,
+                  0d,
+                  0d,
+                  (double) width,
+                  (double) height,
+                  NS_STANDARD_WINDOW_MASK,
+                  NS_BACKING_BUFFERED,
                   0 /* defer=NO */);
 
       sendVoid1(nsWindow, sel(a, "setContentView:"), wkWebView);
@@ -469,15 +477,14 @@ final class CocoaWebView extends WebviewBase {
   /**
    * Synthesises an ObjC class that implements WKScriptMessageHandler entirely at runtime.
    *
-   * We can't implement ObjC protocols in Java, so we use the ObjC runtime C API:
-   *   1. objc_allocateClassPair  — reserve a new class (subclass of NSObject)
-   *   2. upcallStub              — Panama turns onScriptMessage into a C function pointer
-   *   3. class_addMethod         — register the C function pointer as the method implementation
-   *      type encoding "v@:@@" = void, id self, SEL cmd, id arg, id arg
-   *   4. objc_registerClassPair  — finalise (must happen after all addMethod calls)
-   *   5. class_createInstance    — allocate an instance (no -init needed; handler is stateless)
+   * <p>We can't implement ObjC protocols in Java, so we use the ObjC runtime C API: 1.
+   * objc_allocateClassPair — reserve a new class (subclass of NSObject) 2. upcallStub — Panama
+   * turns onScriptMessage into a C function pointer 3. class_addMethod — register the C function
+   * pointer as the method implementation type encoding "v@:@@" = void, id self, SEL cmd, id arg, id
+   * arg 4. objc_registerClassPair — finalise (must happen after all addMethod calls) 5.
+   * class_createInstance — allocate an instance (no -init needed; handler is stateless)
    *
-   * Unique class name per instance avoids runtime conflicts when multiple windows exist.
+   * <p>Unique class name per instance avoids runtime conflicts when multiple windows exist.
    */
   private MemorySegment createScriptHandler(Arena a) {
     try {
@@ -504,9 +511,9 @@ final class CocoaWebView extends WebviewBase {
               .upcallStub(
                   mh,
                   FunctionDescriptor.ofVoid(
-                      ValueLayout.ADDRESS,  // self
-                      ValueLayout.ADDRESS,  // cmd
-                      ValueLayout.ADDRESS,  // WKUserContentController*
+                      ValueLayout.ADDRESS, // self
+                      ValueLayout.ADDRESS, // cmd
+                      ValueLayout.ADDRESS, // WKUserContentController*
                       ValueLayout.ADDRESS), // WKScriptMessage*
                   callbackArena);
 
