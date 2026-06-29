@@ -7,7 +7,6 @@ import java.lang.foreign.*;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.net.URI;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
@@ -37,16 +36,16 @@ final class GtkWebView extends WebviewBase {
   private static volatile boolean gtkInitDone = false;
   private static final AtomicInteger openWindows = new AtomicInteger(0);
 
-  private MemorySegment window;    // GtkWindow*
-  private MemorySegment webView;   // WebKitWebView*
-  private MemorySegment ucManager; // WebKitUserContentManager*
+  private volatile MemorySegment window;    // GtkWindow*
+  private volatile MemorySegment webView;   // WebKitWebView*
+  private volatile MemorySegment ucManager; // WebKitUserContentManager*
 
   private boolean windowShown = false;
+  private volatile boolean closed = false;
   private volatile boolean windowDestroyed = false;
   private final CountDownLatch windowClosedLatch = new CountDownLatch(1);
 
-  // ofShared() because close() or the destroy callback may arrive from a non-creator thread
-  private final Arena callbackArena = Arena.ofShared();
+  private Arena callbackArena = Arena.ofAuto();
 
   // C function pointers (upcall stubs) wired to GLib/GTK signals
   private MemorySegment dispatchStub; // GSourceFunc — drains pendingDispatches on GTK thread
@@ -113,18 +112,20 @@ final class GtkWebView extends WebviewBase {
 
   @Override
   public void close() {
+    closed = true; // stop all impl methods before we free native state
     if (!windowDestroyed && window != null && window.address() != 0L) {
-      // Disconnect signals first to prevent the destroy callback from double-counting.
-      GLib.gSignalHandlersDisconnectByData(window, MemorySegment.NULL);
-      Gtk4.gtkWindowClose(window);
-      depletePending(); // flush any queued dispatches before releasing state
-      window = MemorySegment.NULL;
+      // gtk_window_destroy unconditionally destroys the window and emits "destroy".
+      // Don't disconnect signals first — we need onWindowDestroy to fire so that
+      // windowClosedLatch counts down and run() on other threads can unblock.
+      Gtk4.gtkWindowDestroy(window);
+      // window is now invalid; onWindowDestroy sets window = NULL asynchronously on the
+      // GTK thread, but we must not touch it again regardless.
     }
     if (webView != null && webView.address() != 0L) {
       GLib.gObjectUnref(webView); // balance the gObjectRefSink from initWindowAndWebView
       webView = MemorySegment.NULL;
     }
-    callbackArena.close();
+    callbackArena = null;
   }
 
   // -------------------------------------------------------------------------
@@ -142,6 +143,7 @@ final class GtkWebView extends WebviewBase {
 
   @Override
   protected void navigateImpl(String url) {
+    if (closed) return;
     try (Arena a = Arena.ofConfined()) {
       WebKit6.webkitWebViewLoadUri(webView, a.allocateFrom(url));
     }
@@ -149,6 +151,7 @@ final class GtkWebView extends WebviewBase {
 
   @Override
   protected void setTitleImpl(String title) {
+    if (closed) return;
     try (Arena a = Arena.ofConfined()) {
       Gtk4.gtkWindowSetTitle(window, a.allocateFrom(title));
     }
@@ -156,6 +159,7 @@ final class GtkWebView extends WebviewBase {
 
   @Override
   protected void setSizeImpl(int width, int height) {
+    if (closed) return;
     // Must be resizable before changing default size, or the window ignores the request.
     Gtk4.gtkWindowSetResizable(window, true);
     Gtk4.gtkWindowSetDefaultSize(window, width, height);
@@ -163,6 +167,7 @@ final class GtkWebView extends WebviewBase {
 
   @Override
   protected void setMinSizeImpl(int width, int height) {
+    if (closed) return;
     // GTK4 minimum size is set on the widget, not the window.
     Gtk4.gtkWidgetSetSizeRequest(webView, width, height);
   }
@@ -175,12 +180,14 @@ final class GtkWebView extends WebviewBase {
 
   @Override
   protected void setFixedSizeImpl(int width, int height) {
+    if (closed) return;
     Gtk4.gtkWindowSetResizable(window, false);
     Gtk4.gtkWindowSetDefaultSize(window, width, height);
   }
 
   @Override
   protected void setHtmlImpl(String html) {
+    if (closed) return;
     try (Arena a = Arena.ofConfined()) {
       WebKit6.webkitWebViewLoadHtml(webView, a.allocateFrom(html), MemorySegment.NULL);
     }
@@ -188,7 +195,8 @@ final class GtkWebView extends WebviewBase {
 
   @Override
   protected void evalImpl(String js) {
-    // Skip if no page is loaded (URI would be null).
+    if (closed || webView == null || webView.address() == 0L) return;
+    // Skip if no page is loaded yet (webkit_web_view_get_uri asserts WEBKIT_IS_WEB_VIEW).
     MemorySegment uri = WebKit6.webkitWebViewGetUri(webView);
     if (uri.address() == 0L) return;
     try (Arena a = Arena.ofConfined()) {
@@ -211,6 +219,7 @@ final class GtkWebView extends WebviewBase {
 
   @Override
   protected void nativeAddUserScript(String js) {
+    if (closed) return;
     try (Arena a = Arena.ofConfined()) {
       MemorySegment script = WebKit6.webkitUserScriptNew(
           a.allocateFrom(js),
@@ -223,6 +232,7 @@ final class GtkWebView extends WebviewBase {
 
   @Override
   protected void nativeRemoveAllUserScripts() {
+    if (closed) return;
     WebKit6.webkitUcmRemoveAllScripts(ucManager);
   }
 
@@ -310,9 +320,9 @@ final class GtkWebView extends WebviewBase {
    * the combination, unless the user already set it themselves.
    */
   private static void applyDmabufWorkaround() {
-    if (System.getenv("WAYLAND_DISPLAY") != null) return;           // Wayland is fine
-    if (!new java.io.File("/sys/module/nvidia").isDirectory()) return; // no NVIDIA driver
-    if (System.getenv("WEBKIT_DISABLE_DMABUF_RENDERER") != null) return; // already set
+               // Wayland is fine
+     // no NVIDIA driver
+    if ((System.getenv("WAYLAND_DISPLAY") != null) || !new java.io.File("/sys/module/nvidia").isDirectory() || (System.getenv("WEBKIT_DISABLE_DMABUF_RENDERER") != null)) return; // already set
     try {
       var libc = SymbolLookup.libraryLookup("libc.so.6", Arena.global());
       var setenv = Linker.nativeLinker().downcallHandle(
@@ -401,15 +411,4 @@ final class GtkWebView extends WebviewBase {
     windowShown = true;
   }
 
-  /**
-   * Blocks until a sentinel Runnable that we push onto the GTK thread completes.
-   * Used in close() to ensure all pending dispatches have run before we release state.
-   */
-  private void depletePending() {
-    boolean[] done = {false};
-    dispatchImpl(() -> done[0] = true);
-    while (!done[0]) {
-      GLib.gMainContextIteration(MemorySegment.NULL, 1);
-    }
-  }
 }

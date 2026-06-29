@@ -28,6 +28,9 @@ final class Gtk4 {
             FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
     static final MethodHandle GTK_WINDOW_CLOSE = downcall("gtk_window_close",
             FunctionDescriptor.ofVoid(ADDRESS));
+    // gtk_window_destroy tears down immediately (no "close-request" veto). GTK 4.0+.
+    static final MethodHandle GTK_WINDOW_DESTROY = downcall("gtk_window_destroy",
+            FunctionDescriptor.ofVoid(ADDRESS));
     static final MethodHandle GTK_WINDOW_MAXIMIZE = downcall("gtk_window_maximize",
             FunctionDescriptor.ofVoid(ADDRESS));
     static final MethodHandle GTK_WINDOW_FULLSCREEN = downcall("gtk_window_fullscreen",
@@ -79,6 +82,11 @@ final class Gtk4 {
 
     static void gtkWindowClose(MemorySegment window) {
         try { GTK_WINDOW_CLOSE.invokeExact(window); }
+        catch (Throwable t) { throw new RuntimeException(t); }
+    }
+
+    static void gtkWindowDestroy(MemorySegment window) {
+        try { GTK_WINDOW_DESTROY.invokeExact(window); }
         catch (Throwable t) { throw new RuntimeException(t); }
     }
 
