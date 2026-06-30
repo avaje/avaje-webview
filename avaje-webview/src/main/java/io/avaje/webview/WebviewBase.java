@@ -10,13 +10,18 @@ import module java.base;
 
 import module org.jspecify;
 
+import io.avaje.webview.linux.GtkWebView;
+import io.avaje.webview.macos.CocoaWebView;
+import io.avaje.webview.windows.Win32WebView;
+
 /**
  * Abstract base for platform-specific {@link Webview} implementations.
  *
  * <p>Holds all shared logic: JS bridge injection, binding management, user-script tracking,
  * console-redirect, and thread-safe dispatch routing. Subclasses implement the native layer.
  */
-public abstract class WebviewBase implements Webview {
+public abstract sealed class WebviewBase implements Webview
+    permits GtkWebView, CocoaWebView, Win32WebView {
 
   @FunctionalInterface
   interface BindCallback {
@@ -48,18 +53,13 @@ public abstract class WebviewBase implements Webview {
       })();
       """;
 
-  // JS bridge state — all mutations to userScripts/bindScriptIdx happen on the GTK thread
+  // JS bridge state, all mutations to userScripts/bindScriptIdx must happen on the main thread
   private final List<String> userScripts = new ArrayList<>();
   private int bindScriptIdx = -1;
   private final Map<String, BindCallback> bindings = new ConcurrentHashMap<>();
 
-  // -------------------------------------------------------------------------
-  // Called by subclass once native webview is initialised
-  // -------------------------------------------------------------------------
-
   /**
-   * Injects the JS bridge init script and sets up console redirection. Must be called on the UI/GTK
-   * thread after the user-content manager is configured.
+   * Injects the JS bridge init script and sets up console redirection. Must be called after the user-content manager is configured.
    *
    * @param postFn JS expression for posting messages to Java, e.g. {@code "function(msg){return
    *     window.webkit.messageHandlers.__webview__.postMessage(msg);}"}.
@@ -82,10 +82,6 @@ public abstract class WebviewBase implements Webview {
       dispatchImpl(() -> cb.onCall(id, params));
     }
   }
-
-  // -------------------------------------------------------------------------
-  // Webview interface — concrete implementations
-  // -------------------------------------------------------------------------
 
   @Override
   public void setHTML(@Nullable String html) {
@@ -163,10 +159,6 @@ public abstract class WebviewBase implements Webview {
     dispatchImpl(handler);
   }
 
-  // -------------------------------------------------------------------------
-  // Webview interface — left abstract for platform subclasses
-  // -------------------------------------------------------------------------
-
   @Override
   public abstract MemorySegment nativeWindowPointer();
 
@@ -220,19 +212,22 @@ public abstract class WebviewBase implements Webview {
   /** Remove all previously added user scripts. */
   protected abstract void nativeRemoveAllUserScripts();
 
-  // -------------------------------------------------------------------------
-  // Return result to JS caller
-  // -------------------------------------------------------------------------
-
+  /**
+   * Return result to JS caller
+   *
+   * @param id requestId
+   * @param status status
+   * @param result result
+   */
   void returnResult(String id, int status, String result) {
     final var escaped = result == null || result.isEmpty() ? "undefined" : jsonEscape(result);
-    final var js = "window.__webview__.onReply(" + jsonEscape(id) + "," + status + "," + escaped + ")";
+    final var js =
+        "window.__webview__.onReply(" + jsonEscape(id) + "," + status + "," + escaped + ")";
     dispatchImpl(() -> evalImpl(js));
   }
 
-  // -------------------------------------------------------------------------
+
   // User-script tracking
-  // -------------------------------------------------------------------------
 
   private void addUserScriptInternal(String js) {
     userScripts.add(js);
@@ -251,10 +246,7 @@ public abstract class WebviewBase implements Webview {
     for (final String s : userScripts) nativeAddUserScript(s);
   }
 
-  // -------------------------------------------------------------------------
-  // Console redirect
-  // -------------------------------------------------------------------------
-
+  /** Bind logging redirect to System.Logger */
   private void redirectConsole() {
     bind(
         "__$io_avaje_webview$log__",
@@ -280,10 +272,7 @@ public abstract class WebviewBase implements Webview {
     addUserScriptInternal(CONSOLE_REDIRECT_JS);
   }
 
-  // -------------------------------------------------------------------------
-  // WebviewBinding → BindCallback adapter
-  // -------------------------------------------------------------------------
-
+  /** Adapt a WebviewBinding to a Bind Callback */
   private BindCallback adapt(WebviewBinding wb) {
     return (id, req) -> {
       try {
@@ -296,10 +285,6 @@ public abstract class WebviewBase implements Webview {
       }
     };
   }
-
-  // -------------------------------------------------------------------------
-  // JS script wrappers
-  // -------------------------------------------------------------------------
 
   private static String wrapInitScript(String script, boolean allowNestedAccess) {
     return String.format(
@@ -327,10 +312,72 @@ public abstract class WebviewBase implements Webview {
         script, '"' + WebviewUtil.jsonEscape(script) + '"');
   }
 
-  // -------------------------------------------------------------------------
-  // JS bridge script (ported from webview engine_base.hh)
-  // -------------------------------------------------------------------------
-
+  /**
+   * Builds the minified JavaScript bridge that is injected as a user script at document-start on
+   * every page load.
+   *
+   * <p>The script runs in a self-executing function ({@code (function(){...})()}) in strict mode so
+   * it does not leak any variables into the global scope. It installs exactly one global:
+   * {@code window.__webview__} — an instance of the private {@code Webview_} class.
+   *
+   * <p><b>ID generation ({@code generateId})</b><br>
+   * Each Java binding call needs a unique correlation ID so that when Java calls back with
+   * {@code onReply(id, status, result)}, the bridge can locate and settle the right Promise.
+   * {@code window.crypto.getRandomValues} produces 16 cryptographically random bytes formatted as
+   * a 32-character lowercase hex string. {@code window.msCrypto} is the IE11 fallback (kept for
+   * completeness; unreachable on modern WebView2/WebKit).
+   *
+   * <p><b>Promise map ({@code _promises})</b><br>
+   * A plain object that maps {@code id → {resolve, reject}}. Entries are written by {@code call()}
+   * immediately before the message is posted, and deleted implicitly when {@code onReply()} settles
+   * the Promise and the GC reclaims the entry. No manual cleanup is needed because a Promise can
+   * only be settled once.
+   *
+   * <p><b>{@code Webview_.prototype.post}</b><br>
+   * Thin wrapper around the platform-specific {@code postFn} parameter, which is a JS function
+   * expression that serializes a message and hands it to the native layer. On Linux/macOS it calls
+   * {@code window.webkit.messageHandlers.__webview__.postMessage(msg)}; on Windows it calls the
+   * WebView2 equivalent. Injected at build time so the bridge has no platform branching at runtime.
+   *
+   * <p><b>{@code Webview_.prototype.call}</b><br>
+   * The core RPC method. Called indirectly by every bound {@code window.xxx()} function:
+   * <ol>
+   *   <li>Generates a unique {@code _id}.</li>
+   *   <li>Collects all arguments after the method name into {@code _params}
+   *       ({@code Array.prototype.slice} so it works with the {@code arguments} object).</li>
+   *   <li>Creates a Promise and stores {@code {resolve, reject}} in {@code _promises[_id]}.</li>
+   *   <li>Posts {@code {id, method, params}} as JSON to the native side.</li>
+   *   <li>Returns the Promise — the caller {@code await}s it.</li>
+   * </ol>
+   * Java receives the JSON, invokes the bound {@link WebviewBinding}, and calls back via
+   * {@link #returnResult}, which evals {@code window.__webview__.onReply(id, status, result)}.
+   *
+   * <p><b>{@code Webview_.prototype.onReply}</b><br>
+   * Called by Java (via {@code eval}) when a binding completes. Looks up the pending Promise by
+   * {@code id}, JSON-parses the result string (Java always sends valid JSON), and either resolves
+   * or rejects. {@code status === 0} = success; anything else = the result is an error message.
+   * Parsing is guarded — if Java returns malformed JSON the Promise rejects with a descriptive
+   * error rather than silently swallowing it.
+   *
+   * <p><b>{@code Webview_.prototype.onBind} / {@code onUnbind}</b><br>
+   * Called by Java when {@link #bind} / {@link #unbind} are invoked at runtime (after the page has
+   * loaded). {@code onBind} installs a new property on {@code window} whose value is a closure
+   * that prepends the method name to its arguments and delegates to {@code call()}. The
+   * {@code bind(this)} at the end ensures {@code this} inside the closure refers to the
+   * {@code Webview_} instance (not the global object). {@code onUnbind} removes the property;
+   * both guard against double-bind/double-unbind with an explicit check.
+   *
+   * <p><b>Injection timing</b><br>
+   * This script runs at document-start (before any page scripts) so that {@code window.__webview__}
+   * exists by the time the page's own {@code <script>} tags execute. Bindings registered before
+   * the first page load are installed via a second user script ({@link #buildBindScript}) that also
+   * runs at document-start, after this one.
+   *
+   * @param postFn a JS function expression (not a statement) that posts a single string message to
+   *     the native side, e.g. {@code
+   *     "function(message){return window.webkit.messageHandlers.__webview__.postMessage(message);}"}
+   * @return the complete, minified bridge script ready for injection as a user script
+   */
   private static String buildInitScript(String postFn) {
     return "(function(){'use strict';"
         + "function generateId(){"
@@ -391,10 +438,6 @@ public abstract class WebviewBase implements Webview {
     sb.append("];methods.forEach(function(n){window.__webview__.onBind(n);});})()");
     return sb.toString();
   }
-
-  // -------------------------------------------------------------------------
-  // Minimal JSON utilities
-  // -------------------------------------------------------------------------
 
   static String jsonEscape(String s) {
     return "\"" + WebviewUtil.jsonEscape(s) + "\"";

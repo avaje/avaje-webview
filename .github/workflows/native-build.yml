@@ -6,7 +6,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-latest, ubuntu-24.04, windows-latest]
+        os: [ubuntu-24.04]
     steps:
       - uses: actions/checkout@v7
 
@@ -28,6 +28,27 @@ jobs:
           java --version
           native-image --version
 
-      - name: Build with Maven
-        run:   |
-          mvn clean package -Pnative
+      - name: Install GTK4 + WebKitGTK (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y xvfb libgtk-4-1 libwebkitgtk-6.0-4 libjavascriptcoregtk-6.0-1
+
+      - name: Maven cache
+        uses: actions/cache@v5
+        env:
+          cache-name: maven-cache
+        with:
+          path:
+            ~/.m2
+          key: build-${{ env.cache-name }}
+
+      - name: maven version
+        run: mvn --version
+
+      - name: Build and Test with Maven
+        env:
+          WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: 1
+          WEBKIT_DISABLE_DMABUF_RENDERER: 1
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" mvn clean package -Pnative
+

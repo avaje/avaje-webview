@@ -76,8 +76,9 @@ final class WebviewBuilder implements Builder {
   private Webview createForPlatform() {
     final var os = System.getProperty("os.name", "").toLowerCase();
     if (os.contains("linux")) return new GtkWebView(enableDeveloperTools, width, height);
-    if (os.contains("mac"))   return new CocoaWebView(enableDeveloperTools, width, height);
-    if (os.contains("win"))   return new Win32WebView(enableDeveloperTools, width, height);
-    throw new UnsupportedOperationException("Unsupported platform: " + System.getProperty("os.name"));
+    if (os.contains("mac")) return new CocoaWebView(enableDeveloperTools, width, height);
+    if (os.contains("win")) return new Win32WebView(enableDeveloperTools, width, height);
+    throw new UnsupportedOperationException(
+        "Unsupported platform: " + System.getProperty("os.name"));
   }
 }

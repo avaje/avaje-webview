@@ -40,6 +40,12 @@ public final class GtkWebView extends WebviewBase {
   private static volatile Thread gtkThread;
   private static volatile boolean gtkInitDone = false;
   private static final AtomicInteger openWindows = new AtomicInteger(0);
+  // Arenas queued for closing by the GTK thread after each event-loop iteration. Windows on
+  // non-GTK threads can't close their own arena: windowClosedLatch fires inside drainDispatchQueue
+  // (the upcall stub), so the GTK thread is still executing inside that arena when the latch
+  // unblocks. The GTK thread drains this queue after gMainContextIteration returns, at which point
+  // every dispatch callback has completed and the stubs are no longer executing.
+  private static final ConcurrentLinkedQueue<Arena> pendingArenaClose = new ConcurrentLinkedQueue<>();
 
   private volatile MemorySegment window; // GtkWindow*
   private volatile MemorySegment webView; // WebKitWebView*
@@ -50,7 +56,14 @@ public final class GtkWebView extends WebviewBase {
   private volatile boolean windowDestroyed = false;
   private final CountDownLatch windowClosedLatch = new CountDownLatch(1);
 
-  private Arena callbackArena = Arena.ofAuto();
+  /**
+   * Arena that owns the three Panama upcall stubs (dispatchStub, destroyStub, msgStub).
+   *
+   * <p>{@code Arena.ofShared()} is used so the arena can be explicitly closed from the GTK thread
+   * after the event loop exits, at which point no more callbacks can arrive. Closing it frees the
+   * native stub trampolines immediately rather than waiting for GC.
+   */
+  private final Arena callbackArena = Arena.ofShared();
 
   // C function pointers (upcall stubs) wired to GLib/GTK signals
   private MemorySegment dispatchStub; // GSourceFunc — drains pendingDispatches on GTK thread
@@ -102,9 +115,16 @@ public final class GtkWebView extends WebviewBase {
   public void run() {
     if (Thread.currentThread() == gtkThread) {
       // Drive the GTK main loop manually so we can exit when all windows are gone.
-      // g_main_context_iteration(NULL, block=1) processes one pending event or blocks.
+      // NULL context = the thread-default main context (GTK's global default context on the GTK
+      // thread). mayBlock=1 parks the OS thread in poll/select until at least one event source is
+      // ready — essential for CPU efficiency. We loop manually rather than calling gtk_main() so
+      // we can exit as soon as openWindows reaches 0 without relying on gtk_main_quit().
       while (openWindows.get() > 0) {
         GLib.gMainContextIteration(MemorySegment.NULL, 1);
+        // After gMainContextIteration returns, every dispatch callback has completed. Arenas
+        // queued by doGtkClose (which runs inside drainDispatchQueue) are now safe to close.
+        Arena a;
+        while ((a = pendingArenaClose.poll()) != null) a.close();
       }
     } else {
       // Non-GTK thread: just wait for the window to close.
@@ -136,10 +156,18 @@ public final class GtkWebView extends WebviewBase {
       Gtk4.gtkWindowDestroy(window);
     }
     if (webView != null && webView.address() != 0L) {
-      GLib.gObjectUnref(webView); // balance the gObjectRefSink from initWindowAndWebView
+      // This g_object_unref balances the g_object_ref_sink from initWindowAndWebView.
+      // gtk_window_set_child() does NOT take ownership of the child widget — it holds its own
+      // ref through the GtkWidget parent-child hierarchy. After gtk_window_destroy, the parent
+      // releases the child's GtkWidget ref, but our explicit ref (from the sink) would keep the
+      // WebKitWebView alive indefinitely unless we release it here.
+      GLib.gObjectUnref(webView);
       webView = MemorySegment.NULL;
     }
-    callbackArena = null;
+    // Queue the arena for the GTK thread to close after the current dispatch cycle completes.
+    // We cannot close it here: this method runs inside drainDispatchQueue (an upcall stub in the
+    // arena), so closing now would free memory the stub is still executing from.
+    pendingArenaClose.add(callbackArena);
   }
 
   // -------------------------------------------------------------------------
@@ -210,7 +238,10 @@ public final class GtkWebView extends WebviewBase {
   @Override
   protected void evalImpl(String js) {
     if (closed || webView == null || webView.address() == 0L) return;
-    // Skip if no page is loaded yet (webkit_web_view_get_uri asserts WEBKIT_IS_WEB_VIEW).
+    // webkit_web_view_evaluate_javascript asserts WEBKIT_IS_WEB_VIEW(web_view) and additionally
+    // requires a page to be loaded. Calling it before any content is loaded triggers a
+    // g_return_val_if_fail abort in the WebKit process. get_uri() returns NULL/address==0 when
+    // no page is loaded, so we use it as a cheap guard before every eval.
     final var uri = WebKit6.webkitWebViewGetUri(webView);
     if (uri.address() == 0L) return;
     try (var a = Arena.ofConfined()) {
@@ -241,7 +272,10 @@ public final class GtkWebView extends WebviewBase {
               WebKit6.WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
               WebKit6.WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START);
       WebKit6.webkitUcmAddScript(ucManager, script);
-      WebKit6.webkitUserScriptUnref(script); // UCM retains its own copy
+      // webkit_user_content_manager_add_script() retains its own reference to the script.
+      // We unref our copy immediately so our handle doesn't artificially extend the script's
+      // lifetime past its useful point. The UCM holds the live reference.
+      WebKit6.webkitUserScriptUnref(script);
     }
   }
 
@@ -332,6 +366,14 @@ public final class GtkWebView extends WebviewBase {
    * NVIDIA GPUs under X11 (not Wayland) can crash WebKitGTK's DMABuf renderer. Set
    * WEBKIT_DISABLE_DMABUF_RENDERER=1 via setenv() before GTK starts if we detect the combination,
    * unless the user already set it themselves.
+   *
+   * <p>We call POSIX {@code setenv()} rather than {@code System.setProperty()} or manipulating
+   * {@code ProcessBuilder.environment()} because WebKitGTK reads this variable at the C level via
+   * {@code getenv()} before any Java process environment is consulted. Only a POSIX {@code setenv}
+   * call updates the C runtime's environment table that WebKit reads at init time. The overwrite
+   * flag is set to {@code 1} (YES) so our value takes effect even if the variable was previously
+   * set to something else — but we skip the call entirely if the user already set it to avoid
+   * stomping on an intentional override.
    */
   private static void applyDmabufWorkaround() {
     // Wayland is fine
@@ -367,9 +409,14 @@ public final class GtkWebView extends WebviewBase {
   }
 
   /**
-   * Builds the three C function pointer stubs used as GLib/GTK signal callbacks. Panama
-   * upcallStub() takes a bound MethodHandle and a FunctionDescriptor and returns a MemorySegment
-   * that looks like a C function pointer to native code.
+   * Builds the three C function pointer stubs used as GLib/GTK signal callbacks.
+   *
+   * <p>For each stub: {@code MethodHandles.lookup().findVirtual()} produces a virtual-dispatch
+   * handle for the target method. {@code bindTo(this)} converts it to a direct handle permanently
+   * bound to this specific {@code GtkWebView} instance — subsequent calls always dispatch to
+   * {@code this.drainDispatchQueue()} (or whichever method) without virtual dispatch overhead.
+   * {@code Linker.nativeLinker().upcallStub()} then wraps the handle in a small native
+   * trampoline: a real C function pointer that GLib/GTK can call with the correct ABI.
    */
   private void buildUpcallStubs() {
     final var linker = Linker.nativeLinker();
@@ -415,15 +462,24 @@ public final class GtkWebView extends WebviewBase {
     GLib.gSignalConnect(window, "destroy", destroyStub, MemorySegment.NULL);
 
     webView = WebKit6.webkitWebViewNew();
-    // gObjectRefSink takes ownership of the floating reference GObject emits on construction,
-    // so we control the lifetime and must call gObjectUnref in close().
+    // webkit_web_view_new() returns a GObject with a floating reference (refcount=1, floating flag
+    // set). g_object_ref_sink atomically claims ownership by clearing the floating flag, giving us
+    // a stable +1 reference that we control. We sink it immediately — before gtk_window_set_child
+    // — because set_child() would also sink it, but only when called. An intermediate operation
+    // (e.g. a signal connect) between new() and set_child() could trigger a reference cycle that
+    // causes a premature free if the floating ref hasn't been claimed yet.
     GLib.gObjectRefSink(webView);
 
     ucManager = WebKit6.webkitWebViewGetUserContentManager(webView);
     try (var a = Arena.ofConfined()) {
+      // Registering the handler by name before any page load ensures window.webkit.messageHandlers
+      // .__webview__ exists from the very first page navigation. The third arg (world=NULL) means
+      // the default script world; non-null worlds isolate scripts from page content.
       WebKit6.webkitUcmRegisterHandler(ucManager, a.allocateFrom(HANDLER_NAME));
     }
-    // The signal name includes the handler name so only messages for __webview__ fire here.
+    // GLib signal detail syntax: "signal-name::detail". The ::__webview__ detail causes GLib to
+    // fire this connection only when the handler name matches — WebKitGTK uses detail-based
+    // multiplexing to route messages from different named handlers through a single signal type.
     GLib.gSignalConnect(
         ucManager, "script-message-received::" + HANDLER_NAME, msgStub, MemorySegment.NULL);
 
