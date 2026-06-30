@@ -6,10 +6,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-#        os: [macos-latest, ubuntu-latest]
-        os: [ubuntu-24.04]
+       os: [ubuntu-24.04]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: graalvm/setup-graalvm@v1
         with:
@@ -18,9 +17,15 @@ jobs:
           cache: 'maven'
           github-token: ${{ secrets.GITHUB_TOKEN }}
           native-image-job-reports: 'true'
-          
+
+      - name: Install GTK4 + WebKitGTK (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y xvfb libgtk-4-1 libwebkitgtk-6.0-4 libjavascriptcoregtk-6.0-1
+
       - name: Maven cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         env:
           cache-name: maven-cache
         with:
@@ -31,5 +36,8 @@ jobs:
       - name: maven version
         run: mvn --version
 
-      - name: Build with Maven
-        run: mvn clean verify
+      - name: Build and Test with Maven
+        env:
+          WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: 1
+          WEBKIT_DISABLE_DMABUF_RENDERER: 1
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" mvn clean verify

@@ -10,3 +10,4 @@ examples/hello-world-jex/webview.dll
 
 examples/hello-world/webview.dll
 examples/hello-world-jex/libwebview.so
+.claude/settings.local.json

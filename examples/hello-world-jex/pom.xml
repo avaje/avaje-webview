@@ -20,14 +20,14 @@
 	<dependencies>
 		<dependency>
 			<groupId>io.avaje.webview</groupId>
-			<artifactId>avaje-webview-all</artifactId>
-			<version>0.17</version>
+			<artifactId>avaje-webview</artifactId>
+			<version>0.20</version>
 		</dependency>
 
 		<dependency>
 			<groupId>io.avaje</groupId>
 			<artifactId>avaje-jex-static-content</artifactId>
-			<version>3.5</version>
+			<version>3.6</version>
 		</dependency>
 
 	</dependencies>
@@ -74,7 +74,7 @@
 					<plugin>
 						<groupId>org.graalvm.buildtools</groupId>
 						<artifactId>native-maven-plugin</artifactId>
-						<version>1.0.0</version>
+						<version>1.1.3</version>
 						<executions>
 							<execution>
 								<id>build-native</id>

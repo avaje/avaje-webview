@@ -1,63 +1,22 @@
 package io.avaje.webview;
 
-import static io.avaje.webview.platform.Platform.*;
-import static io.avaje.webview.platform.Platform.archTarget;
-
-import module java.base;
+import java.lang.foreign.MemorySegment;
 
 import io.avaje.webview.Webview.Builder;
-import io.avaje.webview.platform.LinuxLibC;
+import io.avaje.webview.linux.GtkWebView;
+import io.avaje.webview.macos.CocoaWebView;
+import io.avaje.webview.windows.Win32WebView;
 
-/**
- * A fluent builder for configuring and instantiating {@link Webview} instances.
- *
- * <p>This builder handles native library extraction, window sizing, and initial content loading. *
- *
- * <h3>Example Usage:</h3>
- *
- * <pre>{@code
- * Webview wv = Webview.builder()
- *   .title("My App")
- *   .width(1024)
- *   .height(768)
- *   .url("https://example.com")
- *   .enableDeveloperTools(true)
- *   .build();
- *
- *   // Standard usage: This blocks until the window is closed
- * wv.run();
- *
- * }</pre>
- */
 final class WebviewBuilder implements Builder {
 
-  static SymbolLookup LIBRARY;
-  private static final String UNKNOWN_VERSION = "_0.12";
-  private boolean extractToUserHome;
-  private boolean extractToTemp;
   private String title;
   private boolean enableDeveloperTools;
-  private MemorySegment windowPointer;
   private int width = 800;
   private int height = 600;
   private String html;
   private String url;
-  private boolean keepExtractedFile;
-  private boolean temp;
 
   WebviewBuilder() {}
-
-  @Override
-  public WebviewBuilder extractToTemp(boolean extractToTemp) {
-    this.extractToTemp = extractToTemp;
-    return this;
-  }
-
-  @Override
-  public WebviewBuilder extractToUserHome(boolean extractToUserHome) {
-    this.extractToUserHome = extractToUserHome;
-    return this;
-  }
 
   @Override
   public WebviewBuilder title(String title) {
@@ -73,7 +32,6 @@ final class WebviewBuilder implements Builder {
 
   @Override
   public WebviewBuilder windowPointer(MemorySegment windowPointer) {
-    this.windowPointer = windowPointer;
     return this;
   }
 
@@ -103,11 +61,8 @@ final class WebviewBuilder implements Builder {
 
   @Override
   public Webview build() {
-    initNative(this);
-    var view = new DWebView(enableDeveloperTools, windowPointer, width, height);
-    if (title != null) {
-      view.setTitle(title);
-    }
+    final var view = createForPlatform();
+    if (title != null) view.setTitle(title);
     if (url != null) {
       view.navigate(url);
     } else if (html != null) {
@@ -118,127 +73,12 @@ final class WebviewBuilder implements Builder {
     return view;
   }
 
-  static final class Hook extends Thread {
-
-    Hook(Runnable runnable) {
-      super(runnable, "WebviewHook");
-    }
-
-    @Override
-    public void run() {
-      super.run();
-    }
-  }
-
-  private synchronized void initNative(WebviewBuilder bootstrap) {
-    if (LIBRARY == null) {
-      LIBRARY = bootstrap.initNativeLibrary();
-    }
-  }
-
-  private SymbolLookup initNativeLibrary() {
-    var lib = platformLibrary();
-    File target = createTarget(lib);
-    if (target.exists() && !keepExtractedFile && !target.delete()) {
-      System.out.println("Failed to delete previously extracted: " + target);
-    }
-    if (!keepExtractedFile) {
-      target.deleteOnExit();
-    }
-
-    if (target.exists() && !temp || extractToFile(lib, target)) {
-      System.load(target.getAbsolutePath());
-    }
-
-    // Return the FFM-based native implementation
-    return SymbolLookup.libraryLookup(target.getAbsolutePath(), Arena.global());
-  }
-
-  private File createTarget(String lib) {
-    var libName = new File(lib).getName();
-    if (extractToUserHome) {
-      keepExtractedFile = false;
-      String userHome = System.getProperty("user.home");
-      var homeDir = new File(userHome);
-      if (homeDir.exists()) {
-        var version = getClass().getPackage().getImplementationVersion();
-        File extractToDir = Path.of(userHome, ".avaje-webview", version == null ? UNKNOWN_VERSION : version).toFile();
-        if (!extractToDir.exists() && !extractToDir.mkdirs()) {
-          System.err.println("Failed to create directory to extract libraries: " + extractToDir);
-        }
-        keepExtractedFile = true;
-        return new File(extractToDir, libName);
-      }
-    }
-    if (extractToTemp) {
-      try {
-        this.temp = true;
-        return File.createTempFile("webview-", "-" + libName);
-      } catch (IOException e) {
-        throw new UncheckedIOException(e);
-      }
-    }
-    return new File(libName);
-  }
-
-  private static String platformLibrary() {
-    try {
-      String prefix = PREFIX;
-      switch (OS_DISTRIBUTION) {
-        case LINUX -> {
-          if (LinuxLibC.isGNU()) {
-            return prefix + "linux/" + archTarget + "/gnu/libwebview.so";
-          }
-          return prefix + "linux/" + archTarget + "/musl/libwebview.so";
-        }
-        case MACOS -> {
-          return prefix + "macos/" + archTarget + "/libwebview.dylib";
-        }
-        case WINDOWS_NT -> {
-          return prefix + "windows_nt/" + archTarget + "/webview.dll";
-        }
-        default ->
-            throw new IllegalStateException(
-                "Unsupported platform: " + OS_DISTRIBUTION + ":" + archTarget);
-      }
-    } catch (IOException e) {
-      throw new UncheckedIOException(e);
-    }
-  }
-
-  private static boolean extractToFile(String lib, File target) {
-    NativeLoadType n = NativeLoadType.get(lib);
-    var loader =
-        ModuleLayer.boot()
-            .findModule(n.moduleName)
-            .map(m -> (Callable<InputStream>) () -> m.getResourceAsStream(lib))
-            .orElseGet(() -> () -> WebviewBuilder.class.getResourceAsStream(lib));
-
-    try (var in = loader.call();
-        var out = new FileOutputStream(target)) {
-
-      if (in == null) {
-        ModuleLayer.boot()
-            .findModule("io.avaje.webview")
-            .ifPresentOrElse(
-                _ -> {
-                  throw new IllegalStateException(
-                      "Failed to access resource of native: %s - you may need to add a 'requires %s;' clause to your module-info.java"
-                          .formatted(lib, n.moduleName));
-                },
-                () -> {
-                  throw new IllegalStateException("Failed to access resource of native: " + lib);
-                });
-      }
-
-      in.transferTo(out);
-      return true;
-    } catch (Exception e) {
-      if (!e.getMessage().contains("used by another")) {
-        System.err.println("Unable to extract native: " + lib);
-        throw new RuntimeException(e);
-      }
-      return false;
-    }
+  private Webview createForPlatform() {
+    final var os = System.getProperty("os.name", "").toLowerCase();
+    if (os.contains("linux")) return new GtkWebView(enableDeveloperTools, width, height);
+    if (os.contains("mac")) return new CocoaWebView(enableDeveloperTools, width, height);
+    if (os.contains("win")) return new Win32WebView(enableDeveloperTools, width, height);
+    throw new UnsupportedOperationException(
+        "Unsupported platform: " + System.getProperty("os.name"));
   }
 }

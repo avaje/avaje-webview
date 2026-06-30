@@ -25,7 +25,6 @@ public class Main {
     Webview wv =
         Webview.builder()
             .enableDeveloperTools(true)
-            .extractToUserHome(true)
             .title("My App")
             .width(1000)
             .height(800)

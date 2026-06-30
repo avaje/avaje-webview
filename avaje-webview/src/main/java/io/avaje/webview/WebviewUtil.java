@@ -21,17 +21,18 @@
 package io.avaje.webview;
 
 import module java.base;
+
 import module org.jspecify;
 
 final class WebviewUtil {
 
   static String getExceptionStack(@NonNull Throwable e) {
-    StringWriter sw = new StringWriter();
-    PrintWriter pw = new PrintWriter(sw);
+    final var sw = new StringWriter();
+    final var pw = new PrintWriter(sw);
 
     e.printStackTrace(pw);
 
-    String out = sw.toString();
+    final var out = sw.toString();
 
     pw.flush();
     pw.close();
@@ -41,11 +42,11 @@ final class WebviewUtil {
   }
 
   static String jsonEscape(@NonNull String input) {
-    char[] chars = input.toCharArray();
+    final var chars = input.toCharArray();
 
-    StringBuilder output = new StringBuilder();
+    final var output = new StringBuilder();
 
-    for (char ch : chars) {
+    for (final char ch : chars) {
       switch (ch) {
         case 0 -> output.append("\\u0000");
         case '\n' -> output.append("\\n");
@@ -69,11 +70,11 @@ final class WebviewUtil {
   }
 
   static String forceSafeChars(@NonNull String input) {
-    char[] chars = input.toCharArray();
+    final var chars = input.toCharArray();
 
-    StringBuilder output = new StringBuilder();
+    final var output = new StringBuilder();
 
-    for (char ch : chars) {
+    for (final char ch : chars) {
       if (ch == 0) {
         output.append("\\u0000");
       } else if (ch > 127) {

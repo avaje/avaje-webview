@@ -203,13 +203,6 @@ public interface Webview extends Closeable, Runnable {
   Webview fullscreen();
 
   /**
-   * Returns the version string of the underlying webview engine.
-   *
-   * @return the engine version
-   */
-  String version();
-
-  /**
    * Sets the icon for the webview window
    *
    * @param path to the icon file
@@ -225,26 +218,6 @@ public interface Webview extends Closeable, Runnable {
 
   /** Interface for configuring and instantiating {@link Webview} instances. */
   public interface Builder {
-
-    /**
-     * Configures the builder to extract native libraries to the system's temporary directory.
-     *
-     * @param extractToTemp if {@code true}, uses {@code java.io.tmpdir}
-     * @return this builder
-     */
-    Builder extractToTemp(boolean extractToTemp);
-
-    /**
-     * Configures the builder to extract native libraries to a persistent directory in the user's
-     * home folder ({@code ${user.home}/.avaje-webview/}).
-     *
-     * <p><strong>Performance Note:</strong> When enabled, libraries are only extracted once,
-     * significantly reducing startup time for subsequent executions.
-     *
-     * @param extractToUserHome if {@code true}, caches libraries in the user's home directory
-     * @return this builder
-     */
-    Builder extractToUserHome(boolean extractToUserHome);
 
     /**
      * Sets the title of the webview window.
