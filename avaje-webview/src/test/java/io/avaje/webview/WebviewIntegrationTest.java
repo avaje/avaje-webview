@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 @Timeout(value = 30, unit = TimeUnit.SECONDS)
-class WebviewNativeTest {
+class WebviewIntegrationTest {
 
   private static void rethrow(AtomicReference<Throwable> failure) {
     final var t = failure.get();
