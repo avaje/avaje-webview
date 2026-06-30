@@ -37,4 +37,7 @@ jobs:
         run: mvn --version
 
       - name: Build and Test with Maven
+        env:
+          WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: 1
+          WEBKIT_DISABLE_DMABUF_RENDERER: 1
         run: xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" mvn clean verify
