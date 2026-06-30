@@ -113,14 +113,22 @@ public final class GtkWebView extends WebviewBase {
 
   @Override
   public void close() {
-    closed = true; // stop all impl methods before we free native state
+    if (closed) return;
+    closed = true;
+    // All GTK/GObject calls must happen on the GTK thread. Dispatch there regardless of caller.
+    if (Thread.currentThread() == gtkThread) {
+      doGtkClose();
+    } else {
+      pendingDispatches.add(this::doGtkClose);
+      GLib.gIdleAddFull(GLib.G_PRIORITY_HIGH_IDLE, dispatchStub, MemorySegment.NULL, MemorySegment.NULL);
+    }
+  }
+
+  private void doGtkClose() {
     if (!windowDestroyed && window != null && window.address() != 0L) {
-      // gtk_window_destroy unconditionally destroys the window and emits "destroy".
-      // Don't disconnect signals first — we need onWindowDestroy to fire so that
-      // windowClosedLatch counts down and run() on other threads can unblock.
+      // gtk_window_destroy emits "destroy" synchronously, so onWindowDestroy runs before
+      // this returns — windowClosedLatch is counted down and openWindows decremented there.
       Gtk4.gtkWindowDestroy(window);
-      // window is now invalid; onWindowDestroy sets window = NULL asynchronously on the
-      // GTK thread, but we must not touch it again regardless.
     }
     if (webView != null && webView.address() != 0L) {
       GLib.gObjectUnref(webView); // balance the gObjectRefSink from initWindowAndWebView

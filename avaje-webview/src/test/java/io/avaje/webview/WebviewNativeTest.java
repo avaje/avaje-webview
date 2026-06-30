@@ -19,6 +19,10 @@ class WebviewNativeTest {
     if (t != null) throw new RuntimeException(t);
   }
 
+  // -------------------------------------------------------------------------
+  // Lifecycle
+  // -------------------------------------------------------------------------
+
   @Test
   void startAndTerminate() {
     try (var w = Webview.create(false)) {
@@ -26,6 +30,43 @@ class WebviewNativeTest {
       w.run();
     }
   }
+
+  @Test
+  void closeIsIdempotent() {
+    try (var w = Webview.create(false)) {
+      w.dispatch(() -> {
+        w.close();
+        w.close();
+      });
+      w.run();
+    }
+  }
+
+  @Test
+  void closeFromBackgroundThread() {
+    try (var w = Webview.create(false)) {
+      // Signal from inside the event loop so the webview is fully running before we close.
+      w.bind("__ready__", req -> {
+        Thread.ofVirtual().start(w::close);
+        return "null";
+      });
+      w.setHTML("<h1>Hello World!</h1><script>window.__ready__();</script>");
+      w.run();
+    }
+  }
+
+  @Test
+  void nativeWindowPointerNonNull() {
+    try (var w = Webview.create(false)) {
+      assertNotEquals(0L, w.nativeWindowPointer().address());
+      w.dispatch(w::close);
+      w.run();
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Bindings — invocation
+  // -------------------------------------------------------------------------
 
   @Test
   void bindCallbackRuns() {
@@ -41,6 +82,97 @@ class WebviewNativeTest {
       w.run();
     }
     assertTrue(called.get(), "bind callback was never invoked");
+  }
+
+  @Test
+  void multipleBindingsAllInvoked() {
+    var callCount = new AtomicInteger(0);
+    var failure = new AtomicReference<Throwable>();
+
+    try (var w = Webview.create(false)) {
+      w.bind("a", req -> { callCount.incrementAndGet(); return "null"; });
+      w.bind("b", req -> { callCount.incrementAndGet(); return "null"; });
+      w.bind("c", req -> { callCount.incrementAndGet(); return "null"; });
+      w.bind("done", req -> {
+        try {
+          assertEquals(3, callCount.get());
+        } catch (Throwable t) {
+          failure.set(t);
+        } finally {
+          w.dispatch(w::close);
+        }
+        return "null";
+      });
+      w.setHTML("<script>Promise.all([window.a(), window.b(), window.c()]).then(() => window.done());</script>");
+      w.run();
+    }
+    rethrow(failure);
+    assertEquals(3, callCount.get());
+  }
+
+  @Test
+  void bindWithJsonParams() {
+    var failure = new AtomicReference<Throwable>();
+
+    try (var w = Webview.create(false)) {
+      w.bind("test", req -> {
+        try {
+          assertEquals("[\"hello\",42,true]", req);
+        } catch (Throwable t) {
+          failure.set(t);
+        } finally {
+          w.dispatch(w::close);
+        }
+        return "null";
+      });
+      w.setHTML("<script>window.test('hello', 42, true);</script>");
+      w.run();
+    }
+    rethrow(failure);
+  }
+
+  @Test
+  void bindReturnValueReachesJs() {
+    var failure = new AtomicReference<Throwable>();
+
+    try (var w = Webview.create(false)) {
+      w.bind("getData", req -> "\"hello world\"");
+      w.bind("check", req -> {
+        try {
+          assertEquals("[\"hello world\"]", req);
+        } catch (Throwable t) {
+          failure.set(t);
+        } finally {
+          w.dispatch(w::close);
+        }
+        return "null";
+      });
+      w.setHTML("<script>window.getData().then(r => window.check(r));</script>");
+      w.run();
+    }
+    rethrow(failure);
+  }
+
+  @Test
+  void bindReturnNullJsonResolvesWithNull() {
+    var failure = new AtomicReference<Throwable>();
+
+    try (var w = Webview.create(false)) {
+      w.bind("getNull", req -> "null");
+      w.bind("check", req -> {
+        try {
+          assertEquals("[null]", req);
+        } catch (Throwable t) {
+          failure.set(t);
+        } finally {
+          w.dispatch(w::close);
+        }
+        return "null";
+      });
+      w.setHTML("<script>window.getNull().then(r => window.check(r));</script>");
+      w.run();
+    }
+    rethrow(failure);
   }
 
   @Test
@@ -87,6 +219,10 @@ class WebviewNativeTest {
     }
     rethrow(failure);
   }
+
+  // -------------------------------------------------------------------------
+  // Bindings — return value contract
+  // -------------------------------------------------------------------------
 
   @Test
   void bindingReturnMustBeJson() {
@@ -153,5 +289,91 @@ class WebviewNativeTest {
       w.run();
     }
     rethrow(failure);
+  }
+
+  // -------------------------------------------------------------------------
+  // eval
+  // -------------------------------------------------------------------------
+
+  @Test
+  void evalInvokesBinding() {
+    var called = new AtomicBoolean(false);
+
+    try (var w = Webview.create(false)) {
+      w.bind("done", req -> {
+        called.set(true);
+        w.dispatch(w::close);
+        return "null";
+      });
+      w.bind("ready", req -> {
+        w.eval("window.done()");
+        return "null";
+      });
+      w.setHTML("<script>window.ready();</script>");
+      w.run();
+    }
+    assertTrue(called.get(), "eval did not invoke binding");
+  }
+
+  // -------------------------------------------------------------------------
+  // init script
+  // -------------------------------------------------------------------------
+
+  @Test
+  void setInitScriptRunsOnLoad() {
+    var failure = new AtomicReference<Throwable>();
+    var called = new AtomicBoolean(false);
+
+    try (var w = Webview.create(false)) {
+      w.setInitScript("window.__initRan = true;");
+      w.bind("check", req -> {
+        try {
+          assertEquals("[true]", req);
+          called.set(true);
+        } catch (Throwable t) {
+          failure.set(t);
+        } finally {
+          w.dispatch(w::close);
+        }
+        return "null";
+      });
+      w.setHTML("<script>window.check(window.__initRan === true);</script>");
+      w.run();
+    }
+    rethrow(failure);
+    assertTrue(called.get());
+  }
+
+  // -------------------------------------------------------------------------
+  // setHTML — content replacement
+  // -------------------------------------------------------------------------
+
+  @Test
+  void setHTMLCanBeCalledMultipleTimes() {
+    var callCount = new AtomicInteger(0);
+    var failure = new AtomicReference<Throwable>();
+
+    try (var w = Webview.create(false)) {
+      w.bind("loaded", req -> {
+        int count = callCount.incrementAndGet();
+        if (count == 1) {
+          assertEquals("[1]", req);
+          w.setHTML("<script>window.loaded(2);</script>");
+        } else {
+          try {
+            assertEquals("[2]", req);
+          } catch (Throwable t) {
+            failure.set(t);
+          } finally {
+            w.dispatch(w::close);
+          }
+        }
+        return "null";
+      });
+      w.setHTML("<script>window.loaded(1);</script>");
+      w.run();
+    }
+    rethrow(failure);
+    assertEquals(2, callCount.get());
   }
 }
