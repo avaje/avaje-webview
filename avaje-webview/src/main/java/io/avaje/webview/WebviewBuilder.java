@@ -11,7 +11,6 @@ final class WebviewBuilder implements Builder {
 
   private String title;
   private boolean enableDeveloperTools;
-  private MemorySegment windowPointer = MemorySegment.NULL;
   private int width = 800;
   private int height = 600;
   private String html;
@@ -33,7 +32,6 @@ final class WebviewBuilder implements Builder {
 
   @Override
   public WebviewBuilder windowPointer(MemorySegment windowPointer) {
-    this.windowPointer = windowPointer;
     return this;
   }
 

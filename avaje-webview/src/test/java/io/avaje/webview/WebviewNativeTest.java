@@ -1,17 +1,17 @@
 package io.avaje.webview;
 
-import io.avaje.webview.Webview;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 @Timeout(value = 30, unit = TimeUnit.SECONDS)
-class WebviewIntegrationTest {
+class WebviewNativeTest {
 
   private static void rethrow(AtomicReference<Throwable> failure) {
     Throwable t = failure.get();
@@ -25,6 +25,22 @@ class WebviewIntegrationTest {
       w.dispatch(w::close);
       w.run();
     }
+  }
+
+  @Test
+  void bindCallbackRuns() {
+    var called = new AtomicBoolean(false);
+
+    try (var w = Webview.create(false)) {
+      w.bind("ping", req -> {
+        called.set(true);
+        w.dispatch(w::close);
+        return "null";
+      });
+      w.setHTML("<script>window.ping();</script>");
+      w.run();
+    }
+    assertTrue(called.get(), "bind callback was never invoked");
   }
 
   @Test
@@ -76,7 +92,7 @@ class WebviewIntegrationTest {
   void bindingReturnMustBeJson() {
     var failure = new AtomicReference<Throwable>();
 
-    try (var w = Webview.create(false)) {
+    try (var w = Webview.create(true)) {
       w.bind("loadData", req -> "\"hello\"");
       w.bind("endTest", req -> {
         try {

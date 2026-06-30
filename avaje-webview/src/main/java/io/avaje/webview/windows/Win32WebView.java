@@ -123,6 +123,9 @@ public final class Win32WebView extends WebviewBase {
   private volatile int minW, minH, maxW, maxH;
 
   private final ConcurrentLinkedQueue<Runnable> pending = new ConcurrentLinkedQueue<>();
+  // Tracks how deep we are in nested pumps (nativeAddUserScript waits). When > 0,
+  // WM_APP messages must not drain pending — only COM completion callbacks are wanted.
+  private int nestedPumpDepth = 0;
 
   // Combined env+ctrl handler — one COM object for both, state-dispatched.
   // Mirrors reference webview2_com_handler which implements both interfaces.
@@ -151,11 +154,13 @@ public final class Win32WebView extends WebviewBase {
   public void close() {
     if (closed) return;
     closed = true;
+    dispatchImpl(this::doClose);
+  }
+
+  private void doClose() {
     if (controller != null) controller.close();
     if (hwnd != null && hwnd.address() != 0) {
-      dispatchImpl(() -> {
-        try { int _ = (int) Win32.DestroyWindow.invokeExact(hwnd); } catch (Throwable ignored) {}
-      });
+      try { int _ = (int) Win32.DestroyWindow.invokeExact(hwnd); } catch (Throwable ignored) {}
     }
   }
 
@@ -210,6 +215,7 @@ public final class Win32WebView extends WebviewBase {
 
   @Override
   protected void evalImpl(String js) {
+    if (closed) return;
     webView2.executeScript(js);
   }
 
@@ -229,11 +235,14 @@ public final class Win32WebView extends WebviewBase {
     MemorySegment handler = buildScriptAddedHandler();
     int hr = webView2.addScriptToExecuteOnDocumentCreated(js, handler);
     if (hr == 0) {
-      System.out.println("[wv2] nativeAddUserScript: entering nested pumpLoop, done=" + done[0]);
-      pumpLoopDebug(() -> done[0]);
-      System.out.println("[wv2] nativeAddUserScript: nested pumpLoop exited, done=" + done[0]);
+      nestedPumpDepth++;
+      try {
+        pumpLoopDebug(() -> done[0]);
+      } finally {
+        nestedPumpDepth--;
+      }
     } else {
-      scriptDoneCallbacks.poll(); // remove unused callback
+      scriptDoneCallbacks.poll();
       System.out.println("[wv2] nativeAddUserScript: addScriptOnDoc failed hr=0x" + Integer.toHexString(hr));
     }
   }
@@ -333,8 +342,13 @@ public final class Win32WebView extends WebviewBase {
   @SuppressWarnings("unused")
   public long msgWndProc(MemorySegment hWnd, int msg, long wParam, long lParam) {
     if (msg == Win32.WM_APP) {
-      Runnable r;
-      while ((r = pending.poll()) != null) r.run();
+      // Don't drain pending while inside a nested pump: those pumps only need COM
+      // completion callbacks, not general task dispatch. Tasks remain in pending and
+      // are processed when the outer pump sees a WM_APP with nestedPumpDepth == 0.
+      if (nestedPumpDepth == 0) {
+        Runnable r;
+        while ((r = pending.poll()) != null) r.run();
+      }
       return 0;
     }
     try { return (long) Win32.DefWindowProcW.invokeExact(hWnd, msg, wParam, lParam); }
