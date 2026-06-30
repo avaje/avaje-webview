@@ -13,6 +13,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static io.avaje.webview.macos.ObjC.*;
 
@@ -29,8 +30,10 @@ import static io.avaje.webview.macos.ObjC.*;
  * class_addMethod, wiring the method implementation to a Panama upcall stub that calls back into
  * onScriptMessage(). See createScriptHandler() for the full setup.
  *
- * <p>Must be created and {@link #run()} called on the first thread (pass {@code
- * -XstartOnFirstThread} to the JVM).
+ * <p>The first window must be created on the OS main thread (pass {@code -XstartOnFirstThread}).
+ * Additional windows may be created from any thread after the first window's {@link #run()} is
+ * active — they dispatch their init to the main thread via dispatch_async_f and block until done.
+ * Their {@link #run()} blocks on a {@link CountDownLatch} rather than calling [NSApplication run].
  */
 public final class CocoaWebView extends WebviewBase {
 
@@ -61,6 +64,9 @@ public final class CocoaWebView extends WebviewBase {
   // NSApplication is a process singleton; only init once across all CocoaWebView instances.
   private static volatile boolean nsAppInitDone = false;
   private static final AtomicInteger openWindows = new AtomicInteger(0);
+  // The thread that owns [NSApplication run]. Set on first window creation (must be main thread).
+  // Subsequent windows created from other threads dispatch their init to this thread and wait.
+  private static final AtomicReference<Thread> nsAppThread = new AtomicReference<>();
 
   static {
     SymbolLookup.libraryLookup(
@@ -97,14 +103,40 @@ public final class CocoaWebView extends WebviewBase {
   private final ConcurrentLinkedQueue<Runnable> pendingDispatches = new ConcurrentLinkedQueue<>();
 
   public CocoaWebView(boolean debug, int width, int height) {
-    if (!MacOSHelper.startedOnFirstThread()) {
-      throw new IllegalStateException(
-          "CocoaWebView must be created on the first thread. Pass -XstartOnFirstThread to the JVM.");
-    }
     openWindows.incrementAndGet();
     buildDrainStub();
     initNSApp();
-    initWindowAndWebView(debug, width, height);
+
+    Thread current = Thread.currentThread();
+    if (nsAppThread.compareAndSet(null, current)) {
+      // First window — must be on the OS main thread (requires -XstartOnFirstThread).
+      if (!MacOSHelper.startedOnFirstThread()) {
+        nsAppThread.set(null);
+        throw new IllegalStateException(
+            "First CocoaWebView must be created on the first thread. Pass -XstartOnFirstThread.");
+      }
+      initWindowAndWebView(debug, width, height);
+    } else if (current == nsAppThread.get()) {
+      // Additional window created from the main thread itself.
+      initWindowAndWebView(debug, width, height);
+    } else {
+      // Background thread — dispatch init to the main thread and block until done.
+      // dispatch_async_f always targets the OS main queue, which [NSApplication run] drains.
+      var initLatch = new CountDownLatch(1);
+      pendingDispatches.add(() -> {
+        initWindowAndWebView(debug, width, height);
+        initLatch.countDown();
+      });
+      try {
+        DISPATCH_ASYNC_F.invokeExact(DISPATCH_MAIN_QUEUE, MemorySegment.NULL, drainStub);
+        initLatch.await();
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new RuntimeException("Interrupted waiting for Cocoa window init", e);
+      } catch (Throwable t) {
+        throw new RuntimeException(t);
+      }
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -113,10 +145,19 @@ public final class CocoaWebView extends WebviewBase {
 
   @Override
   public void run() {
-    // [NSApplication run] starts the Cocoa event loop; blocks until [app stop:] is sent.
-    try (Arena a = Arena.ofConfined()) {
-      MemorySegment app = send0(ObjC.getClass(a, "NSApplication"), sel(a, "sharedApplication"));
-      sendVoid0(app, sel(a, "run"));
+    if (Thread.currentThread() == nsAppThread.get()) {
+      // Main thread — drive the Cocoa event loop; blocks until [app stop:] is sent.
+      try (Arena a = Arena.ofConfined()) {
+        MemorySegment app = send0(ObjC.getClass(a, "NSApplication"), sel(a, "sharedApplication"));
+        sendVoid0(app, sel(a, "run"));
+      }
+    } else {
+      // Non-main thread — block until this window's delegate fires onWindowWillClose.
+      try {
+        windowClosedLatch.await();
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
     }
   }
 
