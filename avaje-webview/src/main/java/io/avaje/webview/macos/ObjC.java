@@ -1,9 +1,17 @@
 package io.avaje.webview.macos;
 
-import java.lang.foreign.*;
-import java.lang.invoke.MethodHandle;
+import static java.lang.foreign.ValueLayout.ADDRESS;
+import static java.lang.foreign.ValueLayout.JAVA_BYTE;
+import static java.lang.foreign.ValueLayout.JAVA_DOUBLE;
+import static java.lang.foreign.ValueLayout.JAVA_INT;
+import static java.lang.foreign.ValueLayout.JAVA_LONG;
 
-import static java.lang.foreign.ValueLayout.*;
+import java.lang.foreign.Arena;
+import java.lang.foreign.FunctionDescriptor;
+import java.lang.foreign.Linker;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SymbolLookup;
+import java.lang.invoke.MethodHandle;
 
 /**
  * Panama FFI handles into the Objective-C runtime (libobjc.A.dylib).
@@ -178,7 +186,7 @@ final class ObjC {
   static MemorySegment getClass(Arena a, String name) {
     try {
       return (MemorySegment) GET_CLASS.invokeExact(a.allocateFrom(name));
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -189,7 +197,7 @@ final class ObjC {
   static MemorySegment sel(Arena a, String name) {
     try {
       return (MemorySegment) SEL_REGISTER_NAME.invokeExact(a.allocateFrom(name));
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -198,7 +206,7 @@ final class ObjC {
   static MemorySegment send0(MemorySegment recv, MemorySegment sel) {
     try {
       return (MemorySegment) MSG_SEND_0.invokeExact(recv, sel);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -207,7 +215,7 @@ final class ObjC {
   static MemorySegment send1(MemorySegment recv, MemorySegment sel, MemorySegment a1) {
     try {
       return (MemorySegment) MSG_SEND_1.invokeExact(recv, sel, a1);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -217,7 +225,7 @@ final class ObjC {
       MemorySegment recv, MemorySegment sel, MemorySegment a1, MemorySegment a2) {
     try {
       return (MemorySegment) MSG_SEND_2.invokeExact(recv, sel, a1, a2);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -227,7 +235,7 @@ final class ObjC {
       MemorySegment recv, MemorySegment sel, MemorySegment a1, MemorySegment a2, MemorySegment a3) {
     try {
       return (MemorySegment) MSG_SEND_3.invokeExact(recv, sel, a1, a2, a3);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -236,7 +244,7 @@ final class ObjC {
   static void sendVoid0(MemorySegment recv, MemorySegment sel) {
     try {
       MSG_SEND_VOID_0.invokeExact(recv, sel);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -245,7 +253,7 @@ final class ObjC {
   static void sendVoid1(MemorySegment recv, MemorySegment sel, MemorySegment a1) {
     try {
       MSG_SEND_VOID_1.invokeExact(recv, sel, a1);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -257,10 +265,10 @@ final class ObjC {
   static MemorySegment nsString(Arena a, String s) {
     if (s == null) return MemorySegment.NULL;
     try {
-      MemorySegment cls = getClass(a, "NSString");
-      MemorySegment sel = sel(a, "stringWithUTF8String:");
+      final var cls = getClass(a, "NSString");
+      final var sel = sel(a, "stringWithUTF8String:");
       return (MemorySegment) MSG_SEND_1.invokeExact(cls, sel, a.allocateFrom(s));
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -273,9 +281,9 @@ final class ObjC {
   static String fromNSString(Arena a, MemorySegment ns) {
     if (ns.equals(MemorySegment.NULL)) return "";
     try {
-      MemorySegment utf8Addr = send0(ns, sel(a, "UTF8String"));
+      final var utf8Addr = send0(ns, sel(a, "UTF8String"));
       return utf8Addr.reinterpret(Long.MAX_VALUE).getString(0);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }

@@ -1,21 +1,23 @@
 package io.avaje.webview;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 @Timeout(value = 30, unit = TimeUnit.SECONDS)
 class WebviewNativeTest {
 
   private static void rethrow(AtomicReference<Throwable> failure) {
-    Throwable t = failure.get();
-    if (t instanceof AssertionError ae) throw ae;
+    final var t = failure.get();
+    if (t instanceof final AssertionError ae) throw ae;
     if (t != null) throw new RuntimeException(t);
   }
 
@@ -46,7 +48,7 @@ class WebviewNativeTest {
   void closeFromBackgroundThread() {
     try (var w = Webview.create(false)) {
       // Signal from inside the event loop so the webview is fully running before we close.
-      w.bind("__ready__", req -> {
+      w.bind("__ready__", _ -> {
         Thread.ofVirtual().start(w::close);
         return "null";
       });
@@ -70,10 +72,10 @@ class WebviewNativeTest {
 
   @Test
   void bindCallbackRuns() {
-    var called = new AtomicBoolean(false);
+    final var called = new AtomicBoolean(false);
 
     try (var w = Webview.create(false)) {
-      w.bind("ping", req -> {
+      w.bind("ping", _ -> {
         called.set(true);
         w.dispatch(w::close);
         return "null";
@@ -86,17 +88,17 @@ class WebviewNativeTest {
 
   @Test
   void multipleBindingsAllInvoked() {
-    var callCount = new AtomicInteger(0);
-    var failure = new AtomicReference<Throwable>();
+    final var callCount = new AtomicInteger(0);
+    final var failure = new AtomicReference<Throwable>();
 
     try (var w = Webview.create(false)) {
-      w.bind("a", req -> { callCount.incrementAndGet(); return "null"; });
-      w.bind("b", req -> { callCount.incrementAndGet(); return "null"; });
-      w.bind("c", req -> { callCount.incrementAndGet(); return "null"; });
-      w.bind("done", req -> {
+      w.bind("a", _ -> { callCount.incrementAndGet(); return "null"; });
+      w.bind("b", _ -> { callCount.incrementAndGet(); return "null"; });
+      w.bind("c", _ -> { callCount.incrementAndGet(); return "null"; });
+      w.bind("done", _ -> {
         try {
           assertEquals(3, callCount.get());
-        } catch (Throwable t) {
+        } catch (final Throwable t) {
           failure.set(t);
         } finally {
           w.dispatch(w::close);
@@ -112,13 +114,13 @@ class WebviewNativeTest {
 
   @Test
   void bindWithJsonParams() {
-    var failure = new AtomicReference<Throwable>();
+    final var failure = new AtomicReference<Throwable>();
 
     try (var w = Webview.create(false)) {
       w.bind("test", req -> {
         try {
           assertEquals("[\"hello\",42,true]", req);
-        } catch (Throwable t) {
+        } catch (final Throwable t) {
           failure.set(t);
         } finally {
           w.dispatch(w::close);
@@ -133,14 +135,14 @@ class WebviewNativeTest {
 
   @Test
   void bindReturnValueReachesJs() {
-    var failure = new AtomicReference<Throwable>();
+    final var failure = new AtomicReference<Throwable>();
 
     try (var w = Webview.create(false)) {
-      w.bind("getData", req -> "\"hello world\"");
+      w.bind("getData", _ -> "\"hello world\"");
       w.bind("check", req -> {
         try {
           assertEquals("[\"hello world\"]", req);
-        } catch (Throwable t) {
+        } catch (final Throwable t) {
           failure.set(t);
         } finally {
           w.dispatch(w::close);
@@ -155,14 +157,14 @@ class WebviewNativeTest {
 
   @Test
   void bindReturnNullJsonResolvesWithNull() {
-    var failure = new AtomicReference<Throwable>();
+    final var failure = new AtomicReference<Throwable>();
 
     try (var w = Webview.create(false)) {
-      w.bind("getNull", req -> "null");
+      w.bind("getNull", _ -> "null");
       w.bind("check", req -> {
         try {
           assertEquals("[null]", req);
-        } catch (Throwable t) {
+        } catch (final Throwable t) {
           failure.set(t);
         } finally {
           w.dispatch(w::close);
@@ -177,8 +179,8 @@ class WebviewNativeTest {
 
   @Test
   void bindAndUnbind() {
-    var failure = new AtomicReference<Throwable>();
-    var counter = new AtomicInteger(0);
+    final var failure = new AtomicReference<Throwable>();
+    final var counter = new AtomicInteger(0);
 
     try (var w = Webview.create(false)) {
       w.bind("test", req -> {
@@ -186,7 +188,7 @@ class WebviewNativeTest {
           switch (req) {
             case "[0]" -> {
               assertEquals(0, counter.get());
-              w.bind("increment", args -> { counter.incrementAndGet(); return "null"; });
+              w.bind("increment", _ -> { counter.incrementAndGet(); return "null"; });
               w.eval("try{window.increment().then(r=>window.test(1)).catch(()=>window.test(1,1))}catch{window.test(1,1)}");
             }
             case "[1]" -> {
@@ -196,7 +198,7 @@ class WebviewNativeTest {
             }
             case "[2,1]" -> {
               assertEquals(1, counter.get());
-              w.bind("increment", args -> { counter.incrementAndGet(); return "null"; });
+              w.bind("increment", _ -> { counter.incrementAndGet(); return "null"; });
               w.eval("try{window.increment().then(r=>window.test(3)).catch(()=>window.test(3,1))}catch{window.test(3,1)}");
             }
             case "[3]" -> {
@@ -208,7 +210,7 @@ class WebviewNativeTest {
               w.dispatch(w::close);
             }
           }
-        } catch (Throwable t) {
+        } catch (final Throwable t) {
           failure.set(t);
           w.dispatch(w::close);
         }
@@ -226,16 +228,16 @@ class WebviewNativeTest {
 
   @Test
   void bindingReturnMustBeJson() {
-    var failure = new AtomicReference<Throwable>();
+    final var failure = new AtomicReference<Throwable>();
 
     try (var w = Webview.create(true)) {
-      w.bind("loadData", req -> "\"hello\"");
+      w.bind("loadData", _ -> "\"hello\"");
       w.bind("endTest", req -> {
         try {
           assertNotEquals("[1]", req, "Promise rejected — binding must return valid JSON");
           assertNotEquals("[2]", req, "Unexpected synchronous throw");
           assertEquals("[0]", req);
-        } catch (Throwable t) {
+        } catch (final Throwable t) {
           failure.set(t);
         } finally {
           w.dispatch(w::close);
@@ -259,17 +261,17 @@ class WebviewNativeTest {
 
   @Test
   void bindingReturnMustNotBeJs() {
-    var failure = new AtomicReference<Throwable>();
+    final var failure = new AtomicReference<Throwable>();
 
     try (var w = Webview.create(false)) {
-      w.bind("loadData", req ->
+      w.bind("loadData", _ ->
           "(()=>{document.body.innerHTML='gotcha';return 'hello';})()");
       w.bind("endTest", req -> {
         try {
           assertNotEquals("[0]", req, "Promise resolved — raw JS must be rejected");
           assertNotEquals("[2]", req, "Unexpected synchronous throw");
           assertEquals("[1]", req);
-        } catch (Throwable t) {
+        } catch (final Throwable t) {
           failure.set(t);
         } finally {
           w.dispatch(w::close);
@@ -297,15 +299,15 @@ class WebviewNativeTest {
 
   @Test
   void evalInvokesBinding() {
-    var called = new AtomicBoolean(false);
+    final var called = new AtomicBoolean(false);
 
     try (var w = Webview.create(false)) {
-      w.bind("done", req -> {
+      w.bind("done", _ -> {
         called.set(true);
         w.dispatch(w::close);
         return "null";
       });
-      w.bind("ready", req -> {
+      w.bind("ready", _ -> {
         w.eval("window.done()");
         return "null";
       });
@@ -321,8 +323,8 @@ class WebviewNativeTest {
 
   @Test
   void setInitScriptRunsOnLoad() {
-    var failure = new AtomicReference<Throwable>();
-    var called = new AtomicBoolean(false);
+    final var failure = new AtomicReference<Throwable>();
+    final var called = new AtomicBoolean(false);
 
     try (var w = Webview.create(false)) {
       w.setInitScript("window.__initRan = true;");
@@ -330,7 +332,7 @@ class WebviewNativeTest {
         try {
           assertEquals("[true]", req);
           called.set(true);
-        } catch (Throwable t) {
+        } catch (final Throwable t) {
           failure.set(t);
         } finally {
           w.dispatch(w::close);
@@ -350,19 +352,19 @@ class WebviewNativeTest {
 
   @Test
   void setHTMLCanBeCalledMultipleTimes() {
-    var callCount = new AtomicInteger(0);
-    var failure = new AtomicReference<Throwable>();
+    final var callCount = new AtomicInteger(0);
+    final var failure = new AtomicReference<Throwable>();
 
     try (var w = Webview.create(false)) {
       w.bind("loaded", req -> {
-        int count = callCount.incrementAndGet();
+        final var count = callCount.incrementAndGet();
         if (count == 1) {
           assertEquals("[1]", req);
           w.setHTML("<script>window.loaded(2);</script>");
         } else {
           try {
             assertEquals("[2]", req);
-          } catch (Throwable t) {
+          } catch (final Throwable t) {
             failure.set(t);
           } finally {
             w.dispatch(w::close);
@@ -389,25 +391,25 @@ class WebviewNativeTest {
    */
   @Test
   void multipleWindowsBothBindingsFire() throws InterruptedException {
-    var w1Pinged = new AtomicBoolean(false);
-    var w2Pinged = new AtomicBoolean(false);
-    var failure = new AtomicReference<Throwable>();
-    var w2Thread = new AtomicReference<Thread>();
+    final var w1Pinged = new AtomicBoolean(false);
+    final var w2Pinged = new AtomicBoolean(false);
+    final var failure = new AtomicReference<Throwable>();
+    final var w2Thread = new AtomicReference<Thread>();
 
     try (var w1 = Webview.create(false)) {
-      w1.bind("ping1", req -> {
+      w1.bind("ping1", _ -> {
         w1Pinged.set(true);
         // Spawn a platform thread (not virtual) so GTK thread-identity checks work correctly.
-        Thread t = Thread.ofPlatform().start(() -> {
+        final var t = Thread.ofPlatform().start(() -> {
           try (var w2 = Webview.create(false)) {
-            w2.bind("ping2", req2 -> {
+            w2.bind("ping2", _ -> {
               try {
                 w2Pinged.set(true);
                 // Close w2 first (openWindows 2→1), then w1 (1→0 stops the GTK loop).
                 // Both dispatch() calls run immediately since we are on the GTK thread here.
                 w2.dispatch(w2::close);
                 w1.dispatch(w1::close);
-              } catch (Throwable t2) {
+              } catch (final Throwable t2) {
                 failure.set(t2);
                 w1.dispatch(w1::close);
               }
@@ -415,7 +417,7 @@ class WebviewNativeTest {
             });
             w2.setHTML("<script>window.ping2();</script>");
             w2.run(); // blocks on windowClosedLatch until w2 is closed above
-          } catch (Throwable t2) {
+          } catch (final Throwable t2) {
             failure.set(t2);
             w1.dispatch(w1::close);
           }
@@ -428,7 +430,7 @@ class WebviewNativeTest {
       w1.run();
 
       // Join the w2 thread so assertions see its writes.
-      Thread t = w2Thread.get();
+      final var t = w2Thread.get();
       if (t != null) t.join(5_000);
     }
 

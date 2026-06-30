@@ -1,9 +1,33 @@
 package io.avaje.webview.macos;
 
-import io.avaje.webview.Webview;
-import io.avaje.webview.WebviewBase;
+import static io.avaje.webview.macos.ObjC.ALLOC_CLASS_PAIR;
+import static io.avaje.webview.macos.ObjC.CLASS_ADD_METHOD;
+import static io.avaje.webview.macos.ObjC.CLASS_CREATE_INSTANCE;
+import static io.avaje.webview.macos.ObjC.MSG_SEND_0;
+import static io.avaje.webview.macos.ObjC.MSG_SEND_ADDR;
+import static io.avaje.webview.macos.ObjC.MSG_SEND_EVAL_JS;
+import static io.avaje.webview.macos.ObjC.MSG_SEND_NSWINDOW_INIT;
+import static io.avaje.webview.macos.ObjC.MSG_SEND_SET_CONTENT_SIZE;
+import static io.avaje.webview.macos.ObjC.MSG_SEND_SET_SIZE;
+import static io.avaje.webview.macos.ObjC.MSG_SEND_SET_TITLE;
+import static io.avaje.webview.macos.ObjC.MSG_SEND_WKUSERSCRIPT_INIT;
+import static io.avaje.webview.macos.ObjC.MSG_SEND_WKWEBVIEW_INIT;
+import static io.avaje.webview.macos.ObjC.REGISTER_CLASS_PAIR;
+import static io.avaje.webview.macos.ObjC.fromNSString;
+import static io.avaje.webview.macos.ObjC.nsString;
+import static io.avaje.webview.macos.ObjC.sel;
+import static io.avaje.webview.macos.ObjC.send0;
+import static io.avaje.webview.macos.ObjC.send1;
+import static io.avaje.webview.macos.ObjC.send2;
+import static io.avaje.webview.macos.ObjC.sendVoid0;
+import static io.avaje.webview.macos.ObjC.sendVoid1;
 
-import java.lang.foreign.*;
+import java.lang.foreign.Arena;
+import java.lang.foreign.FunctionDescriptor;
+import java.lang.foreign.Linker;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SymbolLookup;
+import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
@@ -15,7 +39,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static io.avaje.webview.macos.ObjC.*;
+import io.avaje.webview.Webview;
+import io.avaje.webview.WebviewBase;
 
 /**
  * macOS Cocoa + WKWebView implementation via Objective-C runtime Panama FFI.
@@ -72,8 +97,8 @@ public final class CocoaWebView extends WebviewBase {
     SymbolLookup.libraryLookup(
         "/System/Library/Frameworks/WebKit.framework/WebKit", Arena.global());
 
-    var linker = Linker.nativeLinker();
-    var lookup = SymbolLookup.loaderLookup().or(linker.defaultLookup());
+    final var linker = Linker.nativeLinker();
+    final var lookup = SymbolLookup.loaderLookup().or(linker.defaultLookup());
     DISPATCH_MAIN_QUEUE =
         lookup
             .find("_dispatch_main_q")
@@ -107,7 +132,7 @@ public final class CocoaWebView extends WebviewBase {
     buildDrainStub();
     initNSApp();
 
-    Thread current = Thread.currentThread();
+    final var current = Thread.currentThread();
     if (nsAppThread.compareAndSet(null, current)) {
       // First window — must be on the OS main thread (requires -XstartOnFirstThread).
       if (!MacOSHelper.startedOnFirstThread()) {
@@ -122,7 +147,7 @@ public final class CocoaWebView extends WebviewBase {
     } else {
       // Background thread — dispatch init to the main thread and block until done.
       // dispatch_async_f always targets the OS main queue, which [NSApplication run] drains.
-      var initLatch = new CountDownLatch(1);
+      final var initLatch = new CountDownLatch(1);
       pendingDispatches.add(() -> {
         initWindowAndWebView(debug, width, height);
         initLatch.countDown();
@@ -130,10 +155,10 @@ public final class CocoaWebView extends WebviewBase {
       try {
         DISPATCH_ASYNC_F.invokeExact(DISPATCH_MAIN_QUEUE, MemorySegment.NULL, drainStub);
         initLatch.await();
-      } catch (InterruptedException e) {
+      } catch (final InterruptedException e) {
         Thread.currentThread().interrupt();
         throw new RuntimeException("Interrupted waiting for Cocoa window init", e);
-      } catch (Throwable t) {
+      } catch (final Throwable t) {
         throw new RuntimeException(t);
       }
     }
@@ -147,15 +172,15 @@ public final class CocoaWebView extends WebviewBase {
   public void run() {
     if (Thread.currentThread() == nsAppThread.get()) {
       // Main thread — drive the Cocoa event loop; blocks until [app stop:] is sent.
-      try (Arena a = Arena.ofConfined()) {
-        MemorySegment app = send0(ObjC.getClass(a, "NSApplication"), sel(a, "sharedApplication"));
+      try (var a = Arena.ofConfined()) {
+        final var app = send0(ObjC.getClass(a, "NSApplication"), sel(a, "sharedApplication"));
         sendVoid0(app, sel(a, "run"));
       }
     } else {
       // Non-main thread — block until this window's delegate fires onWindowWillClose.
       try {
         windowClosedLatch.await();
-      } catch (InterruptedException e) {
+      } catch (final InterruptedException e) {
         Thread.currentThread().interrupt();
       }
     }
@@ -168,7 +193,7 @@ public final class CocoaWebView extends WebviewBase {
     // Dispatch [nsWindow close] to the main thread. The window delegate's windowWillClose:
     // fires synchronously during [close], and onWindowWillClose() handles all shutdown logic.
     dispatchImpl(() -> {
-      try (Arena a = Arena.ofConfined()) {
+      try (var a = Arena.ofConfined()) {
         sendVoid0(nsWindow, sel(a, "close"));
       }
     });
@@ -190,11 +215,11 @@ public final class CocoaWebView extends WebviewBase {
   @Override
   protected void navigateImpl(String url) {
     if (closed) return;
-    try (Arena a = Arena.ofConfined()) {
+    try (var a = Arena.ofConfined()) {
       // NSURL → NSURLRequest → [WKWebView loadRequest:]
-      MemorySegment nsUrl =
+      final var nsUrl =
           send1(ObjC.getClass(a, "NSURL"), sel(a, "URLWithString:"), nsString(a, url));
-      MemorySegment request =
+      final var request =
           send1(ObjC.getClass(a, "NSURLRequest"), sel(a, "requestWithURL:"), nsUrl);
       sendVoid1(wkWebView, sel(a, "loadRequest:"), request);
     }
@@ -203,9 +228,9 @@ public final class CocoaWebView extends WebviewBase {
   @Override
   protected void setTitleImpl(String title) {
     if (closed) return;
-    try (Arena a = Arena.ofConfined()) {
+    try (var a = Arena.ofConfined()) {
       MSG_SEND_SET_TITLE.invokeExact(nsWindow, sel(a, "setTitle:"), nsString(a, title));
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -213,11 +238,11 @@ public final class CocoaWebView extends WebviewBase {
   @Override
   protected void setSizeImpl(int width, int height) {
     if (closed) return;
-    try (Arena a = Arena.ofConfined()) {
+    try (var a = Arena.ofConfined()) {
       // setContentSize: takes NSSize (two doubles) — hence the specialised handle
       MSG_SEND_SET_CONTENT_SIZE.invokeExact(
           nsWindow, sel(a, "setContentSize:"), (double) width, (double) height);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -225,10 +250,10 @@ public final class CocoaWebView extends WebviewBase {
   @Override
   protected void setMinSizeImpl(int width, int height) {
     if (closed) return;
-    try (Arena a = Arena.ofConfined()) {
+    try (var a = Arena.ofConfined()) {
       MSG_SEND_SET_SIZE.invokeExact(
           nsWindow, sel(a, "setMinSize:"), (double) width, (double) height);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -236,10 +261,10 @@ public final class CocoaWebView extends WebviewBase {
   @Override
   protected void setMaxSizeImpl(int width, int height) {
     if (closed) return;
-    try (Arena a = Arena.ofConfined()) {
+    try (var a = Arena.ofConfined()) {
       MSG_SEND_SET_SIZE.invokeExact(
           nsWindow, sel(a, "setMaxSize:"), (double) width, (double) height);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -247,12 +272,12 @@ public final class CocoaWebView extends WebviewBase {
   @Override
   protected void setFixedSizeImpl(int width, int height) {
     if (closed) return;
-    try (Arena a = Arena.ofConfined()) {
+    try (var a = Arena.ofConfined()) {
       MSG_SEND_SET_CONTENT_SIZE.invokeExact(
           nsWindow, sel(a, "setContentSize:"), (double) width, (double) height);
       // Read the current styleMask (returned as address-sized int), strip NS_RESIZABLE, write back.
-      MemorySegment styleSel = sel(a, "styleMask");
-      long mask = ((MemorySegment) MSG_SEND_0.invokeExact(nsWindow, styleSel)).address();
+      final var styleSel = sel(a, "styleMask");
+      var mask = ((MemorySegment) MSG_SEND_0.invokeExact(nsWindow, styleSel)).address();
       mask &= ~NS_RESIZABLE;
       Linker.nativeLinker()
           .downcallHandle(
@@ -260,7 +285,7 @@ public final class CocoaWebView extends WebviewBase {
               FunctionDescriptor.ofVoid(
                   ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG))
           .invokeExact(nsWindow, sel(a, "setStyleMask:"), mask);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -268,7 +293,7 @@ public final class CocoaWebView extends WebviewBase {
   @Override
   protected void setHtmlImpl(String html) {
     if (closed) return;
-    try (Arena a = Arena.ofConfined()) {
+    try (var a = Arena.ofConfined()) {
       send2(wkWebView, sel(a, "loadHTMLString:baseURL:"), nsString(a, html), MemorySegment.NULL);
     }
   }
@@ -276,14 +301,14 @@ public final class CocoaWebView extends WebviewBase {
   @Override
   protected void evalImpl(String js) {
     if (closed) return;
-    try (Arena a = Arena.ofConfined()) {
+    try (var a = Arena.ofConfined()) {
       // NULL completionHandler = fire-and-forget; we don't need the return value.
       MSG_SEND_EVAL_JS.invokeExact(
           wkWebView,
           sel(a, "evaluateJavaScript:completionHandler:"),
           nsString(a, js),
           MemorySegment.NULL);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -294,7 +319,7 @@ public final class CocoaWebView extends WebviewBase {
     pendingDispatches.add(r);
     try {
       DISPATCH_ASYNC_F.invokeExact(DISPATCH_MAIN_QUEUE, MemorySegment.NULL, drainStub);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -302,9 +327,9 @@ public final class CocoaWebView extends WebviewBase {
   @Override
   protected void nativeAddUserScript(String js) {
     if (closed) return;
-    try (Arena a = Arena.ofConfined()) {
-      MemorySegment WKUserScript = ObjC.getClass(a, "WKUserScript");
-      MemorySegment script =
+    try (var a = Arena.ofConfined()) {
+      final var WKUserScript = ObjC.getClass(a, "WKUserScript");
+      final var script =
           (MemorySegment)
               MSG_SEND_WKUSERSCRIPT_INIT.invokeExact(
                   send0(WKUserScript, sel(a, "alloc")),
@@ -313,7 +338,7 @@ public final class CocoaWebView extends WebviewBase {
                   WK_INJECT_AT_DOCUMENT_START,
                   1 /* mainFrameOnly = YES */);
       sendVoid1(ucController, sel(a, "addUserScript:"), script);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -321,7 +346,7 @@ public final class CocoaWebView extends WebviewBase {
   @Override
   protected void nativeRemoveAllUserScripts() {
     if (closed) return;
-    try (Arena a = Arena.ofConfined()) {
+    try (var a = Arena.ofConfined()) {
       sendVoid0(ucController, sel(a, "removeAllUserScripts"));
     }
   }
@@ -356,7 +381,7 @@ public final class CocoaWebView extends WebviewBase {
   public void setIcon(URI uri) {
     try {
       setIcon(Path.of(uri));
-    } catch (Exception ignored) {
+    } catch (final Exception ignored) {
     }
   }
 
@@ -384,9 +409,9 @@ public final class CocoaWebView extends WebviewBase {
   @SuppressWarnings("unused")
   public void onScriptMessage(
       MemorySegment self, MemorySegment cmd, MemorySegment controller, MemorySegment message) {
-    try (Arena a = Arena.ofConfined()) {
-      MemorySegment body = send0(message, sel(a, "body"));
-      String json = fromNSString(a, body);
+    try (var a = Arena.ofConfined()) {
+      final var body = send0(message, sel(a, "body"));
+      final var json = fromNSString(a, body);
       onMessage(json);
     }
   }
@@ -405,8 +430,8 @@ public final class CocoaWebView extends WebviewBase {
     if (!windowClosed.compareAndSet(false, true)) return;
     closed = true;
     if (openWindows.decrementAndGet() == 0) {
-      try (Arena a = Arena.ofConfined()) {
-        MemorySegment app = send0(ObjC.getClass(a, "NSApplication"), sel(a, "sharedApplication"));
+      try (var a = Arena.ofConfined()) {
+        final var app = send0(ObjC.getClass(a, "NSApplication"), sel(a, "sharedApplication"));
         sendVoid1(app, sel(a, "stop:"), MemorySegment.NULL);
       }
     }
@@ -423,7 +448,7 @@ public final class CocoaWebView extends WebviewBase {
    */
   private void buildDrainStub() {
     try {
-      var mh =
+      final var mh =
           MethodHandles.lookup()
               .findVirtual(
                   CocoaWebView.class,
@@ -445,9 +470,9 @@ public final class CocoaWebView extends WebviewBase {
    */
   private static void initNSApp() {
     if (nsAppInitDone) return;
-    try (Arena a = Arena.ofConfined()) {
-      MemorySegment NSApp = ObjC.getClass(a, "NSApplication");
-      MemorySegment app = send0(NSApp, sel(a, "sharedApplication"));
+    try (var a = Arena.ofConfined()) {
+      final var NSApp = ObjC.getClass(a, "NSApplication");
+      final var app = send0(NSApp, sel(a, "sharedApplication"));
       // setActivationPolicy: takes NSInteger — needs a custom descriptor (not in ObjC presets)
       Linker.nativeLinker()
           .downcallHandle(
@@ -456,7 +481,7 @@ public final class CocoaWebView extends WebviewBase {
                   ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG))
           .invokeExact(app, sel(a, "setActivationPolicy:"), 0L); // 0 = Regular
       MacOSHelper.createMenus();
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
     nsAppInitDone = true;
@@ -469,15 +494,15 @@ public final class CocoaWebView extends WebviewBase {
    * *before* WKWebView is created so it's present from the first load.
    */
   private void initWindowAndWebView(boolean debug, int width, int height) {
-    try (Arena a = Arena.ofConfined()) {
+    try (var a = Arena.ofConfined()) {
       // Configuration object that WKWebView reads at creation time (can't change it after).
-      MemorySegment WKConfig = ObjC.getClass(a, "WKWebViewConfiguration");
-      MemorySegment config = send0(send0(WKConfig, sel(a, "alloc")), sel(a, "init"));
+      final var WKConfig = ObjC.getClass(a, "WKWebViewConfiguration");
+      final var config = send0(send0(WKConfig, sel(a, "alloc")), sel(a, "init"));
 
       ucController = send0(config, sel(a, "userContentController"));
 
       // Register our synthetic WKScriptMessageHandler so JS can call postMessage().
-      MemorySegment handler = createScriptHandler(a);
+      final var handler = createScriptHandler(a);
       send2(
           ucController,
           sel(a, "addScriptMessageHandler:name:"),
@@ -486,8 +511,8 @@ public final class CocoaWebView extends WebviewBase {
 
       if (debug) {
         // WKPreferences.developerExtrasEnabled — KVC setValue:forKey: works on all macOS versions.
-        MemorySegment prefs = send0(config, sel(a, "preferences"));
-        MemorySegment nsYes =
+        final var prefs = send0(config, sel(a, "preferences"));
+        final var nsYes =
             (MemorySegment)
                 Linker.nativeLinker()
                     .downcallHandle(
@@ -518,8 +543,8 @@ public final class CocoaWebView extends WebviewBase {
       if (debug) {
         // WKWebView.inspectable = YES — macOS 13.3+ (Sonoma). Guard with respondsToSelector: to
         // avoid crashing on older macOS where the selector doesn't exist.
-        MemorySegment inspSel = sel(a, "setInspectable:");
-        byte responds =
+        final var inspSel = sel(a, "setInspectable:");
+        final var responds =
             (byte)
                 Linker.nativeLinker()
                     .downcallHandle(
@@ -557,7 +582,7 @@ public final class CocoaWebView extends WebviewBase {
 
       // activateIgnoringOtherApps:YES is needed when launching from a terminal;
       // without it the window appears but the app doesn't come to the foreground.
-      MemorySegment app = send0(ObjC.getClass(a, "NSApplication"), sel(a, "sharedApplication"));
+      final var app = send0(ObjC.getClass(a, "NSApplication"), sel(a, "sharedApplication"));
       Linker.nativeLinker()
           .downcallHandle(
               MSG_SEND_ADDR,
@@ -566,7 +591,7 @@ public final class CocoaWebView extends WebviewBase {
           .invokeExact(app, sel(a, "activateIgnoringOtherApps:"), 1);
 
       setupJsBridge(POST_FN);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -579,12 +604,12 @@ public final class CocoaWebView extends WebviewBase {
    */
   private MemorySegment createWindowDelegate(Arena a) {
     try {
-      MemorySegment superCls = ObjC.getClass(a, "NSObject");
-      String clsName = "JavaWebviewDelegate_" + System.identityHashCode(this);
-      MemorySegment cls =
+      final var superCls = ObjC.getClass(a, "NSObject");
+      final var clsName = "JavaWebviewDelegate_" + System.identityHashCode(this);
+      final var cls =
           (MemorySegment) ALLOC_CLASS_PAIR.invokeExact(superCls, a.allocateFrom(clsName), 0L);
 
-      var mh =
+      final var mh =
           MethodHandles.lookup()
               .findVirtual(
                   CocoaWebView.class,
@@ -592,7 +617,7 @@ public final class CocoaWebView extends WebviewBase {
                   MethodType.methodType(
                       void.class, MemorySegment.class, MemorySegment.class, MemorySegment.class))
               .bindTo(this);
-      MemorySegment stub =
+      final var stub =
           Linker.nativeLinker()
               .upcallStub(
                   mh,
@@ -602,14 +627,14 @@ public final class CocoaWebView extends WebviewBase {
                       ValueLayout.ADDRESS), // NSNotification*
                   callbackArena);
 
-      byte _ =
+      final var _ =
           (byte)
               CLASS_ADD_METHOD.invokeExact(
                   cls, sel(a, "windowWillClose:"), stub, a.allocateFrom("v@:@"));
 
       REGISTER_CLASS_PAIR.invokeExact(cls);
       return (MemorySegment) CLASS_CREATE_INSTANCE.invokeExact(cls, 0L);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -628,13 +653,13 @@ public final class CocoaWebView extends WebviewBase {
    */
   private MemorySegment createScriptHandler(Arena a) {
     try {
-      MemorySegment superCls = ObjC.getClass(a, "NSObject");
-      String clsName = "JavaWebviewHandler_" + System.identityHashCode(this);
-      MemorySegment cls =
+      final var superCls = ObjC.getClass(a, "NSObject");
+      final var clsName = "JavaWebviewHandler_" + System.identityHashCode(this);
+      final var cls =
           (MemorySegment) ALLOC_CLASS_PAIR.invokeExact(superCls, a.allocateFrom(clsName), 0L);
 
       // Bind the upcall stub to `this` so callbacks hit the right CocoaWebView instance.
-      var mh =
+      final var mh =
           MethodHandles.lookup()
               .findVirtual(
                   CocoaWebView.class,
@@ -646,7 +671,7 @@ public final class CocoaWebView extends WebviewBase {
                       MemorySegment.class,
                       MemorySegment.class))
               .bindTo(this);
-      MemorySegment stub =
+      final var stub =
           Linker.nativeLinker()
               .upcallStub(
                   mh,
@@ -658,7 +683,7 @@ public final class CocoaWebView extends WebviewBase {
                   callbackArena);
 
       // "v@:@@" — ObjC type encoding for (void)(id, SEL, id, id)
-      byte _ =
+      final var _ =
           (byte)
               CLASS_ADD_METHOD.invokeExact(
                   cls,
@@ -668,7 +693,7 @@ public final class CocoaWebView extends WebviewBase {
 
       REGISTER_CLASS_PAIR.invokeExact(cls);
       return (MemorySegment) CLASS_CREATE_INSTANCE.invokeExact(cls, 0L);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }

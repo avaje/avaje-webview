@@ -1,9 +1,20 @@
 package io.avaje.webview.macos;
 
-import java.lang.foreign.*;
-import java.nio.file.Path;
+import static io.avaje.webview.macos.ObjC.fromNSString;
+import static io.avaje.webview.macos.ObjC.nsString;
+import static io.avaje.webview.macos.ObjC.sel;
+import static io.avaje.webview.macos.ObjC.send0;
+import static io.avaje.webview.macos.ObjC.send1;
+import static io.avaje.webview.macos.ObjC.send3;
+import static io.avaje.webview.macos.ObjC.sendVoid0;
+import static io.avaje.webview.macos.ObjC.sendVoid1;
 
-import static io.avaje.webview.macos.ObjC.*;
+import java.lang.foreign.Arena;
+import java.lang.foreign.FunctionDescriptor;
+import java.lang.foreign.Linker;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.nio.file.Path;
 
 final class MacOSHelper {
 
@@ -12,8 +23,8 @@ final class MacOSHelper {
   static boolean startedOnFirstThread() {
     if (System.getProperty("org.graalvm.nativeimage.imagecode") != null) return true;
     try {
-      var linker = Linker.nativeLinker();
-      int pid =
+      final var linker = Linker.nativeLinker();
+      final var pid =
           (int)
               linker
                   .downcallHandle(
@@ -21,37 +32,37 @@ final class MacOSHelper {
                       FunctionDescriptor.of(ValueLayout.JAVA_INT))
                   .invokeExact();
       return "1".equals(System.getenv("JAVA_STARTED_ON_FIRST_THREAD_" + pid));
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       return false;
     }
   }
 
   static void setWindowAppearance(MemorySegment nsWindow, boolean shouldBeDark) {
-    try (Arena a = Arena.ofConfined()) {
-      MemorySegment cls = ObjC.getClass(a, "NSAppearance");
-      String name = shouldBeDark ? "NSAppearanceNameDarkAqua" : "NSAppearanceNameAqua";
-      MemorySegment appearance = send1(cls, sel(a, "appearanceNamed:"), nsString(a, name));
+    try (var a = Arena.ofConfined()) {
+      final var cls = ObjC.getClass(a, "NSAppearance");
+      final var name = shouldBeDark ? "NSAppearanceNameDarkAqua" : "NSAppearanceNameAqua";
+      final var appearance = send1(cls, sel(a, "appearanceNamed:"), nsString(a, name));
       sendVoid1(nsWindow, sel(a, "setAppearance:"), appearance);
     }
   }
 
   static void fullscreen(MemorySegment nsWindow) {
-    try (Arena a = Arena.ofConfined()) {
+    try (var a = Arena.ofConfined()) {
       sendVoid1(nsWindow, sel(a, "toggleFullScreen:"), MemorySegment.NULL);
     }
   }
 
   static void maximize(MemorySegment nsWindow) {
-    try (Arena a = Arena.ofConfined()) {
+    try (var a = Arena.ofConfined()) {
       sendVoid1(nsWindow, sel(a, "zoom:"), MemorySegment.NULL);
     }
   }
 
   static void setIcon(Path iconPath) {
-    try (Arena a = Arena.ofConfined()) {
-      MemorySegment app = send0(ObjC.getClass(a, "NSApplication"), sel(a, "sharedApplication"));
-      MemorySegment NSImage = ObjC.getClass(a, "NSImage");
-      MemorySegment image =
+    try (var a = Arena.ofConfined()) {
+      final var app = send0(ObjC.getClass(a, "NSApplication"), sel(a, "sharedApplication"));
+      final var NSImage = ObjC.getClass(a, "NSImage");
+      final var image =
           send1(
               send0(NSImage, sel(a, "alloc")),
               sel(a, "initWithContentsOfFile:"),
@@ -63,28 +74,28 @@ final class MacOSHelper {
   }
 
   static void createMenus() {
-    try (Arena a = Arena.ofConfined()) {
-      MemorySegment NSMenu = ObjC.getClass(a, "NSMenu");
-      MemorySegment NSMenuItem = ObjC.getClass(a, "NSMenuItem");
-      MemorySegment NSApp = ObjC.getClass(a, "NSApplication");
-      MemorySegment NSPI = ObjC.getClass(a, "NSProcessInfo");
+    try (var a = Arena.ofConfined()) {
+      final var NSMenu = ObjC.getClass(a, "NSMenu");
+      final var NSMenuItem = ObjC.getClass(a, "NSMenuItem");
+      final var NSApp = ObjC.getClass(a, "NSApplication");
+      final var NSPI = ObjC.getClass(a, "NSProcessInfo");
 
-      MemorySegment alloc = sel(a, "alloc");
-      MemorySegment autorelease = sel(a, "autorelease");
-      MemorySegment initTitle = sel(a, "initWithTitle:");
-      MemorySegment addItem = sel(a, "addItem:");
-      MemorySegment setSubmenu = sel(a, "setSubmenu:");
-      MemorySegment initItemSel = sel(a, "initWithTitle:action:keyEquivalent:");
+      final var alloc = sel(a, "alloc");
+      final var autorelease = sel(a, "autorelease");
+      final var initTitle = sel(a, "initWithTitle:");
+      final var addItem = sel(a, "addItem:");
+      final var setSubmenu = sel(a, "setSubmenu:");
+      final var initItemSel = sel(a, "initWithTitle:action:keyEquivalent:");
 
-      MemorySegment menuBar = send1(send0(NSMenu, alloc), initTitle, nsString(a, ""));
+      final var menuBar = send1(send0(NSMenu, alloc), initTitle, nsString(a, ""));
       sendVoid0(menuBar, autorelease);
 
-      MemorySegment processInfo = send0(NSPI, sel(a, "processInfo"));
-      MemorySegment appNameNS = send0(processInfo, sel(a, "processName"));
-      String appName = fromNSString(a, appNameNS);
+      final var processInfo = send0(NSPI, sel(a, "processInfo"));
+      final var appNameNS = send0(processInfo, sel(a, "processName"));
+      final var appName = fromNSString(a, appNameNS);
 
       // App menu
-      MemorySegment appItem =
+      final var appItem =
           send3(
               send0(NSMenuItem, alloc),
               initItemSel,
@@ -92,9 +103,9 @@ final class MacOSHelper {
               MemorySegment.NULL,
               nsString(a, ""));
       send1(menuBar, addItem, appItem);
-      MemorySegment appMenu = send1(send0(NSMenu, alloc), initTitle, appNameNS);
+      final var appMenu = send1(send0(NSMenu, alloc), initTitle, appNameNS);
       sendVoid0(appMenu, autorelease);
-      MemorySegment quitItem =
+      final var quitItem =
           send3(
               send0(NSMenuItem, alloc),
               initItemSel,
@@ -105,10 +116,10 @@ final class MacOSHelper {
       sendVoid1(appItem, setSubmenu, appMenu);
 
       // Edit menu
-      MemorySegment editNS = nsString(a, "Edit");
-      MemorySegment editItem =
+      final var editNS = nsString(a, "Edit");
+      final var editItem =
           send3(send0(NSMenuItem, alloc), initItemSel, editNS, MemorySegment.NULL, nsString(a, ""));
-      MemorySegment editMenu = send1(send0(NSMenu, alloc), initTitle, editNS);
+      final var editMenu = send1(send0(NSMenu, alloc), initTitle, editNS);
       sendVoid0(editMenu, autorelease);
       sendVoid1(editItem, setSubmenu, editMenu);
       send1(menuBar, addItem, editItem);
@@ -118,7 +129,7 @@ final class MacOSHelper {
       send1(editMenu, addItem, send0(NSMenuItem, sel(a, "separatorItem")));
       addEditItem(a, editMenu, NSMenuItem, initItemSel, addItem, "Select All", "selectAll:", "a");
 
-      MemorySegment sharedApp = send0(NSApp, sel(a, "sharedApplication"));
+      final var sharedApp = send0(NSApp, sel(a, "sharedApplication"));
       sendVoid1(sharedApp, sel(a, "setMainMenu:"), menuBar);
     }
   }
@@ -132,7 +143,7 @@ final class MacOSHelper {
       String title,
       String action,
       String key) {
-    MemorySegment item =
+    final var item =
         send3(
             send0(NSMenuItem, sel(a, "alloc")),
             initItemSel,

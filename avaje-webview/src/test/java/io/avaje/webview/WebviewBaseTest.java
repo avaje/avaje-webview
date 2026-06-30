@@ -116,7 +116,15 @@ class WebviewBaseTest {
     // chars > 127 become unicode escapes — unlike C++ which leaves UTF-8 bytes as-is
     // use concatenation to avoid Java unicode-escape processing in string literals
     assertEquals("\\" + "u2328", WebviewUtil.jsonEscape("⌨"));
-    String expected = "\\" + "u30d5" + "\\" + "u30fc" + "\\" + "u30d0" + "\\" + "u30fc";
+    final var expected = """
+  	\\\
+  	u30d5\
+  	\\\
+  	u30fc\
+  	\\\
+  	u30d0\
+  	\\\
+  	u30fc""";
     assertEquals(expected, WebviewUtil.jsonEscape("フーバー"));
   }
 

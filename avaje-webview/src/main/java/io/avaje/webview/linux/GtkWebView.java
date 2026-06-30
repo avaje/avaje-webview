@@ -1,9 +1,11 @@
 package io.avaje.webview.linux;
 
-import io.avaje.webview.Webview;
-import io.avaje.webview.WebviewBase;
-
-import java.lang.foreign.*;
+import java.lang.foreign.Arena;
+import java.lang.foreign.FunctionDescriptor;
+import java.lang.foreign.Linker;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SymbolLookup;
+import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.net.URI;
@@ -11,6 +13,9 @@ import java.nio.file.Path;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import io.avaje.webview.Webview;
+import io.avaje.webview.WebviewBase;
 
 /**
  * Linux implementation using GTK4 + WebKitGTK 6.0 via Panama FFI.
@@ -72,7 +77,7 @@ public final class GtkWebView extends WebviewBase {
       // Already a GTK loop running on another thread — dispatch our init onto it.
       applyDmabufWorkaround();
       buildUpcallStubs();
-      var initLatch = new CountDownLatch(1);
+      final var initLatch = new CountDownLatch(1);
       pendingDispatches.add(
           () -> {
             initWindowAndWebView(debug);
@@ -82,7 +87,7 @@ public final class GtkWebView extends WebviewBase {
           GLib.G_PRIORITY_HIGH_IDLE, dispatchStub, MemorySegment.NULL, MemorySegment.NULL);
       try {
         initLatch.await();
-      } catch (InterruptedException e) {
+      } catch (final InterruptedException e) {
         Thread.currentThread().interrupt();
         throw new RuntimeException("Interrupted waiting for GTK window init", e);
       }
@@ -105,7 +110,7 @@ public final class GtkWebView extends WebviewBase {
       // Non-GTK thread: just wait for the window to close.
       try {
         windowClosedLatch.await();
-      } catch (InterruptedException e) {
+      } catch (final InterruptedException e) {
         Thread.currentThread().interrupt();
       }
     }
@@ -153,7 +158,7 @@ public final class GtkWebView extends WebviewBase {
   @Override
   protected void navigateImpl(String url) {
     if (closed) return;
-    try (Arena a = Arena.ofConfined()) {
+    try (var a = Arena.ofConfined()) {
       WebKit6.webkitWebViewLoadUri(webView, a.allocateFrom(url));
     }
   }
@@ -161,7 +166,7 @@ public final class GtkWebView extends WebviewBase {
   @Override
   protected void setTitleImpl(String title) {
     if (closed) return;
-    try (Arena a = Arena.ofConfined()) {
+    try (var a = Arena.ofConfined()) {
       Gtk4.gtkWindowSetTitle(window, a.allocateFrom(title));
     }
   }
@@ -197,7 +202,7 @@ public final class GtkWebView extends WebviewBase {
   @Override
   protected void setHtmlImpl(String html) {
     if (closed) return;
-    try (Arena a = Arena.ofConfined()) {
+    try (var a = Arena.ofConfined()) {
       WebKit6.webkitWebViewLoadHtml(webView, a.allocateFrom(html), MemorySegment.NULL);
     }
   }
@@ -206,9 +211,9 @@ public final class GtkWebView extends WebviewBase {
   protected void evalImpl(String js) {
     if (closed || webView == null || webView.address() == 0L) return;
     // Skip if no page is loaded yet (webkit_web_view_get_uri asserts WEBKIT_IS_WEB_VIEW).
-    MemorySegment uri = WebKit6.webkitWebViewGetUri(webView);
+    final var uri = WebKit6.webkitWebViewGetUri(webView);
     if (uri.address() == 0L) return;
-    try (Arena a = Arena.ofConfined()) {
+    try (var a = Arena.ofConfined()) {
       WebKit6.webkitWebViewEvaluateJavascript(webView, a.allocateFrom(js), -1L);
     }
   }
@@ -229,8 +234,8 @@ public final class GtkWebView extends WebviewBase {
   @Override
   protected void nativeAddUserScript(String js) {
     if (closed) return;
-    try (Arena a = Arena.ofConfined()) {
-      MemorySegment script =
+    try (var a = Arena.ofConfined()) {
+      final var script =
           WebKit6.webkitUserScriptNew(
               a.allocateFrom(js),
               WebKit6.WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
@@ -277,7 +282,7 @@ public final class GtkWebView extends WebviewBase {
   public void setIcon(URI uri) {
     try {
       setIcon(Path.of(uri));
-    } catch (Exception e) {
+    } catch (final Exception e) {
       // best-effort
     }
   }
@@ -331,12 +336,12 @@ public final class GtkWebView extends WebviewBase {
   private static void applyDmabufWorkaround() {
     // Wayland is fine
     // no NVIDIA driver
-    if ((System.getenv("WAYLAND_DISPLAY") != null)
+    if (System.getenv("WAYLAND_DISPLAY") != null
         || !new java.io.File("/sys/module/nvidia").isDirectory()
-        || (System.getenv("WEBKIT_DISABLE_DMABUF_RENDERER") != null)) return; // already set
+        || System.getenv("WEBKIT_DISABLE_DMABUF_RENDERER") != null) return; // already set
     try {
-      var libc = SymbolLookup.libraryLookup("libc.so.6", Arena.global());
-      var setenv =
+      final var libc = SymbolLookup.libraryLookup("libc.so.6", Arena.global());
+      final var setenv =
           Linker.nativeLinker()
               .downcallHandle(
                   libc.find("setenv").orElseThrow(),
@@ -345,13 +350,13 @@ public final class GtkWebView extends WebviewBase {
                       ValueLayout.ADDRESS,
                       ValueLayout.ADDRESS,
                       ValueLayout.JAVA_INT));
-      try (Arena a = Arena.ofConfined()) {
-        int _ =
+      try (var a = Arena.ofConfined()) {
+        final var _ =
             (int)
                 setenv.invokeExact(
                     a.allocateFrom("WEBKIT_DISABLE_DMABUF_RENDERER"), a.allocateFrom("1"), 1);
       }
-    } catch (Throwable ignored) {
+    } catch (final Throwable ignored) {
     }
   }
 
@@ -367,11 +372,11 @@ public final class GtkWebView extends WebviewBase {
    * that looks like a C function pointer to native code.
    */
   private void buildUpcallStubs() {
-    var linker = Linker.nativeLinker();
-    var lookup = MethodHandles.lookup();
+    final var linker = Linker.nativeLinker();
+    final var lookup = MethodHandles.lookup();
     try {
       // GSourceFunc: gboolean(*)(gpointer data) — used by g_idle_add_full
-      var drainMh =
+      final var drainMh =
           lookup
               .findVirtual(
                   GtkWebView.class,
@@ -381,7 +386,7 @@ public final class GtkWebView extends WebviewBase {
       dispatchStub = linker.upcallStub(drainMh, GLib.GSOURCE_FUNC_DESC, callbackArena);
 
       // "destroy" signal: void(*)(GtkWidget*, gpointer)
-      var destroyMh =
+      final var destroyMh =
           lookup
               .findVirtual(
                   GtkWebView.class,
@@ -391,7 +396,7 @@ public final class GtkWebView extends WebviewBase {
       destroyStub = linker.upcallStub(destroyMh, Gtk4.DESTROY_SIGNAL_DESC, callbackArena);
 
       // "script-message-received": void(*)(WebKitUserContentManager*, JSCValue*, gpointer)
-      var msgMh =
+      final var msgMh =
           lookup
               .findVirtual(
                   GtkWebView.class,
@@ -415,14 +420,14 @@ public final class GtkWebView extends WebviewBase {
     GLib.gObjectRefSink(webView);
 
     ucManager = WebKit6.webkitWebViewGetUserContentManager(webView);
-    try (Arena a = Arena.ofConfined()) {
+    try (var a = Arena.ofConfined()) {
       WebKit6.webkitUcmRegisterHandler(ucManager, a.allocateFrom(HANDLER_NAME));
     }
     // The signal name includes the handler name so only messages for __webview__ fire here.
     GLib.gSignalConnect(
         ucManager, "script-message-received::" + HANDLER_NAME, msgStub, MemorySegment.NULL);
 
-    MemorySegment settings = WebKit6.webkitWebViewGetSettings(webView);
+    final var settings = WebKit6.webkitWebViewGetSettings(webView);
     WebKit6.webkitSettingsSetJsClipboard(settings, true);
     if (debug) {
       WebKit6.webkitSettingsSetConsoleToStdout(settings, true);

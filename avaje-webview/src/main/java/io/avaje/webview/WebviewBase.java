@@ -1,9 +1,14 @@
 package io.avaje.webview;
 
-import module java.base;
-import module org.jspecify;
+import static java.lang.System.Logger.Level.DEBUG;
+import static java.lang.System.Logger.Level.ERROR;
+import static java.lang.System.Logger.Level.INFO;
+import static java.lang.System.Logger.Level.TRACE;
+import static java.lang.System.Logger.Level.WARNING;
 
-import static java.lang.System.Logger.Level.*;
+import module java.base;
+
+import module org.jspecify;
 
 /**
  * Abstract base for platform-specific {@link Webview} implementations.
@@ -69,10 +74,10 @@ public abstract class WebviewBase implements Webview {
    * JSON message and dispatches to the matching {@link BindCallback}.
    */
   protected final void onMessage(String json) {
-    String id = jsonGet(json, "id");
-    String method = jsonGet(json, "method");
-    String params = jsonGet(json, "params");
-    BindCallback cb = bindings.get(method);
+    final var id = jsonGet(json, "id");
+    final var method = jsonGet(json, "method");
+    final var params = jsonGet(json, "params");
+    final var cb = bindings.get(method);
     if (cb != null) {
       dispatchImpl(() -> cb.onCall(id, params));
     }
@@ -124,7 +129,7 @@ public abstract class WebviewBase implements Webview {
 
   @Override
   public void setInitScript(@NonNull String script, boolean allowNestedAccess) {
-    String wrapped = wrapInitScript(script, allowNestedAccess);
+    final var wrapped = wrapInitScript(script, allowNestedAccess);
     dispatchImpl(() -> addUserScriptInternal(wrapped));
   }
 
@@ -135,7 +140,7 @@ public abstract class WebviewBase implements Webview {
 
   @Override
   public void bind(@NonNull String name, @NonNull WebviewBinding handler) {
-    bindings.put(name, adapt(name, handler));
+    bindings.put(name, adapt(handler));
     dispatchImpl(
         () -> {
           rebuildBindScript();
@@ -220,8 +225,8 @@ public abstract class WebviewBase implements Webview {
   // -------------------------------------------------------------------------
 
   void returnResult(String id, int status, String result) {
-    String escaped = (result == null || result.isEmpty()) ? "undefined" : jsonEscape(result);
-    String js = "window.__webview__.onReply(" + jsonEscape(id) + "," + status + "," + escaped + ")";
+    final var escaped = result == null || result.isEmpty() ? "undefined" : jsonEscape(result);
+    final var js = "window.__webview__.onReply(" + jsonEscape(id) + "," + status + "," + escaped + ")";
     dispatchImpl(() -> evalImpl(js));
   }
 
@@ -235,7 +240,7 @@ public abstract class WebviewBase implements Webview {
   }
 
   private void rebuildBindScript() {
-    String newScript = buildBindScript();
+    final var newScript = buildBindScript();
     nativeRemoveAllUserScripts();
     if (bindScriptIdx >= 0) {
       userScripts.set(bindScriptIdx, newScript);
@@ -243,7 +248,7 @@ public abstract class WebviewBase implements Webview {
       bindScriptIdx = userScripts.size();
       userScripts.add(newScript);
     }
-    for (String s : userScripts) nativeAddUserScript(s);
+    for (final String s : userScripts) nativeAddUserScript(s);
   }
 
   // -------------------------------------------------------------------------
@@ -254,14 +259,14 @@ public abstract class WebviewBase implements Webview {
     bind(
         "__$io_avaje_webview$log__",
         json -> {
-          int comma = json.indexOf(",");
+          final var comma = json.indexOf(",");
           if (comma == -1 || json.charAt(0) != '[') {
             log.log(ERROR, "[Webview] " + json);
             return "\"ok\"";
           }
-          String function = json.substring(2, comma - 1);
-          String contents = json.substring(comma + 1, json.length() - 1);
-          String message = "[Webview | console." + function + "] " + contents;
+          final var function = json.substring(2, comma - 1);
+          final var contents = json.substring(comma + 1, json.length() - 1);
+          final var message = "[Webview | console." + function + "] " + contents;
           switch (function) {
             case "log", "info" -> log.log(INFO, message);
             case "warn" -> log.log(WARNING, message);
@@ -279,13 +284,13 @@ public abstract class WebviewBase implements Webview {
   // WebviewBinding → BindCallback adapter
   // -------------------------------------------------------------------------
 
-  private BindCallback adapt(String name, WebviewBinding wb) {
+  private BindCallback adapt(WebviewBinding wb) {
     return (id, req) -> {
       try {
-        String result = wb.apply(WebviewUtil.forceSafeChars(req));
+        final var result = wb.apply(WebviewUtil.forceSafeChars(req));
         returnResult(id, 0, result == null ? "null" : WebviewUtil.forceSafeChars(result));
-      } catch (Throwable e) {
-        String stack = WebviewUtil.getExceptionStack(e);
+      } catch (final Throwable e) {
+        final var stack = WebviewUtil.getExceptionStack(e);
         log.log(ERROR, stack);
         returnResult(id, 1, "\"" + WebviewUtil.jsonEscape(stack) + "\"");
       }
@@ -376,9 +381,9 @@ public abstract class WebviewBase implements Webview {
   }
 
   private String buildBindScript() {
-    var sb = new StringBuilder("(function(){'use strict';var methods=[");
-    boolean first = true;
-    for (String name : bindings.keySet()) {
+    final var sb = new StringBuilder("(function(){'use strict';var methods=[");
+    var first = true;
+    for (final String name : bindings.keySet()) {
       if (!first) sb.append(",");
       sb.append(jsonEscape(name));
       first = false;
@@ -396,19 +401,19 @@ public abstract class WebviewBase implements Webview {
   }
 
   static String jsonGet(String json, String key) {
-    String needle = "\"" + key + "\"";
-    int ki = json.indexOf(needle);
+    final var needle = "\"" + key + "\"";
+    final var ki = json.indexOf(needle);
     if (ki < 0) return "";
-    int colon = json.indexOf(':', ki + needle.length());
+    final var colon = json.indexOf(':', ki + needle.length());
     if (colon < 0) return "";
-    int vi = colon + 1;
+    var vi = colon + 1;
     while (vi < json.length() && json.charAt(vi) == ' ') vi++;
     if (vi >= json.length()) return "";
-    char first = json.charAt(vi);
+    final var first = json.charAt(vi);
     if (first == '"') {
-      int end = vi + 1;
+      var end = vi + 1;
       while (end < json.length()) {
-        char c = json.charAt(end);
+        final var c = json.charAt(end);
         if (c == '\\') {
           end += 2;
           continue;
@@ -419,11 +424,11 @@ public abstract class WebviewBase implements Webview {
       return json.substring(vi + 1, end);
     }
     if (first == '[' || first == '{') {
-      char close = first == '[' ? ']' : '}';
+      final var close = first == '[' ? ']' : '}';
       int depth = 1, i = vi + 1;
-      boolean inStr = false;
+      var inStr = false;
       while (i < json.length() && depth > 0) {
-        char c = json.charAt(i);
+        final var c = json.charAt(i);
         if (!inStr && c == '"') {
           inStr = true;
         } else if (inStr && c == '\\') {
@@ -439,7 +444,7 @@ public abstract class WebviewBase implements Webview {
       }
       return json.substring(vi, i);
     }
-    int end = vi;
+    var end = vi;
     while (end < json.length() && json.charAt(end) != ',' && json.charAt(end) != '}') end++;
     return json.substring(vi, end).trim();
   }

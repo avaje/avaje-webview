@@ -1,10 +1,19 @@
 package io.avaje.webview.windows;
 
-import java.lang.foreign.*;
+import static java.lang.foreign.ValueLayout.ADDRESS;
+import static java.lang.foreign.ValueLayout.JAVA_INT;
+import static java.lang.foreign.ValueLayout.JAVA_LONG;
+import static java.lang.foreign.ValueLayout.JAVA_SHORT;
+
+import java.lang.foreign.Arena;
+import java.lang.foreign.FunctionDescriptor;
+import java.lang.foreign.Linker;
+import java.lang.foreign.MemoryLayout;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.StructLayout;
+import java.lang.foreign.SymbolLookup;
 import java.lang.invoke.MethodHandle;
 import java.nio.charset.StandardCharsets;
-
-import static java.lang.foreign.ValueLayout.*;
 
 final class Win32 {
 
@@ -152,84 +161,84 @@ final class Win32 {
 
   static MemorySegment getModuleHandle() {
     try { return (MemorySegment) GetModuleHandleW.invokeExact(MemorySegment.NULL); }
-    catch (Throwable t) { throw new RuntimeException(t); }
+    catch (final Throwable t) { throw new RuntimeException(t); }
   }
 
   static void postQuitMessage(int code) {
     try { PostQuitMessage.invokeExact(code); }
-    catch (Throwable t) { throw new RuntimeException(t); }
+    catch (final Throwable t) { throw new RuntimeException(t); }
   }
 
   static void showWindow(MemorySegment hwnd, int cmd) {
-    try { int _ = (int) ShowWindow.invokeExact(hwnd, cmd); }
-    catch (Throwable t) { throw new RuntimeException(t); }
+    try { final var _ = (int) ShowWindow.invokeExact(hwnd, cmd); }
+    catch (final Throwable t) { throw new RuntimeException(t); }
   }
 
   static void setWindowText(MemorySegment hwnd, String title) {
-    try (Arena a = Arena.ofConfined()) {
-      int _ = (int) SetWindowTextW.invokeExact(hwnd, a.allocateFrom(title, StandardCharsets.UTF_16LE));
-    } catch (Throwable t) { throw new RuntimeException(t); }
+    try (var a = Arena.ofConfined()) {
+      final var _ = (int) SetWindowTextW.invokeExact(hwnd, a.allocateFrom(title, StandardCharsets.UTF_16LE));
+    } catch (final Throwable t) { throw new RuntimeException(t); }
   }
 
   static MemorySegment getClientRect(MemorySegment hwnd, Arena a) {
-    MemorySegment rect = a.allocate(RECT_LAYOUT);
-    try { int _ = (int) GetClientRect.invokeExact(hwnd, rect); }
-    catch (Throwable t) { throw new RuntimeException(t); }
+    final var rect = a.allocate(RECT_LAYOUT);
+    try { final var _ = (int) GetClientRect.invokeExact(hwnd, rect); }
+    catch (final Throwable t) { throw new RuntimeException(t); }
     return rect;
   }
 
   static void fullscreen(MemorySegment hwnd) {
-    try (Arena a = Arena.ofConfined()) {
-      int screenW = (int) GetSystemMetrics.invokeExact(SM_CXSCREEN);
-      int screenH = (int) GetSystemMetrics.invokeExact(SM_CYSCREEN);
-      int style   = (int) GetWindowLong.invokeExact(hwnd, GWL_STYLE);
-      int _ = (int) SetWindowLong.invokeExact(hwnd, GWL_STYLE, style & ~WS_OVERLAPPEDWINDOW);
-      int __ = (int) SetWindowPos.invokeExact(hwnd, MemorySegment.NULL, 0, 0, screenW, screenH,
-          SWP_NOZORDER | SWP_FRAMECHANGED);
-    } catch (Throwable t) { throw new RuntimeException(t); }
+    try (var _ = Arena.ofConfined()) {
+      final var screenW = (int) GetSystemMetrics.invokeExact(SM_CXSCREEN);
+      final var screenH = (int) GetSystemMetrics.invokeExact(SM_CYSCREEN);
+      final var style   = (int) GetWindowLong.invokeExact(hwnd, GWL_STYLE);
+      final var _ = (int) SetWindowLong.invokeExact(hwnd, GWL_STYLE, style & ~WS_OVERLAPPEDWINDOW);
+      SetWindowPos.invokeExact(hwnd, MemorySegment.NULL, 0, 0, screenW, screenH,
+        SWP_NOZORDER | SWP_FRAMECHANGED);
+    } catch (final Throwable t) { throw new RuntimeException(t); }
   }
 
   static void applyDarkMode(MemorySegment hwnd, boolean dark) {
-    try (Arena a = Arena.ofConfined()) {
-      MemorySegment val = a.allocate(JAVA_INT);
+    try (var a = Arena.ofConfined()) {
+      final var val = a.allocate(JAVA_INT);
       val.set(JAVA_INT, 0, dark ? 1 : 0);
-      int hr = (int) DwmSetWindowAttr.invokeExact(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, val, (int) JAVA_INT.byteSize());
+      final var hr = (int) DwmSetWindowAttr.invokeExact(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, val, (int) JAVA_INT.byteSize());
       if (hr != 0) {
-        int _ = (int) DwmSetWindowAttr.invokeExact(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_WIN11, val, (int) JAVA_INT.byteSize());
+        final var _ = (int) DwmSetWindowAttr.invokeExact(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_WIN11, val, (int) JAVA_INT.byteSize());
       }
-      int _ = (int) InvalidateRect.invokeExact(hwnd, MemorySegment.NULL, 0);
-    } catch (Throwable t) { throw new RuntimeException(t); }
+      final var _ = (int) InvalidateRect.invokeExact(hwnd, MemorySegment.NULL, 0);
+    } catch (final Throwable t) { throw new RuntimeException(t); }
   }
 
   static void setIcon(MemorySegment hwnd, java.nio.file.Path iconPath) {
-    try (Arena a = Arena.ofConfined()) {
-      MemorySegment pathSeg = a.allocateFrom(iconPath.toAbsolutePath().toString(), StandardCharsets.UTF_16LE);
-      MemorySegment big   = (MemorySegment) LoadImageW.invokeExact(MemorySegment.NULL, pathSeg, IMAGE_ICON, 32, 32, LR_LOADFROMFILE);
-      MemorySegment small = (MemorySegment) LoadImageW.invokeExact(MemorySegment.NULL, pathSeg, IMAGE_ICON, 16, 16, LR_LOADFROMFILE);
-      if (big.address()   != 0) { long _ = (long) SendMessageW.invokeExact(hwnd, WM_SETICON, (long) ICON_BIG,   big); }
-      if (small.address() != 0) { long _ = (long) SendMessageW.invokeExact(hwnd, WM_SETICON, (long) ICON_SMALL, small); }
-    } catch (Throwable t) { throw new RuntimeException(t); }
+    try (var a = Arena.ofConfined()) {
+      final var pathSeg = a.allocateFrom(iconPath.toAbsolutePath().toString(), StandardCharsets.UTF_16LE);
+      final var big   = (MemorySegment) LoadImageW.invokeExact(MemorySegment.NULL, pathSeg, IMAGE_ICON, 32, 32, LR_LOADFROMFILE);
+      final var small = (MemorySegment) LoadImageW.invokeExact(MemorySegment.NULL, pathSeg, IMAGE_ICON, 16, 16, LR_LOADFROMFILE);
+      if (big.address()   != 0) { final var _ = (long) SendMessageW.invokeExact(hwnd, WM_SETICON, (long) ICON_BIG,   big); }
+      if (small.address() != 0) { final var _ = (long) SendMessageW.invokeExact(hwnd, WM_SETICON, (long) ICON_SMALL, small); }
+    } catch (final Throwable t) { throw new RuntimeException(t); }
   }
 
   /** Returns the string value from the given registry key, or null on error. */
   static String regQueryString(long rootKey, String subKey, String valueName) {
-    try (Arena a = Arena.ofConfined()) {
-      MemorySegment pKey = a.allocate(JAVA_LONG);
-      int status = (int) RegOpenKeyExW.invokeExact(rootKey,
+    try (var a = Arena.ofConfined()) {
+      final var pKey = a.allocate(JAVA_LONG);
+      var status = (int) RegOpenKeyExW.invokeExact(rootKey,
           a.allocateFrom(subKey, StandardCharsets.UTF_16LE),
           0, KEY_READ | KEY_WOW64_32KEY, pKey);
       if (status != ERROR_SUCCESS) return null;
-      long hkey = pKey.get(JAVA_LONG, 0);
+      final var hkey = pKey.get(JAVA_LONG, 0);
       try {
-        MemorySegment cbData = a.allocate(JAVA_INT);
+        final var cbData = a.allocate(JAVA_INT);
         cbData.set(JAVA_INT, 0, 0);
         // First call: get buffer size
-        int _ = (int) RegQueryValueExW.invokeExact(hkey,
+        final var _ = (int) RegQueryValueExW.invokeExact(hkey,
             a.allocateFrom(valueName, StandardCharsets.UTF_16LE),
             MemorySegment.NULL, MemorySegment.NULL, MemorySegment.NULL, cbData);
-        int bufSize = cbData.get(JAVA_INT, 0);
+        final var bufSize = cbData.get(JAVA_INT, 0);
         if (bufSize <= 0) return null;
-        MemorySegment buf = a.allocate(bufSize);
+        final var buf = a.allocate(bufSize);
         cbData.set(JAVA_INT, 0, bufSize);
         status = (int) RegQueryValueExW.invokeExact(hkey,
             a.allocateFrom(valueName, StandardCharsets.UTF_16LE),
@@ -238,23 +247,23 @@ final class Win32 {
         // UTF-16LE, strip trailing nulls
         return buf.reinterpret(bufSize).getString(0, StandardCharsets.UTF_16LE).stripTrailing().replace("\0", "");
       } finally {
-        int _ = (int) RegCloseKey.invokeExact(hkey);
+        final var _ = (int) RegCloseKey.invokeExact(hkey);
       }
-    } catch (Throwable t) { return null; }
+    } catch (final Throwable t) { return null; }
   }
 
   static void coInitialize() {
     try {
-      int hr = (int) CoInitializeEx.invokeExact(MemorySegment.NULL, COINIT_APARTMENTTHREADED);
+      final var hr = (int) CoInitializeEx.invokeExact(MemorySegment.NULL, COINIT_APARTMENTTHREADED);
       // S_OK (0x0) = first init, S_FALSE (0x1) = already STA, RPC_E_CHANGED_MODE (0x80010106) = thread is MTA (bug)
       System.out.println("[wv2] CoInitializeEx(APARTMENTTHREADED) hr=0x" + Integer.toHexString(hr));
     }
-    catch (Throwable t) { throw new RuntimeException(t); }
+    catch (final Throwable t) { throw new RuntimeException(t); }
   }
 
   static void coTaskMemFree(MemorySegment ptr) {
     try { CoTaskMemFree.invokeExact(ptr); }
-    catch (Throwable t) { /* best effort */ }
+    catch (final Throwable t) { /* best effort */ }
   }
 
   private Win32() {}

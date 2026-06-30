@@ -1,9 +1,15 @@
 package io.avaje.webview.linux;
 
-import java.lang.foreign.*;
-import java.lang.invoke.MethodHandle;
+import static java.lang.foreign.ValueLayout.ADDRESS;
+import static java.lang.foreign.ValueLayout.JAVA_INT;
+import static java.lang.foreign.ValueLayout.JAVA_LONG;
 
-import static java.lang.foreign.ValueLayout.*;
+import java.lang.foreign.Arena;
+import java.lang.foreign.FunctionDescriptor;
+import java.lang.foreign.Linker;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SymbolLookup;
+import java.lang.invoke.MethodHandle;
 
 final class WebKit6 {
 
@@ -77,27 +83,27 @@ final class WebKit6 {
 
     static MemorySegment webkitWebViewNew() {
         try { return (MemorySegment) WEBKIT_WEB_VIEW_NEW.invokeExact(); }
-        catch (Throwable t) { throw new RuntimeException(t); }
+        catch (final Throwable t) { throw new RuntimeException(t); }
     }
 
     static MemorySegment webkitWebViewGetUserContentManager(MemorySegment wv) {
         try { return (MemorySegment) WEBKIT_WEB_VIEW_GET_USER_CONTENT_MANAGER.invokeExact(wv); }
-        catch (Throwable t) { throw new RuntimeException(t); }
+        catch (final Throwable t) { throw new RuntimeException(t); }
     }
 
     static MemorySegment webkitWebViewGetSettings(MemorySegment wv) {
         try { return (MemorySegment) WEBKIT_WEB_VIEW_GET_SETTINGS.invokeExact(wv); }
-        catch (Throwable t) { throw new RuntimeException(t); }
+        catch (final Throwable t) { throw new RuntimeException(t); }
     }
 
     static void webkitWebViewLoadUri(MemorySegment wv, MemorySegment uri) {
         try { WEBKIT_WEB_VIEW_LOAD_URI.invokeExact(wv, uri); }
-        catch (Throwable t) { throw new RuntimeException(t); }
+        catch (final Throwable t) { throw new RuntimeException(t); }
     }
 
     static void webkitWebViewLoadHtml(MemorySegment wv, MemorySegment html, MemorySegment baseUri) {
         try { WEBKIT_WEB_VIEW_LOAD_HTML.invokeExact(wv, html, baseUri); }
-        catch (Throwable t) { throw new RuntimeException(t); }
+        catch (final Throwable t) { throw new RuntimeException(t); }
     }
 
     static void webkitWebViewEvaluateJavascript(MemorySegment wv, MemorySegment js, long length) {
@@ -106,42 +112,42 @@ final class WebKit6 {
                     wv, js, length,
                     MemorySegment.NULL, MemorySegment.NULL, MemorySegment.NULL,
                     MemorySegment.NULL, MemorySegment.NULL);
-        } catch (Throwable t) { throw new RuntimeException(t); }
+        } catch (final Throwable t) { throw new RuntimeException(t); }
     }
 
     static MemorySegment webkitWebViewGetUri(MemorySegment wv) {
         try { return (MemorySegment) WEBKIT_WEB_VIEW_GET_URI.invokeExact(wv); }
-        catch (Throwable t) { throw new RuntimeException(t); }
+        catch (final Throwable t) { throw new RuntimeException(t); }
     }
 
     static void webkitSettingsSetJsClipboard(MemorySegment settings, boolean enable) {
         try { WEBKIT_SETTINGS_SET_JS_CLIPBOARD.invokeExact(settings, enable ? 1 : 0); }
-        catch (Throwable t) { throw new RuntimeException(t); }
+        catch (final Throwable t) { throw new RuntimeException(t); }
     }
 
     static void webkitSettingsSetConsoleToStdout(MemorySegment settings, boolean enable) {
         try { WEBKIT_SETTINGS_SET_CONSOLE_TO_STDOUT.invokeExact(settings, enable ? 1 : 0); }
-        catch (Throwable t) { throw new RuntimeException(t); }
+        catch (final Throwable t) { throw new RuntimeException(t); }
     }
 
     static void webkitSettingsSetDevExtras(MemorySegment settings, boolean enable) {
         try { WEBKIT_SETTINGS_SET_DEV_EXTRAS.invokeExact(settings, enable ? 1 : 0); }
-        catch (Throwable t) { throw new RuntimeException(t); }
+        catch (final Throwable t) { throw new RuntimeException(t); }
     }
 
     static void webkitUcmRegisterHandler(MemorySegment manager, MemorySegment name) {
-        try { int _ = (int) WEBKIT_UCM_REGISTER_HANDLER.invokeExact(manager, name, MemorySegment.NULL); }
-        catch (Throwable t) { throw new RuntimeException(t); }
+        try { final var _ = (int) WEBKIT_UCM_REGISTER_HANDLER.invokeExact(manager, name, MemorySegment.NULL); }
+        catch (final Throwable t) { throw new RuntimeException(t); }
     }
 
     static void webkitUcmAddScript(MemorySegment manager, MemorySegment script) {
         try { WEBKIT_UCM_ADD_SCRIPT.invokeExact(manager, script); }
-        catch (Throwable t) { throw new RuntimeException(t); }
+        catch (final Throwable t) { throw new RuntimeException(t); }
     }
 
     static void webkitUcmRemoveAllScripts(MemorySegment manager) {
         try { WEBKIT_UCM_REMOVE_ALL_SCRIPTS.invokeExact(manager); }
-        catch (Throwable t) { throw new RuntimeException(t); }
+        catch (final Throwable t) { throw new RuntimeException(t); }
     }
 
     static MemorySegment webkitUserScriptNew(MemorySegment source, int injectedFrames, int injectionTime) {
@@ -149,19 +155,19 @@ final class WebKit6 {
             return (MemorySegment) WEBKIT_USER_SCRIPT_NEW.invokeExact(
                     source, injectedFrames, injectionTime,
                     MemorySegment.NULL, MemorySegment.NULL);
-        } catch (Throwable t) { throw new RuntimeException(t); }
+        } catch (final Throwable t) { throw new RuntimeException(t); }
     }
 
     static void webkitUserScriptUnref(MemorySegment script) {
         try { WEBKIT_USER_SCRIPT_UNREF.invokeExact(script); }
-        catch (Throwable t) { throw new RuntimeException(t); }
+        catch (final Throwable t) { throw new RuntimeException(t); }
     }
 
     static String jscValueToString(MemorySegment jscValue) {
         MemorySegment raw;
         try { raw = (MemorySegment) JSC_VALUE_TO_STRING.invokeExact(jscValue); }
-        catch (Throwable t) { throw new RuntimeException(t); }
-        String s = raw.reinterpret(Long.MAX_VALUE).getString(0);
+        catch (final Throwable t) { throw new RuntimeException(t); }
+        final var s = raw.reinterpret(Long.MAX_VALUE).getString(0);
         GLib.gFree(raw);
         return s;
     }

@@ -1,9 +1,14 @@
 package io.avaje.webview.linux;
 
-import java.lang.foreign.*;
-import java.lang.invoke.MethodHandle;
+import static java.lang.foreign.ValueLayout.ADDRESS;
+import static java.lang.foreign.ValueLayout.JAVA_INT;
 
-import static java.lang.foreign.ValueLayout.*;
+import java.lang.foreign.Arena;
+import java.lang.foreign.FunctionDescriptor;
+import java.lang.foreign.Linker;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SymbolLookup;
+import java.lang.invoke.MethodHandle;
 
 final class Gtk4 {
 
@@ -56,7 +61,7 @@ final class Gtk4 {
   static boolean gtkInitCheck() {
     try {
       return (int) GTK_INIT_CHECK.invokeExact() != 0;
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -64,7 +69,7 @@ final class Gtk4 {
   static MemorySegment gtkWindowNew() {
     try {
       return (MemorySegment) GTK_WINDOW_NEW.invokeExact();
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -72,7 +77,7 @@ final class Gtk4 {
   static void gtkWindowSetTitle(MemorySegment window, MemorySegment title) {
     try {
       GTK_WINDOW_SET_TITLE.invokeExact(window, title);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -80,7 +85,7 @@ final class Gtk4 {
   static void gtkWindowSetDefaultSize(MemorySegment window, int w, int h) {
     try {
       GTK_WINDOW_SET_DEFAULT_SIZE.invokeExact(window, w, h);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -88,7 +93,7 @@ final class Gtk4 {
   static void gtkWindowSetResizable(MemorySegment window, boolean resizable) {
     try {
       GTK_WINDOW_SET_RESIZABLE.invokeExact(window, resizable ? 1 : 0);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -96,7 +101,7 @@ final class Gtk4 {
   static void gtkWindowSetChild(MemorySegment window, MemorySegment child) {
     try {
       GTK_WINDOW_SET_CHILD.invokeExact(window, child);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -104,7 +109,7 @@ final class Gtk4 {
   static void gtkWindowClose(MemorySegment window) {
     try {
       GTK_WINDOW_CLOSE.invokeExact(window);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -112,7 +117,7 @@ final class Gtk4 {
   static void gtkWindowDestroy(MemorySegment window) {
     try {
       GTK_WINDOW_DESTROY.invokeExact(window);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -120,7 +125,7 @@ final class Gtk4 {
   static void gtkWindowMaximize(MemorySegment window) {
     try {
       GTK_WINDOW_MAXIMIZE.invokeExact(window);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -128,7 +133,7 @@ final class Gtk4 {
   static void gtkWindowFullscreen(MemorySegment window) {
     try {
       GTK_WINDOW_FULLSCREEN.invokeExact(window);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -136,7 +141,7 @@ final class Gtk4 {
   static void gtkWidgetSetVisible(MemorySegment widget, boolean visible) {
     try {
       GTK_WIDGET_SET_VISIBLE.invokeExact(widget, visible ? 1 : 0);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -144,15 +149,15 @@ final class Gtk4 {
   static void gtkWidgetSetSizeRequest(MemorySegment widget, int w, int h) {
     try {
       GTK_WIDGET_SET_SIZE_REQUEST.invokeExact(widget, w, h);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
 
   static void gtkWidgetGrabFocus(MemorySegment widget) {
     try {
-      int _ = (int) GTK_WIDGET_GRAB_FOCUS.invokeExact(widget);
-    } catch (Throwable t) {
+      final var _ = (int) GTK_WIDGET_GRAB_FOCUS.invokeExact(widget);
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -160,7 +165,7 @@ final class Gtk4 {
   static MemorySegment gtkSettingsGetDefault() {
     try {
       return (MemorySegment) GTK_SETTINGS_GET_DEFAULT.invokeExact();
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }

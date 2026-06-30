@@ -1,9 +1,15 @@
 package io.avaje.webview.linux;
 
-import java.lang.foreign.*;
-import java.lang.invoke.MethodHandle;
+import static java.lang.foreign.ValueLayout.ADDRESS;
+import static java.lang.foreign.ValueLayout.JAVA_INT;
+import static java.lang.foreign.ValueLayout.JAVA_LONG;
 
-import static java.lang.foreign.ValueLayout.*;
+import java.lang.foreign.Arena;
+import java.lang.foreign.FunctionDescriptor;
+import java.lang.foreign.Linker;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SymbolLookup;
+import java.lang.invoke.MethodHandle;
 
 final class GLib {
 
@@ -55,8 +61,8 @@ final class GLib {
 
   static void gMainContextIteration(MemorySegment ctx, int mayBlock) {
     try {
-      int _ = (int) G_MAIN_CONTEXT_ITERATION.invokeExact(ctx, mayBlock);
-    } catch (Throwable t) {
+      final var _ = (int) G_MAIN_CONTEXT_ITERATION.invokeExact(ctx, mayBlock);
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -64,8 +70,8 @@ final class GLib {
   static void gIdleAddFull(
       int priority, MemorySegment fn, MemorySegment data, MemorySegment notify) {
     try {
-      int _ = (int) G_IDLE_ADD_FULL.invokeExact(priority, fn, data, notify);
-    } catch (Throwable t) {
+      final var _ = (int) G_IDLE_ADD_FULL.invokeExact(priority, fn, data, notify);
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -73,7 +79,7 @@ final class GLib {
   static void gFree(MemorySegment ptr) {
     try {
       G_FREE.invokeExact(ptr);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -81,7 +87,7 @@ final class GLib {
   static MemorySegment gObjectRefSink(MemorySegment obj) {
     try {
       return (MemorySegment) G_OBJECT_REF_SINK.invokeExact(obj);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -89,7 +95,7 @@ final class GLib {
   static void gObjectUnref(MemorySegment obj) {
     try {
       G_OBJECT_UNREF.invokeExact(obj);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
@@ -98,26 +104,26 @@ final class GLib {
       MemorySegment obj, MemorySegment propertyName, int value, MemorySegment terminator) {
     try {
       G_OBJECT_SET.invokeExact(obj, propertyName, value, terminator);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
 
   static void gSignalConnect(
       MemorySegment instance, String signal, MemorySegment callback, MemorySegment data) {
-    try (Arena a = Arena.ofConfined()) {
-      long _ =
+    try (var a = Arena.ofConfined()) {
+      final var _ =
           (long)
               G_SIGNAL_CONNECT_DATA.invokeExact(
                   instance, a.allocateFrom(signal), callback, data, MemorySegment.NULL, 0);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
 
   static void gSignalHandlersDisconnectByData(MemorySegment instance, MemorySegment data) {
     try {
-      int _ =
+      final var _ =
           (int)
               G_SIGNAL_HANDLERS_DISCONNECT_MATCHED.invokeExact(
                   instance,
@@ -127,7 +133,7 @@ final class GLib {
                   MemorySegment.NULL,
                   MemorySegment.NULL,
                   data);
-    } catch (Throwable t) {
+    } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }

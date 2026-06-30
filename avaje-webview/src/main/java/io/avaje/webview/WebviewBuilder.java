@@ -1,11 +1,11 @@
 package io.avaje.webview;
 
+import java.lang.foreign.MemorySegment;
+
 import io.avaje.webview.Webview.Builder;
 import io.avaje.webview.linux.GtkWebView;
 import io.avaje.webview.macos.CocoaWebView;
 import io.avaje.webview.windows.Win32WebView;
-
-import java.lang.foreign.MemorySegment;
 
 final class WebviewBuilder implements Builder {
 
@@ -61,7 +61,7 @@ final class WebviewBuilder implements Builder {
 
   @Override
   public Webview build() {
-    Webview view = createForPlatform();
+    final var view = createForPlatform();
     if (title != null) view.setTitle(title);
     if (url != null) {
       view.navigate(url);
@@ -74,7 +74,7 @@ final class WebviewBuilder implements Builder {
   }
 
   private Webview createForPlatform() {
-    String os = System.getProperty("os.name", "").toLowerCase();
+    final var os = System.getProperty("os.name", "").toLowerCase();
     if (os.contains("linux")) return new GtkWebView(enableDeveloperTools, width, height);
     if (os.contains("mac"))   return new CocoaWebView(enableDeveloperTools, width, height);
     if (os.contains("win"))   return new Win32WebView(enableDeveloperTools, width, height);
