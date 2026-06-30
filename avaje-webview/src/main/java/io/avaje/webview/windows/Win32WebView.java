@@ -18,16 +18,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static java.lang.foreign.ValueLayout.*;
 
 /**
- * Windows WebView2 implementation via Win32 + COM Panama FFI.
+ * Windows WebView2 implementation via Win32 + Panama FFI.
  *
- * <p>Mirrors the C webview win32_edge backend: three Win32 windows (main, widget,
- * message-only), WebView2 COM interfaces called through vtable-resolved Panama
- * downcall handles, and COM callback objects built from upcall stubs.
- *
- * <p>COM interface vtable indices are derived from the official WebView2.h IDL
- * declarations.  Each interface is wrapped in a typed inner class that resolves
- * its MethodHandles once from the live vtable when the COM object arrives, then
- * exposes named methods — mirroring the C code's {@code m_controller->put_Bounds()}.
+ * <p>Structure mirrors the reference C webview win32_edge backend:
+ * three Win32 windows (main, widget, message-only), one combined COM handler
+ * object for env+ctrl callbacks (matching reference's single webview2_com_handler),
+ * and all init work deferred to run inside the message pump via msgWndProc so
+ * that nested pumping for AddScriptToExecuteOnDocumentCreated completions works.
  */
 public final class Win32WebView extends WebviewBase {
 
@@ -52,6 +49,7 @@ public final class Win32WebView extends WebviewBase {
           lib.find("CreateCoreWebView2EnvironmentWithOptions").orElseThrow(),
           FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, ADDRESS, ADDRESS));
       loaderDll = true;
+      System.out.println("[wv2] Using WebView2Loader.dll (official loader)");
     } catch (Exception ignored) {}
 
     if (fn == null) {
@@ -66,6 +64,7 @@ public final class Win32WebView extends WebviewBase {
             if (fnAddr.address() != 0) {
               fn = Linker.nativeLinker().downcallHandle(fnAddr,
                   FunctionDescriptor.of(JAVA_INT, JAVA_INT, JAVA_INT, ADDRESS, ADDRESS, ADDRESS));
+              System.out.println("[wv2] Using embedded loader: " + ebWebViewPath);
             }
           }
         } catch (Throwable ignored) {}
@@ -110,14 +109,25 @@ public final class Win32WebView extends WebviewBase {
 
   private volatile ComController controller;
   private volatile ComWebView2    webView2;
-  private volatile boolean        wv2Ready; // set true on both success and failure; check webView2 != null for success
+  /** Set true when the controller callback fires. */
+  private volatile boolean        wv2Ready;
+  /** Set true after all init tasks (settings, scripts, show) complete in msgWndProc. */
+  private volatile boolean        webviewReady;
   private volatile boolean        closed;
+  private          boolean        debugMode;
 
   private final List<String> scriptIds = new ArrayList<>();
+  // FIFO queue pairing each nativeAddUserScript call to its completion.
+  private final ConcurrentLinkedQueue<Runnable> scriptDoneCallbacks = new ConcurrentLinkedQueue<>();
 
   private volatile int minW, minH, maxW, maxH;
 
   private final ConcurrentLinkedQueue<Runnable> pending = new ConcurrentLinkedQueue<>();
+
+  // Combined env+ctrl handler — one COM object for both, state-dispatched.
+  // Mirrors reference webview2_com_handler which implements both interfaces.
+  private MemorySegment combinedHandler;
+  private volatile boolean ctrlPhase; // false=env callback, true=ctrl callback
 
   public Win32WebView(boolean debug, int width, int height) {
     openWindows.incrementAndGet();
@@ -134,6 +144,7 @@ public final class Win32WebView extends WebviewBase {
   @Override
   public void run() {
     pumpLoop(() -> false);
+    arenaStubs.close();
   }
 
   @Override
@@ -146,7 +157,6 @@ public final class Win32WebView extends WebviewBase {
         try { int _ = (int) Win32.DestroyWindow.invokeExact(hwnd); } catch (Throwable ignored) {}
       });
     }
-    arenaStubs.close();
   }
 
   @Override
@@ -177,14 +187,10 @@ public final class Win32WebView extends WebviewBase {
   }
 
   @Override
-  protected void setMinSizeImpl(int width, int height) {
-    minW = width; minH = height;
-  }
+  protected void setMinSizeImpl(int width, int height) { minW = width; minH = height; }
 
   @Override
-  protected void setMaxSizeImpl(int width, int height) {
-    maxW = width; maxH = height;
-  }
+  protected void setMaxSizeImpl(int width, int height) { maxW = width; maxH = height; }
 
   @Override
   protected void setFixedSizeImpl(int width, int height) {
@@ -218,8 +224,18 @@ public final class Win32WebView extends WebviewBase {
 
   @Override
   protected void nativeAddUserScript(String js) {
+    boolean[] done = {false};
+    scriptDoneCallbacks.add(() -> done[0] = true);
     MemorySegment handler = buildScriptAddedHandler();
-    webView2.addScriptToExecuteOnDocumentCreated(js, handler);
+    int hr = webView2.addScriptToExecuteOnDocumentCreated(js, handler);
+    if (hr == 0) {
+      System.out.println("[wv2] nativeAddUserScript: entering nested pumpLoop, done=" + done[0]);
+      pumpLoopDebug(() -> done[0]);
+      System.out.println("[wv2] nativeAddUserScript: nested pumpLoop exited, done=" + done[0]);
+    } else {
+      scriptDoneCallbacks.poll(); // remove unused callback
+      System.out.println("[wv2] nativeAddUserScript: addScriptOnDoc failed hr=0x" + Integer.toHexString(hr));
+    }
   }
 
   @Override
@@ -250,9 +266,7 @@ public final class Win32WebView extends WebviewBase {
   }
 
   @Override
-  public void setIcon(Path path) {
-    dispatchImpl(() -> Win32.setIcon(hwnd, path));
-  }
+  public void setIcon(Path path) { dispatchImpl(() -> Win32.setIcon(hwnd, path)); }
 
   @Override
   public void setIcon(URI uri) {
@@ -374,7 +388,7 @@ public final class Win32WebView extends WebviewBase {
   }
 
   private static void registerClass(Arena a, MemorySegment hInstance, String cls, MemorySegment proc) {
-    MemorySegment wce = a.allocate(80); // WNDCLASSEXW on Win64
+    MemorySegment wce = a.allocate(80);
     wce.set(JAVA_INT,  0, 80);
     wce.set(JAVA_INT,  4, 0x0003); // CS_HREDRAW | CS_VREDRAW
     wce.set(ADDRESS,   8, proc);
@@ -396,7 +410,8 @@ public final class Win32WebView extends WebviewBase {
   // -------------------------------------------------------------------------
 
   private void embedWebView2(boolean debug) {
-    MemorySegment envHandler = buildEnvCompletedHandler();
+    debugMode = debug;
+    combinedHandler = buildCombinedHandler();
     try {
       String userData = System.getenv("APPDATA");
       if (userData == null) userData = System.getProperty("user.home");
@@ -408,7 +423,7 @@ public final class Win32WebView extends WebviewBase {
               MemorySegment.NULL,
               a.allocateFrom(userData, StandardCharsets.UTF_16LE),
               MemorySegment.NULL,
-              envHandler);
+              combinedHandler);
         }
       } else {
         try (Arena a = Arena.ofConfined()) {
@@ -416,34 +431,29 @@ public final class Win32WebView extends WebviewBase {
               1 /* isBuiltin */, 0 /* installed */,
               a.allocateFrom(userData, StandardCharsets.UTF_16LE),
               MemorySegment.NULL,
-              envHandler);
+              combinedHandler);
         }
       }
       if (hr != 0) throw new RuntimeException("CreateCoreWebView2Environment failed: 0x" + Integer.toHexString(hr));
     } catch (Throwable t) { throw new RuntimeException(t); }
 
-    pumpLoop(() -> wv2Ready);
+    // Pump until webviewReady — this exits AFTER the deferred init task in msgWndProc
+    // completes (settings + scripts + show). The pump is still running when addScriptOnDoc
+    // is called (via setupJsBridge → nativeAddUserScript from within msgWndProc), so nested
+    // pumping for completion delivery works correctly.
+    pumpLoop(() -> webviewReady);
     if (webView2 == null) throw new RuntimeException("WebView2 initialization failed");
-
-    applySettings(debug);
-    setupJsBridge(POST_FN);
-
-    try {
-      int _ = (int) Win32.ShowWindow.invokeExact(hwndWidget, Win32.SW_SHOW);
-      int __ = (int) Win32.ShowWindow.invokeExact(hwnd, Win32.SW_SHOW);
-      int ___ = (int) Win32.UpdateWindow.invokeExact(hwnd);
-      MemorySegment ____ = (MemorySegment) Win32.SetFocus.invokeExact(hwnd);
-    } catch (Throwable t) { throw new RuntimeException(t); }
-    resizeWidget(hwnd);
   }
 
   // -------------------------------------------------------------------------
-  // COM environment completed handler
+  // Combined env+ctrl handler — one COM object for both phases.
+  // Mirrors reference webview2_com_handler which implements both interfaces
+  // on a single object, allowing env->CreateCoreWebView2Controller(wnd, this).
   // -------------------------------------------------------------------------
 
-  private MemorySegment buildEnvCompletedHandler() {
+  private MemorySegment buildCombinedHandler() {
     try {
-      var mh = MethodHandles.lookup().findVirtual(Win32WebView.class, "onEnvCompleted",
+      var mh = MethodHandles.lookup().findVirtual(Win32WebView.class, "onCombinedInvoke",
           MethodType.methodType(int.class, MemorySegment.class, int.class, MemorySegment.class))
           .bindTo(this);
       return buildComObject(Linker.nativeLinker().upcallStub(mh,
@@ -451,48 +461,99 @@ public final class Win32WebView extends WebviewBase {
     } catch (ReflectiveOperationException e) { throw new RuntimeException(e); }
   }
 
+  /**
+   * Dispatches to env-completed or ctrl-completed phase based on {@link #ctrlPhase}.
+   * Called by WebView2 for both CreateCoreWebView2EnvironmentCompletedHandler::Invoke
+   * and CreateCoreWebView2ControllerCompletedHandler::Invoke — identical native signature.
+   */
   @SuppressWarnings("unused")
-  public int onEnvCompleted(MemorySegment self, int hr, MemorySegment env) {
-    if (hr != 0) { wv2Ready = true; return hr; }
-    // ICoreWebView2Environment::CreateCoreWebView2Controller — vtable[3] per IDL
-    MemorySegment ctrlHandler = buildCtrlCompletedHandler();
+  public int onCombinedInvoke(MemorySegment self, int hr, MemorySegment ptr) {
+    if (!ctrlPhase) {
+      return onEnvCompleted(hr, ptr);
+    } else {
+      return onCtrlCompleted(hr, ptr);
+    }
+  }
+
+  private int onEnvCompleted(int hr, MemorySegment env) {
+    System.out.println("[wv2] onEnvCompleted hr=0x" + Integer.toHexString(hr));
+    if (hr != 0) { webviewReady = true; return hr; }
+    // Pass combinedHandler as the ctrl handler — same object, mirrors reference's "this".
+    // When WebView2 calls QI on it for ICoreWebView2CreateCoreWebView2ControllerCompletedHandler,
+    // our QI returns self, which is this same handler.
+    ctrlPhase = true;
     MemorySegment createCtrl = vtableFn(env, 3);
     try {
       MethodHandle mh = Linker.nativeLinker().downcallHandle(createCtrl,
           FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, ADDRESS));
-      int _ = (int) mh.invokeExact(env, hwndWidget, ctrlHandler);
-    } catch (Throwable t) { throw new RuntimeException(t); }
+      int createHr = (int) mh.invokeExact(env, hwndWidget, combinedHandler);
+      System.out.println("[wv2] CreateCoreWebView2Controller hr=0x" + Integer.toHexString(createHr));
+      if (createHr != 0) { webviewReady = true; }
+    } catch (Throwable t) { webviewReady = true; throw new RuntimeException(t); }
     return 0;
   }
 
-  // -------------------------------------------------------------------------
-  // COM controller completed handler
-  // -------------------------------------------------------------------------
+  private int onCtrlCompleted(int hr, MemorySegment ctrlPtr) {
+    System.out.println("[wv2] onCtrlCompleted hr=0x" + Integer.toHexString(hr)
+        + " ctrlPtr=0x" + Long.toHexString(ctrlPtr.address()));
+    if (hr != 0) { webviewReady = true; return hr; }
 
-  private MemorySegment buildCtrlCompletedHandler() {
-    try {
-      var mh = MethodHandles.lookup().findVirtual(Win32WebView.class, "onCtrlCompleted",
-          MethodType.methodType(int.class, MemorySegment.class, int.class, MemorySegment.class))
-          .bindTo(this);
-      return buildComObject(Linker.nativeLinker().upcallStub(mh,
-          FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT, ADDRESS), arenaStubs));
-    } catch (ReflectiveOperationException e) { throw new RuntimeException(e); }
-  }
+    // AddRef the controller before this callback returns. Without this, WebView2
+    // releases its reference on return, freeing the COM object and causing every
+    // subsequent call through controller.ptr to fail with 0x8007139f.
+    nativeAddRef(ctrlPtr);
 
-  @SuppressWarnings("unused")
-  public int onCtrlCompleted(MemorySegment self, int hr, MemorySegment ctrlPtr) {
-    if (hr != 0) { wv2Ready = true; return hr; }
     controller = new ComController(ctrlPtr);
-    webView2   = new ComWebView2(controller.getCoreWebView2());
+    MemorySegment wv2Ptr = controller.getCoreWebView2();
+    if (wv2Ptr.address() == 0 || (wv2Ptr.address() & 7) != 0) {
+      System.out.println("[wv2] ERROR: bad wv2Ptr");
+      webviewReady = true; return -1;
+    }
+    webView2 = new ComWebView2(wv2Ptr);
 
+    // Register event handlers while still inside the controller callback (this works;
+    // these are local COM ops that don't require the IPC channel).
     addWebMessageHandler();
     addPermissionHandler();
+    addProcessFailedHandler();
 
-    resizeWebView2(hwndWidget);
-    controller.putIsVisible(true);
-    focusWebView2();
+    // Defer the IPC-requiring work (settings, scripts, resize, show) to a pending task
+    // that will run inside msgWndProc — a clean stack frame outside any WebView2 callback.
+    // This is the critical fix: addScriptToExecuteOnDocumentCreated needs the pump to be
+    // active AND must not be called from within a WebView2 callback completion chain.
+    pending.add(this::doInitTasks);
+    try { int _ = (int) Win32.PostMessageW.invokeExact(hwndMsg, Win32.WM_APP, 0L, 0L); }
+    catch (Throwable ignored) {}
+
     wv2Ready = true;
     return 0;
+  }
+
+  /**
+   * Runs after the controller callback returns — called from msgWndProc (inside DispatchMessageW,
+   * part of the init pump). At this point we are NOT inside any WebView2 callback, so:
+   * <ol>
+   *   <li>addScriptToExecuteOnDocumentCreated succeeds (IPC is available).</li>
+   *   <li>Nested pumping inside nativeAddUserScript works (GetMessageW picks up completions).</li>
+   * </ol>
+   * Mirrors reference embed() sequence: settings → add_init_script → resize → put_IsVisible → show.
+   */
+  private void doInitTasks() {
+    applySettings(debugMode);
+    setupJsBridge(POST_FN);  // nativeAddUserScript uses nested pump; works from msgWndProc context
+    resizeWidget(hwnd);
+    try {
+      int hr = (int) controller.putIsVisible(true);
+      System.out.println("[wv2] putIsVisible(true) hr=0x" + Integer.toHexString(hr));
+      int _a = (int) Win32.ShowWindow.invokeExact(hwndWidget, Win32.SW_SHOW);
+      int _b = (int) Win32.UpdateWindow.invokeExact(hwndWidget);
+      int _c = (int) Win32.ShowWindow.invokeExact(hwnd, Win32.SW_SHOW);
+      int _d = (int) Win32.UpdateWindow.invokeExact(hwnd);
+      MemorySegment _e = (MemorySegment) Win32.SetFocus.invokeExact(hwnd);
+    } catch (Throwable t) { throw new RuntimeException(t); }
+    focusWebView2();
+    // Signal the embedWebView2 pumpLoop to exit.
+    webviewReady = true;
   }
 
   // -------------------------------------------------------------------------
@@ -512,8 +573,7 @@ public final class Win32WebView extends WebviewBase {
 
   @SuppressWarnings("unused")
   public int onWebMessage(MemorySegment self, MemorySegment sender, MemorySegment args) {
-    // ICoreWebView2WebMessageReceivedEventArgs::TryGetWebMessageAsString — vtable[5] per IDL
-    // IDL order: QI=0, AddRef=1, Release=2, get_Source=3, get_WebMessageAsJson=4, TryGetWebMessageAsString=5
+    // ICoreWebView2WebMessageReceivedEventArgs::TryGetWebMessageAsString — vtable[5]
     try (Arena a = Arena.ofConfined()) {
       MemorySegment pStr = a.allocate(ADDRESS);
       MethodHandle tryGet = Linker.nativeLinker().downcallHandle(vtableFn(args, 5),
@@ -548,8 +608,6 @@ public final class Win32WebView extends WebviewBase {
 
   @SuppressWarnings("unused")
   public int onPermissionRequested(MemorySegment self, MemorySegment sender, MemorySegment args) {
-    // ICoreWebView2PermissionRequestedEventArgs vtable per IDL:
-    // QI=0,AddRef=1,Release=2, get_Uri=3, get_PermissionKind=4, get_IsUserInitiated=5, get_State=6, put_State=7
     try (Arena a = Arena.ofConfined()) {
       MemorySegment pKind = a.allocate(JAVA_INT);
       MethodHandle getKind = Linker.nativeLinker().downcallHandle(vtableFn(args, 4),
@@ -561,6 +619,26 @@ public final class Win32WebView extends WebviewBase {
         int __ = (int) putState.invokeExact(args, Win32.COREWEBVIEW2_PERMISSION_STATE_ALLOW);
       }
     } catch (Throwable ignored) {}
+    return 0;
+  }
+
+  // -------------------------------------------------------------------------
+  // ProcessFailed handler (diagnostic: detect browser process crashes)
+  // -------------------------------------------------------------------------
+
+  private void addProcessFailedHandler() {
+    try {
+      var mh = MethodHandles.lookup().findVirtual(Win32WebView.class, "onProcessFailed",
+          MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class, MemorySegment.class))
+          .bindTo(this);
+      webView2.addProcessFailed(buildComObject(Linker.nativeLinker().upcallStub(mh,
+          FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, ADDRESS), arenaStubs)));
+    } catch (ReflectiveOperationException e) { throw new RuntimeException(e); }
+  }
+
+  @SuppressWarnings("unused")
+  public int onProcessFailed(MemorySegment self, MemorySegment sender, MemorySegment args) {
+    System.out.println("[wv2] BROWSER PROCESS FAILED — WebView2 renderer/browser crashed!");
     return 0;
   }
 
@@ -580,13 +658,20 @@ public final class Win32WebView extends WebviewBase {
 
   @SuppressWarnings("unused")
   public int onScriptAdded(MemorySegment self, int hr, MemorySegment idStr) {
+    System.out.println("[wv2] onScriptAdded hr=0x" + Integer.toHexString(hr)
+        + " idStr=0x" + Long.toHexString(idStr.address()));
     if (hr == 0 && idStr.address() != 0) {
       try {
+        // idStr is an [in] LPCWSTR owned by WebView2 for the duration of this callback.
+        // Copy the string; do NOT call CoTaskMemFree on it.
         String id = idStr.reinterpret(1024).getString(0, StandardCharsets.UTF_16LE);
-        Win32.coTaskMemFree(idStr);
         scriptIds.add(id);
-      } catch (Exception ignored) {}
+        System.out.println("[wv2] script id=\"" + id + "\"");
+      } catch (Exception e) { System.out.println("[wv2] onScriptAdded getString failed: " + e); }
     }
+    // Unblock the nativeAddUserScript that submitted this script (FIFO order).
+    Runnable cb = scriptDoneCallbacks.poll();
+    if (cb != null) cb.run();
     return 0;
   }
 
@@ -621,6 +706,10 @@ public final class Win32WebView extends WebviewBase {
     if (controller == null) return;
     try (Arena a = Arena.ofConfined()) {
       MemorySegment rect = Win32.getClientRect(hWnd, a);
+      int l = rect.get(JAVA_INT, 0), t = rect.get(JAVA_INT, 4),
+          r = rect.get(JAVA_INT, 8), b = rect.get(JAVA_INT, 12);
+      if (r - l <= 0 || b - t <= 0) return;
+      System.out.println("[wv2] resizeWebView2 bounds=(" + l + "," + t + "," + r + "," + b + ")");
       controller.putBounds(rect);
     }
   }
@@ -661,8 +750,31 @@ public final class Win32WebView extends WebviewBase {
         if (done.getAsBoolean()) break;
         int r = (int) Win32.GetMessageW.invokeExact(msg, MemorySegment.NULL, 0, 0);
         if (r <= 0) break;
-        int wmsg = msg.get(JAVA_INT, 8);
-        if (wmsg == Win32.WM_QUIT) break;
+        if (msg.get(JAVA_INT, 8) == Win32.WM_QUIT) break;
+        int _ = (int) Win32.TranslateMessage.invokeExact(msg);
+        long __ = (long) Win32.DispatchMessageW.invokeExact(msg);
+        if (done.getAsBoolean()) break;
+      }
+    } catch (Throwable t) { throw new RuntimeException(t); }
+  }
+
+  /** Debug variant of pumpLoop: logs the first 20 messages received. */
+  private void pumpLoopDebug(java.util.function.BooleanSupplier done) {
+    int count = 0;
+    try (Arena a = Arena.ofConfined()) {
+      MemorySegment msg = a.allocate(Win32.MSG_LAYOUT);
+      for (;;) {
+        if (done.getAsBoolean()) break;
+        int r = (int) Win32.GetMessageW.invokeExact(msg, MemorySegment.NULL, 0, 0);
+        if (count < 20) {
+          int msgId = msg.get(JAVA_INT, 8);
+          long hwndMsg2 = msg.get(ADDRESS, 0).address();
+          System.out.printf("[wv2] pumpLoopDebug[%d] GetMessage r=%d msg=0x%x hwnd=0x%x%n",
+              count, r, msgId, hwndMsg2);
+        }
+        count++;
+        if (r <= 0) { System.out.println("[wv2] pumpLoopDebug: r=" + r + " exiting"); break; }
+        if (msg.get(JAVA_INT, 8) == Win32.WM_QUIT) { System.out.println("[wv2] pumpLoopDebug: WM_QUIT"); break; }
         int _ = (int) Win32.TranslateMessage.invokeExact(msg);
         long __ = (long) Win32.DispatchMessageW.invokeExact(msg);
         if (done.getAsBoolean()) break;
@@ -675,30 +787,22 @@ public final class Win32WebView extends WebviewBase {
   // -------------------------------------------------------------------------
 
   /**
-   * Wraps ICoreWebView2Controller.
-   *
-   * <p>Vtable layout (IDL order is correct for slots 3–6; MoveFocus and beyond are +1
-   * relative to IDL due to one extra slot in the runtime vtable):
+   * ICoreWebView2Controller vtable indices (verified against WebView2.h).
    * <pre>
-   *  3  get_IsVisible        4  put_IsVisible   (BOOL)
-   *  5  get_Bounds           6  put_Bounds      (RECT by-ref on x64)
-   *  7  get_ZoomFactor       8  put_ZoomFactor
-   *  9  add_ZoomFactorChanged  10  remove_ZoomFactorChanged
-   * 11  (extra)             12  MoveFocus
-   * 13  add_MoveFocusRequested  14–23  focus/accel/parent events
-   * 24  Close               25  get_CoreWebView2
+   *  3  get_IsVisible    4  put_IsVisible    5  get_Bounds       6  put_Bounds
+   * 12  MoveFocus       24  Close           25  get_CoreWebView2
    * </pre>
    */
   private static final class ComController {
     private final MemorySegment ptr;
-    private final MethodHandle  putIsVisible;    // vtable[4]  — BOOL
-    private final MethodHandle  putBounds;       // vtable[6]  — RECT (by-ref on x64)
-    private final MethodHandle  moveFocus;       // vtable[12]
-    private final MethodHandle  close;           // vtable[24]
-    private final MethodHandle  getCoreWebView2; // vtable[25]
+    private final MethodHandle  putIsVisible;
+    private final MethodHandle  putBounds;
+    private final MethodHandle  moveFocus;
+    private final MethodHandle  close;
+    private final MethodHandle  getCoreWebView2;
 
     ComController(MemorySegment ptr) {
-      this.ptr          = ptr;
+      this.ptr        = ptr;
       putIsVisible    = resolve(ptr,  4, FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT));
       putBounds       = resolve(ptr,  6, FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS));
       moveFocus       = resolve(ptr, 12, FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT));
@@ -706,147 +810,161 @@ public final class Win32WebView extends WebviewBase {
       getCoreWebView2 = resolve(ptr, 25, FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS));
     }
 
-    void putIsVisible(boolean visible) {
-      try { int _ = (int) putIsVisible.invokeExact(ptr, visible ? 1 : 0); }
+    int putIsVisible(boolean visible) {
+      try { return (int) putIsVisible.invokeExact(ptr, visible ? 1 : 0); }
       catch (Throwable t) { throw new RuntimeException(t); }
     }
 
     void putBounds(MemorySegment rect) {
-      try { int _ = (int) putBounds.invokeExact(ptr, rect); }
-      catch (Throwable t) { throw new RuntimeException(t); }
+      try {
+        int hr = (int) putBounds.invokeExact(ptr, rect);
+        System.out.println("[wv2] putBounds hr=0x" + Integer.toHexString(hr));
+      } catch (Throwable t) { throw new RuntimeException(t); }
     }
 
     void moveFocus(int reason) {
-      try { int _ = (int) moveFocus.invokeExact(ptr, reason); }
-      catch (Throwable t) { throw new RuntimeException(t); }
+      try {
+        int hr = (int) moveFocus.invokeExact(ptr, reason);
+        System.out.println("[wv2] moveFocus hr=0x" + Integer.toHexString(hr));
+      } catch (Throwable t) { throw new RuntimeException(t); }
     }
 
     void close() {
-      try { int _ = (int) close.invokeExact(ptr); }
-      catch (Throwable ignored) {}
+      try { int _ = (int) close.invokeExact(ptr); } catch (Throwable ignored) {}
     }
 
     MemorySegment getCoreWebView2() {
       try (Arena a = Arena.ofConfined()) {
         MemorySegment pWv2 = a.allocate(ADDRESS);
-        int _ = (int) getCoreWebView2.invokeExact(ptr, pWv2);
-        return pWv2.get(ADDRESS, 0);
+        int hr = (int) getCoreWebView2.invokeExact(ptr, pWv2);
+        MemorySegment wv2 = pWv2.get(ADDRESS, 0);
+        System.out.println("[wv2] get_CoreWebView2 hr=0x" + Integer.toHexString(hr)
+            + " ptr=0x" + Long.toHexString(wv2.address()));
+        return wv2;
       } catch (Throwable t) { throw new RuntimeException(t); }
     }
   }
 
   /**
-   * Wraps ICoreWebView2.
-   *
-   * <p>Vtable layout per WebView2.h IDL (IUnknown occupies slots 0–2):
+   * ICoreWebView2 vtable indices (verified against WebView2.h).
    * <pre>
-   *  3  get_Settings          4  get_Source
-   *  5  Navigate              6  NavigateToString
-   *  7  add_NavigationStarting  ...  20 remove_FrameNavigationCompleted
-   * 21  add_WebMessageReceived  22  remove_WebMessageReceived
-   * 23  add_PermissionRequested  24  remove_PermissionRequested
-   * 25  add_ProcessFailed     26  remove_ProcessFailed
+   *  3  get_Settings     5  Navigate         6  NavigateToString
+   * 23  add_PermissionRequested
    * 27  AddScriptToExecuteOnDocumentCreated
    * 28  RemoveScriptToExecuteOnDocumentCreated
-   * 29  ExecuteScript         30  CapturePreview  31  Reload ...
+   * 29  ExecuteScript
+   * 34  add_WebMessageReceived
    * </pre>
    */
   private static final class ComWebView2 {
     private final MemorySegment ptr;
-    private final MethodHandle  getSettings;        // vtable[3]
-    private final MethodHandle  navigate;           // vtable[5]
-    private final MethodHandle  navigateToString;   // vtable[6]
-    private final MethodHandle  addWebMessageRcvd;  // vtable[21]
-    private final MethodHandle  addPermissionReq;   // vtable[23]
-    private final MethodHandle  addScriptOnDoc;     // vtable[27]
-    private final MethodHandle  removeScript;       // vtable[28]
-    private final MethodHandle  executeScript;      // vtable[29]
+    private final MethodHandle  getSettings;
+    private final MethodHandle  navigate;
+    private final MethodHandle  navigateToString;
+    private final MethodHandle  addWebMessageRcvd;
+    private final MethodHandle  addPermissionReq;
+    private final MethodHandle  addScriptOnDoc;
+    private final MethodHandle  removeScript;
+    private final MethodHandle  executeScript;
 
     ComWebView2(MemorySegment ptr) {
-      this.ptr = ptr;
+      this.ptr          = ptr;
       getSettings       = resolve(ptr,  3, FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS));
       navigate          = resolve(ptr,  5, FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS));
       navigateToString  = resolve(ptr,  6, FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS));
-      addWebMessageRcvd = resolve(ptr, 21, FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, ADDRESS));
       addPermissionReq  = resolve(ptr, 23, FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, ADDRESS));
       addScriptOnDoc    = resolve(ptr, 27, FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, ADDRESS));
       removeScript      = resolve(ptr, 28, FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS));
       executeScript     = resolve(ptr, 29, FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, ADDRESS));
+      addWebMessageRcvd = resolve(ptr, 34, FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, ADDRESS));
     }
 
     ComWebView2Settings getSettings() {
       try (Arena a = Arena.ofConfined()) {
         MemorySegment pSettings = a.allocate(ADDRESS);
-        int _ = (int) getSettings.invokeExact(ptr, pSettings);
+        int hr = (int) getSettings.invokeExact(ptr, pSettings);
         MemorySegment s = pSettings.get(ADDRESS, 0);
+        System.out.println("[wv2] getSettings hr=0x" + Integer.toHexString(hr)
+            + " ptr=0x" + Long.toHexString(s.address()));
         return s.address() != 0 ? new ComWebView2Settings(s) : null;
       } catch (Throwable t) { throw new RuntimeException(t); }
     }
 
     void navigate(String url) {
       try (Arena a = Arena.ofConfined()) {
-        int _ = (int) navigate.invokeExact(ptr, a.allocateFrom(url, StandardCharsets.UTF_16LE));
+        int hr = (int) navigate.invokeExact(ptr, a.allocateFrom(url, StandardCharsets.UTF_16LE));
+        System.out.println("[wv2] navigate(\"" + url + "\") hr=0x" + Integer.toHexString(hr));
       } catch (Throwable t) { throw new RuntimeException(t); }
     }
 
     void navigateToString(String html) {
       try (Arena a = Arena.ofConfined()) {
-        int _ = (int) navigateToString.invokeExact(ptr, a.allocateFrom(html, StandardCharsets.UTF_16LE));
+        int hr = (int) navigateToString.invokeExact(ptr, a.allocateFrom(html, StandardCharsets.UTF_16LE));
+        System.out.println("[wv2] navigateToString(len=" + html.length() + ") hr=0x" + Integer.toHexString(hr));
       } catch (Throwable t) { throw new RuntimeException(t); }
     }
 
     void addWebMessageReceived(MemorySegment handler) {
       try (Arena a = Arena.ofConfined()) {
         MemorySegment pToken = a.allocate(JAVA_LONG);
-        int _ = (int) addWebMessageRcvd.invokeExact(ptr, handler, pToken);
+        int hr = (int) addWebMessageRcvd.invokeExact(ptr, handler, pToken);
+        System.out.println("[wv2] addWebMessageReceived hr=0x" + Integer.toHexString(hr));
       } catch (Throwable t) { throw new RuntimeException(t); }
     }
 
     void addPermissionRequested(MemorySegment handler) {
       try (Arena a = Arena.ofConfined()) {
         MemorySegment pToken = a.allocate(JAVA_LONG);
-        int _ = (int) addPermissionReq.invokeExact(ptr, handler, pToken);
+        int hr = (int) addPermissionReq.invokeExact(ptr, handler, pToken);
+        System.out.println("[wv2] addPermissionRequested hr=0x" + Integer.toHexString(hr));
       } catch (Throwable t) { throw new RuntimeException(t); }
     }
 
-    void addScriptToExecuteOnDocumentCreated(String js, MemorySegment handler) {
+    // ICoreWebView2::add_ProcessFailed — vtable[25]
+    void addProcessFailed(MemorySegment handler) {
       try (Arena a = Arena.ofConfined()) {
-        int _ = (int) addScriptOnDoc.invokeExact(ptr,
+        MemorySegment pToken = a.allocate(JAVA_LONG);
+        MethodHandle mh = resolve(ptr, 25, FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, ADDRESS));
+        int hr = (int) mh.invokeExact(ptr, handler, pToken);
+        System.out.println("[wv2] add_ProcessFailed hr=0x" + Integer.toHexString(hr));
+      } catch (Throwable t) { throw new RuntimeException(t); }
+    }
+
+    int addScriptToExecuteOnDocumentCreated(String js, MemorySegment handler) {
+      try (Arena a = Arena.ofConfined()) {
+        int hr = (int) addScriptOnDoc.invokeExact(ptr,
             a.allocateFrom(js, StandardCharsets.UTF_16LE), handler);
+        System.out.println("[wv2] addScriptOnDoc hr=0x" + Integer.toHexString(hr));
+        return hr;
       } catch (Throwable t) { throw new RuntimeException(t); }
     }
 
     void removeScriptToExecuteOnDocumentCreated(String id) {
       try (Arena a = Arena.ofConfined()) {
-        int _ = (int) removeScript.invokeExact(ptr,
-            a.allocateFrom(id, StandardCharsets.UTF_16LE));
+        int _ = (int) removeScript.invokeExact(ptr, a.allocateFrom(id, StandardCharsets.UTF_16LE));
       } catch (Throwable t) { throw new RuntimeException(t); }
     }
 
     void executeScript(String js) {
       try (Arena a = Arena.ofConfined()) {
-        int _ = (int) executeScript.invokeExact(ptr,
+        int hr = (int) executeScript.invokeExact(ptr,
             a.allocateFrom(js, StandardCharsets.UTF_16LE), MemorySegment.NULL);
+        System.out.println("[wv2] executeScript hr=0x" + Integer.toHexString(hr));
       } catch (Throwable t) { throw new RuntimeException(t); }
     }
   }
 
   /**
-   * Wraps ICoreWebView2Settings.
-   *
-   * <p>Vtable layout per WebView2.h IDL (IUnknown occupies slots 0–2):
+   * ICoreWebView2Settings vtable indices.
    * <pre>
-   *  3  get_IsScriptEnabled     4  put_IsScriptEnabled
-   *  5  get_IsWebMessageEnabled  6  put_IsWebMessageEnabled
-   *  7  get_AreDefaultScriptDialogsEnabled  8  put_AreDefaultScriptDialogsEnabled
    *  9  get_IsStatusBarEnabled  10  put_IsStatusBarEnabled
-   * 11  get_AreDevToolsEnabled  12  put_AreDevToolsEnabled  ...
+   * 11  get_AreDevToolsEnabled  12  put_AreDevToolsEnabled
    * </pre>
    */
   private static final class ComWebView2Settings {
     private final MemorySegment ptr;
-    private final MethodHandle  putIsStatusBarEnabled;  // vtable[10]
-    private final MethodHandle  putAreDevToolsEnabled;  // vtable[12]
+    private final MethodHandle  putIsStatusBarEnabled;
+    private final MethodHandle  putAreDevToolsEnabled;
 
     ComWebView2Settings(MemorySegment ptr) {
       this.ptr = ptr;
@@ -855,29 +973,26 @@ public final class Win32WebView extends WebviewBase {
     }
 
     void putIsStatusBarEnabled(boolean enabled) {
-      try { int _ = (int) putIsStatusBarEnabled.invokeExact(ptr, enabled ? 1 : 0); }
-      catch (Throwable t) { throw new RuntimeException(t); }
+      try {
+        int hr = (int) putIsStatusBarEnabled.invokeExact(ptr, enabled ? 1 : 0);
+        System.out.println("[wv2] putIsStatusBarEnabled(" + enabled + ") hr=0x" + Integer.toHexString(hr));
+      } catch (Throwable t) { throw new RuntimeException(t); }
     }
 
     void putAreDevToolsEnabled(boolean enabled) {
-      try { int _ = (int) putAreDevToolsEnabled.invokeExact(ptr, enabled ? 1 : 0); }
-      catch (Throwable t) { throw new RuntimeException(t); }
+      try {
+        int hr = (int) putAreDevToolsEnabled.invokeExact(ptr, enabled ? 1 : 0);
+        System.out.println("[wv2] putAreDevToolsEnabled(" + enabled + ") hr=0x" + Integer.toHexString(hr));
+      } catch (Throwable t) { throw new RuntimeException(t); }
     }
   }
 
   // -------------------------------------------------------------------------
-  // COM vtable resolution
+  // COM vtable resolution helpers
   // -------------------------------------------------------------------------
 
-  /**
-   * Reads vtable[idx] from a COM object pointer at runtime and returns a downcall
-   * MethodHandle for it.  Called once per method per COM object instance — the
-   * returned handle is cached in the typed wrapper so the vtable is only read
-   * at construction, not on every call.
-   */
   private static MethodHandle resolve(MemorySegment comObj, int idx, FunctionDescriptor fd) {
-    MemorySegment fnPtr = vtableFn(comObj, idx);
-    return Linker.nativeLinker().downcallHandle(fnPtr, fd);
+    return Linker.nativeLinker().downcallHandle(vtableFn(comObj, idx), fd);
   }
 
   private static MemorySegment vtableFn(MemorySegment comObj, int idx) {
@@ -888,7 +1003,7 @@ public final class Win32WebView extends WebviewBase {
   }
 
   // -------------------------------------------------------------------------
-  // COM object construction (IUnknown + Invoke vtable)
+  // COM object construction (IUnknown + Invoke vtable — 4 slots)
   // -------------------------------------------------------------------------
 
   private MemorySegment buildComObject(MemorySegment invokeStub) {
@@ -940,12 +1055,30 @@ public final class Win32WebView extends WebviewBase {
     return cachedRelease;
   }
 
+  // QI: return self for any IID — mirrors reference returning self for all known interfaces.
+  // With the official WebView2Loader.dll, QI is never called on our handlers.
+  // With the embedded loader, QI is called on the env handler for the env completed IID;
+  // returning self is correct since our combined handler IS the env+ctrl handler.
   @SuppressWarnings("unused")
-  private static int  comQI(MemorySegment self, MemorySegment riid, MemorySegment ppv) {
-    ppv.set(ADDRESS, 0, self); return 0;
+  private static int comQI(MemorySegment self, MemorySegment riid, MemorySegment ppv) {
+    ppv.set(ADDRESS, 0, self);
+    return 0; // S_OK
   }
   @SuppressWarnings("unused")
   private static long comAddRef(MemorySegment self)  { return 1L; }
   @SuppressWarnings("unused")
   private static long comRelease(MemorySegment self) { return 1L; }
+
+  // -------------------------------------------------------------------------
+  // Calls IUnknown::AddRef (vtable[1]) on a native COM object to increment
+  // its reference count, keeping the object alive beyond the current callback.
+  // -------------------------------------------------------------------------
+  private static void nativeAddRef(MemorySegment comObj) {
+    try {
+      MethodHandle addRef = Linker.nativeLinker().downcallHandle(
+          vtableFn(comObj, 1), // IUnknown::AddRef
+          FunctionDescriptor.of(JAVA_INT, ADDRESS));
+      int _ = (int) addRef.invokeExact(comObj);
+    } catch (Throwable ignored) {}
+  }
 }

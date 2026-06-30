@@ -244,7 +244,11 @@ final class Win32 {
   }
 
   static void coInitialize() {
-    try { int _ = (int) CoInitializeEx.invokeExact(MemorySegment.NULL, COINIT_APARTMENTTHREADED); }
+    try {
+      int hr = (int) CoInitializeEx.invokeExact(MemorySegment.NULL, COINIT_APARTMENTTHREADED);
+      // S_OK (0x0) = first init, S_FALSE (0x1) = already STA, RPC_E_CHANGED_MODE (0x80010106) = thread is MTA (bug)
+      System.out.println("[wv2] CoInitializeEx(APARTMENTTHREADED) hr=0x" + Integer.toHexString(hr));
+    }
     catch (Throwable t) { throw new RuntimeException(t); }
   }
 
