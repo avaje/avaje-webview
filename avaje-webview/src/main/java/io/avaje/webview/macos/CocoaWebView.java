@@ -11,6 +11,7 @@ import java.net.URI;
 import java.nio.file.Path;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static io.avaje.webview.macos.ObjC.*;
@@ -85,6 +86,7 @@ public final class CocoaWebView extends WebviewBase {
   private volatile MemorySegment ucController; // WKUserContentController*
 
   private volatile boolean closed = false;
+  private final AtomicBoolean windowClosed = new AtomicBoolean(false);
   private final CountDownLatch windowClosedLatch = new CountDownLatch(1);
 
   // ofShared() because close() may be called from a non-main thread after the stubs are created
@@ -122,22 +124,13 @@ public final class CocoaWebView extends WebviewBase {
   public void close() {
     if (closed) return;
     closed = true;
-    // Dispatch to main thread — Cocoa objects can only be touched there.
-    dispatchImpl(
-        () -> {
-          try (Arena a = Arena.ofConfined()) {
-            // -close takes no args; -close with isReleasedWhenClosed=YES (default) destroys the
-            // window.
-            sendVoid0(nsWindow, sel(a, "close"));
-            // When the last window closes, stop the event loop so run() returns.
-            if (openWindows.decrementAndGet() == 0) {
-              MemorySegment app =
-                  send0(ObjC.getClass(a, "NSApplication"), sel(a, "sharedApplication"));
-              sendVoid1(app, sel(a, "stop:"), MemorySegment.NULL);
-            }
-          }
-          windowClosedLatch.countDown();
-        });
+    // Dispatch [nsWindow close] to the main thread. The window delegate's windowWillClose:
+    // fires synchronously during [close], and onWindowWillClose() handles all shutdown logic.
+    dispatchImpl(() -> {
+      try (Arena a = Arena.ofConfined()) {
+        sendVoid0(nsWindow, sel(a, "close"));
+      }
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -357,6 +350,28 @@ public final class CocoaWebView extends WebviewBase {
     }
   }
 
+  /**
+   * NSWindowDelegate: -windowWillClose:(NSNotification*)notification
+   *
+   * <p>Fires on the main thread whenever the window is about to close — whether triggered by the
+   * user clicking the red X or by Java calling [nsWindow close] via close(). The AtomicBoolean
+   * ensures the shutdown sequence runs exactly once regardless of who initiated the close.
+   *
+   * <p>C signature: void(id self, SEL cmd, id notification) — type encoding "v@:@"
+   */
+  @SuppressWarnings("unused")
+  public void onWindowWillClose(MemorySegment self, MemorySegment cmd, MemorySegment notification) {
+    if (!windowClosed.compareAndSet(false, true)) return;
+    closed = true;
+    if (openWindows.decrementAndGet() == 0) {
+      try (Arena a = Arena.ofConfined()) {
+        MemorySegment app = send0(ObjC.getClass(a, "NSApplication"), sel(a, "sharedApplication"));
+        sendVoid1(app, sel(a, "stop:"), MemorySegment.NULL);
+      }
+    }
+    windowClosedLatch.countDown();
+  }
+
   // -------------------------------------------------------------------------
   // Initialisation
   // -------------------------------------------------------------------------
@@ -495,6 +510,7 @@ public final class CocoaWebView extends WebviewBase {
                   NS_BACKING_BUFFERED,
                   0 /* defer=NO */);
 
+      sendVoid1(nsWindow, sel(a, "setDelegate:"), createWindowDelegate(a));
       sendVoid1(nsWindow, sel(a, "setContentView:"), wkWebView);
       sendVoid1(nsWindow, sel(a, "makeKeyAndOrderFront:"), MemorySegment.NULL);
 
@@ -509,6 +525,49 @@ public final class CocoaWebView extends WebviewBase {
           .invokeExact(app, sel(a, "activateIgnoringOtherApps:"), 1);
 
       setupJsBridge(POST_FN);
+    } catch (Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * Synthesises an NSWindowDelegate at runtime to intercept windowWillClose:.
+   *
+   * <p>Same pattern as createScriptHandler: allocate a class pair, add a method wired to a Panama
+   * upcall stub, register the pair, and return an instance. Type encoding "v@:@" = void(id, SEL, id).
+   */
+  private MemorySegment createWindowDelegate(Arena a) {
+    try {
+      MemorySegment superCls = ObjC.getClass(a, "NSObject");
+      String clsName = "JavaWebviewDelegate_" + System.identityHashCode(this);
+      MemorySegment cls =
+          (MemorySegment) ALLOC_CLASS_PAIR.invokeExact(superCls, a.allocateFrom(clsName), 0L);
+
+      var mh =
+          MethodHandles.lookup()
+              .findVirtual(
+                  CocoaWebView.class,
+                  "onWindowWillClose",
+                  MethodType.methodType(
+                      void.class, MemorySegment.class, MemorySegment.class, MemorySegment.class))
+              .bindTo(this);
+      MemorySegment stub =
+          Linker.nativeLinker()
+              .upcallStub(
+                  mh,
+                  FunctionDescriptor.ofVoid(
+                      ValueLayout.ADDRESS, // self
+                      ValueLayout.ADDRESS, // cmd
+                      ValueLayout.ADDRESS), // NSNotification*
+                  callbackArena);
+
+      byte _ =
+          (byte)
+              CLASS_ADD_METHOD.invokeExact(
+                  cls, sel(a, "windowWillClose:"), stub, a.allocateFrom("v@:@"));
+
+      REGISTER_CLASS_PAIR.invokeExact(cls);
+      return (MemorySegment) CLASS_CREATE_INSTANCE.invokeExact(cls, 0L);
     } catch (Throwable t) {
       throw new RuntimeException(t);
     }
