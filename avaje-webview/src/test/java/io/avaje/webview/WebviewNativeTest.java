@@ -376,4 +376,64 @@ class WebviewNativeTest {
     rethrow(failure);
     assertEquals(2, callCount.get());
   }
+
+  // -------------------------------------------------------------------------
+  // Multiple windows
+  // -------------------------------------------------------------------------
+
+  /**
+   * Creates a second window from a background platform thread while the first window's GTK event
+   * loop is already running. The second window dispatches its init to the GTK thread and blocks its
+   * own run() on a CountDownLatch. Both bindings must fire; w2 closes before w1 so that
+   * openWindows reaches 0 only after w2's latch is signaled and w2.run() can return.
+   */
+  @Test
+  void multipleWindowsBothBindingsFire() throws InterruptedException {
+    var w1Pinged = new AtomicBoolean(false);
+    var w2Pinged = new AtomicBoolean(false);
+    var failure = new AtomicReference<Throwable>();
+    var w2Thread = new AtomicReference<Thread>();
+
+    try (var w1 = Webview.create(false)) {
+      w1.bind("ping1", req -> {
+        w1Pinged.set(true);
+        // Spawn a platform thread (not virtual) so GTK thread-identity checks work correctly.
+        Thread t = Thread.ofPlatform().start(() -> {
+          try (var w2 = Webview.create(false)) {
+            w2.bind("ping2", req2 -> {
+              try {
+                w2Pinged.set(true);
+                // Close w2 first (openWindows 2→1), then w1 (1→0 stops the GTK loop).
+                // Both dispatch() calls run immediately since we are on the GTK thread here.
+                w2.dispatch(w2::close);
+                w1.dispatch(w1::close);
+              } catch (Throwable t2) {
+                failure.set(t2);
+                w1.dispatch(w1::close);
+              }
+              return "null";
+            });
+            w2.setHTML("<script>window.ping2();</script>");
+            w2.run(); // blocks on windowClosedLatch until w2 is closed above
+          } catch (Throwable t2) {
+            failure.set(t2);
+            w1.dispatch(w1::close);
+          }
+        });
+        w2Thread.set(t);
+        return "null";
+      });
+
+      w1.setHTML("<script>window.ping1();</script>");
+      w1.run();
+
+      // Join the w2 thread so assertions see its writes.
+      Thread t = w2Thread.get();
+      if (t != null) t.join(5_000);
+    }
+
+    rethrow(failure);
+    assertTrue(w1Pinged.get(), "window 1 ping was not called");
+    assertTrue(w2Pinged.get(), "window 2 ping was not called");
+  }
 }

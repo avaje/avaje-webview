@@ -6,8 +6,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-#        os: [macos-latest, ubuntu-latest]
-        os: [ubuntu-24.04]
+       os: [macos-latest, ubuntu-24.04, windows-latest]
     steps:
       - uses: actions/checkout@v7
 
@@ -18,7 +17,13 @@ jobs:
           cache: 'maven'
           github-token: ${{ secrets.GITHUB_TOKEN }}
           native-image-job-reports: 'true'
-          
+
+      - name: Install GTK4 + WebKitGTK (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y xvfb libgtk-4-1 libwebkitgtk-6.0-4 libjavascriptcoregtk-6.0-1
+
       - name: Maven cache
         uses: actions/cache@v5
         env:
