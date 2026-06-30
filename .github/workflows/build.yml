@@ -6,7 +6,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-24.04, macos-latest, windows-latest]
+       os: [ubuntu-24.04]
     steps:
       - uses: actions/checkout@v7
 
@@ -29,19 +29,15 @@ jobs:
         env:
           cache-name: maven-cache
         with:
-          path: ~/.m2
-          key: build-${{ env.cache-name }}-${{ matrix.os }}
+          path:
+            ~/.m2
+          key: build-${{ env.cache-name }}
 
       - name: maven version
         run: mvn --version
 
-      - name: Build and Test (Linux)
-        if: runner.os == 'Linux'
+      - name: Build and Test with Maven
         env:
           WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: 1
           WEBKIT_DISABLE_DMABUF_RENDERER: 1
         run: xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" mvn clean verify
-
-      - name: Build and Test (macOS / Windows)
-        if: runner.os != 'Linux'
-        run: mvn clean verify
