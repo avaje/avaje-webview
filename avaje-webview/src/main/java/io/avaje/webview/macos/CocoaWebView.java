@@ -428,6 +428,25 @@ public final class CocoaWebView extends WebviewBase {
           handler,
           nsString(a, HANDLER_NAME));
 
+      if (debug) {
+        // WKPreferences.developerExtrasEnabled — KVC setValue:forKey: works on all macOS versions.
+        MemorySegment prefs = send0(config, sel(a, "preferences"));
+        MemorySegment nsYes =
+            (MemorySegment)
+                Linker.nativeLinker()
+                    .downcallHandle(
+                        MSG_SEND_ADDR,
+                        FunctionDescriptor.of(
+                            ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT))
+                    .invokeExact(ObjC.getClass(a, "NSNumber"), sel(a, "numberWithBool:"), 1);
+        Linker.nativeLinker()
+            .downcallHandle(
+                MSG_SEND_ADDR,
+                FunctionDescriptor.ofVoid(
+                    ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS))
+            .invokeExact(prefs, sel(a, "setValue:forKey:"), nsYes, nsString(a, "developerExtrasEnabled"));
+      }
+
       // NSRect is passed as 4 inline doubles (x=0, y=0, w, h) on arm64.
       wkWebView =
           (MemorySegment)
@@ -439,6 +458,27 @@ public final class CocoaWebView extends WebviewBase {
                   (double) width,
                   (double) height,
                   config);
+
+      if (debug) {
+        // WKWebView.inspectable = YES — macOS 13.3+ (Sonoma). Guard with respondsToSelector: to
+        // avoid crashing on older macOS where the selector doesn't exist.
+        MemorySegment inspSel = sel(a, "setInspectable:");
+        byte responds =
+            (byte)
+                Linker.nativeLinker()
+                    .downcallHandle(
+                        MSG_SEND_ADDR,
+                        FunctionDescriptor.of(
+                            ValueLayout.JAVA_BYTE, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS))
+                    .invokeExact(wkWebView, sel(a, "respondsToSelector:"), inspSel);
+        if (responds != 0) {
+          Linker.nativeLinker()
+              .downcallHandle(
+                  MSG_SEND_ADDR,
+                  FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT))
+              .invokeExact(wkWebView, inspSel, 1);
+        }
+      }
 
       // NS_BACKING_BUFFERED is the only backing type that works on modern macOS.
       // defer=0 (NO) means create the window now rather than lazily when first displayed.
