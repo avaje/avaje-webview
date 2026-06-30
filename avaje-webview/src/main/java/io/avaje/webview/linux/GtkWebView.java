@@ -15,14 +15,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Linux implementation using GTK4 + WebKitGTK 6.0 via Panama FFI.
  *
- * GTK is single-threaded: every GTK/WebKit call must happen on the thread that called
- * gtk_init (tracked as gtkThread). Cross-thread calls queue a Runnable and schedule a
- * GLib idle source via g_idle_add_full, which fires drainDispatchQueue on the GTK thread
- * during the next main-loop iteration.
+ * <p>GTK is single-threaded: every GTK/WebKit call must happen on the thread that called gtk_init
+ * (tracked as gtkThread). Cross-thread calls queue a Runnable and schedule a GLib idle source via
+ * g_idle_add_full, which fires drainDispatchQueue on the GTK thread during the next main-loop
+ * iteration.
  *
- * Multiple CocoaWebView windows can share a single GTK main loop: if a second window is
- * created from a non-GTK thread, it dispatches its init onto the GTK thread and blocks
- * on a CountDownLatch until done.
+ * <p>Multiple CocoaWebView windows can share a single GTK main loop: if a second window is created
+ * from a non-GTK thread, it dispatches its init onto the GTK thread and blocks on a CountDownLatch
+ * until done.
  */
 public final class GtkWebView extends WebviewBase {
 
@@ -36,8 +36,8 @@ public final class GtkWebView extends WebviewBase {
   private static volatile boolean gtkInitDone = false;
   private static final AtomicInteger openWindows = new AtomicInteger(0);
 
-  private volatile MemorySegment window;    // GtkWindow*
-  private volatile MemorySegment webView;   // WebKitWebView*
+  private volatile MemorySegment window; // GtkWindow*
+  private volatile MemorySegment webView; // WebKitWebView*
   private volatile MemorySegment ucManager; // WebKitUserContentManager*
 
   private boolean windowShown = false;
@@ -49,8 +49,8 @@ public final class GtkWebView extends WebviewBase {
 
   // C function pointers (upcall stubs) wired to GLib/GTK signals
   private MemorySegment dispatchStub; // GSourceFunc — drains pendingDispatches on GTK thread
-  private MemorySegment destroyStub;  // "destroy" signal on GtkWindow
-  private MemorySegment msgStub;      // "script-message-received" signal on WebKitUserContentManager
+  private MemorySegment destroyStub; // "destroy" signal on GtkWindow
+  private MemorySegment msgStub; // "script-message-received" signal on WebKitUserContentManager
 
   private final ConcurrentLinkedQueue<Runnable> pendingDispatches = new ConcurrentLinkedQueue<>();
   private final int initialWidth;
@@ -73,12 +73,13 @@ public final class GtkWebView extends WebviewBase {
       applyDmabufWorkaround();
       buildUpcallStubs();
       var initLatch = new CountDownLatch(1);
-      pendingDispatches.add(() -> {
-        initWindowAndWebView(debug);
-        initLatch.countDown();
-      });
-      GLib.gIdleAddFull(GLib.G_PRIORITY_HIGH_IDLE, dispatchStub,
-          MemorySegment.NULL, MemorySegment.NULL);
+      pendingDispatches.add(
+          () -> {
+            initWindowAndWebView(debug);
+            initLatch.countDown();
+          });
+      GLib.gIdleAddFull(
+          GLib.G_PRIORITY_HIGH_IDLE, dispatchStub, MemorySegment.NULL, MemorySegment.NULL);
       try {
         initLatch.await();
       } catch (InterruptedException e) {
@@ -212,8 +213,8 @@ public final class GtkWebView extends WebviewBase {
     } else {
       pendingDispatches.add(r);
       // G_PRIORITY_HIGH_IDLE fires before redraws but after I/O; keeps the UI responsive.
-      GLib.gIdleAddFull(GLib.G_PRIORITY_HIGH_IDLE,
-          dispatchStub, MemorySegment.NULL, MemorySegment.NULL);
+      GLib.gIdleAddFull(
+          GLib.G_PRIORITY_HIGH_IDLE, dispatchStub, MemorySegment.NULL, MemorySegment.NULL);
     }
   }
 
@@ -221,10 +222,11 @@ public final class GtkWebView extends WebviewBase {
   protected void nativeAddUserScript(String js) {
     if (closed) return;
     try (Arena a = Arena.ofConfined()) {
-      MemorySegment script = WebKit6.webkitUserScriptNew(
-          a.allocateFrom(js),
-          WebKit6.WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
-          WebKit6.WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START);
+      MemorySegment script =
+          WebKit6.webkitUserScriptNew(
+              a.allocateFrom(js),
+              WebKit6.WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
+              WebKit6.WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START);
       WebKit6.webkitUcmAddScript(ucManager, script);
       WebKit6.webkitUserScriptUnref(script); // UCM retains its own copy
     }
@@ -277,9 +279,9 @@ public final class GtkWebView extends WebviewBase {
   // -------------------------------------------------------------------------
 
   /**
-   * GSourceFunc callback — drains the pending dispatch queue on the GTK main thread.
-   * Returns G_SOURCE_REMOVE (0) so GLib removes the idle source after one invocation.
-   * We add a fresh idle source per dispatch(), so there's no need to repeat.
+   * GSourceFunc callback — drains the pending dispatch queue on the GTK main thread. Returns
+   * G_SOURCE_REMOVE (0) so GLib removes the idle source after one invocation. We add a fresh idle
+   * source per dispatch(), so there's no need to repeat.
    */
   @SuppressWarnings("unused")
   public int drainDispatchQueue(MemorySegment ignoredData) {
@@ -289,9 +291,8 @@ public final class GtkWebView extends WebviewBase {
   }
 
   /**
-   * "destroy" signal handler for the GtkWindow.
-   * GTK emits this after the window is torn down; at this point the GtkWindow* is
-   * no longer usable, so we null it out and signal waiters.
+   * "destroy" signal handler for the GtkWindow. GTK emits this after the window is torn down; at
+   * this point the GtkWindow* is no longer usable, so we null it out and signal waiters.
    */
   @SuppressWarnings("unused")
   public void onWindowDestroy(MemorySegment widget, MemorySegment ignoredData) {
@@ -302,8 +303,8 @@ public final class GtkWebView extends WebviewBase {
   }
 
   /**
-   * "script-message-received" signal on WebKitUserContentManager.
-   * jsValue is a JavaScriptCore JSCValue wrapping the JS argument to postMessage().
+   * "script-message-received" signal on WebKitUserContentManager. jsValue is a JavaScriptCore
+   * JSCValue wrapping the JS argument to postMessage().
    */
   @SuppressWarnings("unused")
   public void onScriptMessage(MemorySegment manager, MemorySegment jsValue, MemorySegment data) {
@@ -315,26 +316,35 @@ public final class GtkWebView extends WebviewBase {
   // -------------------------------------------------------------------------
 
   /**
-   * NVIDIA GPUs under X11 (not Wayland) can crash WebKitGTK's DMABuf renderer.
-   * Set WEBKIT_DISABLE_DMABUF_RENDERER=1 via setenv() before GTK starts if we detect
-   * the combination, unless the user already set it themselves.
+   * NVIDIA GPUs under X11 (not Wayland) can crash WebKitGTK's DMABuf renderer. Set
+   * WEBKIT_DISABLE_DMABUF_RENDERER=1 via setenv() before GTK starts if we detect the combination,
+   * unless the user already set it themselves.
    */
   private static void applyDmabufWorkaround() {
-               // Wayland is fine
-     // no NVIDIA driver
-    if ((System.getenv("WAYLAND_DISPLAY") != null) || !new java.io.File("/sys/module/nvidia").isDirectory() || (System.getenv("WEBKIT_DISABLE_DMABUF_RENDERER") != null)) return; // already set
+    // Wayland is fine
+    // no NVIDIA driver
+    if ((System.getenv("WAYLAND_DISPLAY") != null)
+        || !new java.io.File("/sys/module/nvidia").isDirectory()
+        || (System.getenv("WEBKIT_DISABLE_DMABUF_RENDERER") != null)) return; // already set
     try {
       var libc = SymbolLookup.libraryLookup("libc.so.6", Arena.global());
-      var setenv = Linker.nativeLinker().downcallHandle(
-          libc.find("setenv").orElseThrow(),
-          FunctionDescriptor.of(ValueLayout.JAVA_INT,
-              ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+      var setenv =
+          Linker.nativeLinker()
+              .downcallHandle(
+                  libc.find("setenv").orElseThrow(),
+                  FunctionDescriptor.of(
+                      ValueLayout.JAVA_INT,
+                      ValueLayout.ADDRESS,
+                      ValueLayout.ADDRESS,
+                      ValueLayout.JAVA_INT));
       try (Arena a = Arena.ofConfined()) {
-        int _ = (int) setenv.invokeExact(
-            a.allocateFrom("WEBKIT_DISABLE_DMABUF_RENDERER"),
-            a.allocateFrom("1"), 1);
+        int _ =
+            (int)
+                setenv.invokeExact(
+                    a.allocateFrom("WEBKIT_DISABLE_DMABUF_RENDERER"), a.allocateFrom("1"), 1);
       }
-    } catch (Throwable ignored) {}
+    } catch (Throwable ignored) {
+    }
   }
 
   private static void initGtk() {
@@ -344,28 +354,43 @@ public final class GtkWebView extends WebviewBase {
   }
 
   /**
-   * Builds the three C function pointer stubs used as GLib/GTK signal callbacks.
-   * Panama upcallStub() takes a bound MethodHandle and a FunctionDescriptor and returns
-   * a MemorySegment that looks like a C function pointer to native code.
+   * Builds the three C function pointer stubs used as GLib/GTK signal callbacks. Panama
+   * upcallStub() takes a bound MethodHandle and a FunctionDescriptor and returns a MemorySegment
+   * that looks like a C function pointer to native code.
    */
   private void buildUpcallStubs() {
     var linker = Linker.nativeLinker();
     var lookup = MethodHandles.lookup();
     try {
       // GSourceFunc: gboolean(*)(gpointer data) — used by g_idle_add_full
-      var drainMh = lookup.findVirtual(GtkWebView.class, "drainDispatchQueue",
-          MethodType.methodType(int.class, MemorySegment.class)).bindTo(this);
+      var drainMh =
+          lookup
+              .findVirtual(
+                  GtkWebView.class,
+                  "drainDispatchQueue",
+                  MethodType.methodType(int.class, MemorySegment.class))
+              .bindTo(this);
       dispatchStub = linker.upcallStub(drainMh, GLib.GSOURCE_FUNC_DESC, callbackArena);
 
       // "destroy" signal: void(*)(GtkWidget*, gpointer)
-      var destroyMh = lookup.findVirtual(GtkWebView.class, "onWindowDestroy",
-          MethodType.methodType(void.class, MemorySegment.class, MemorySegment.class)).bindTo(this);
+      var destroyMh =
+          lookup
+              .findVirtual(
+                  GtkWebView.class,
+                  "onWindowDestroy",
+                  MethodType.methodType(void.class, MemorySegment.class, MemorySegment.class))
+              .bindTo(this);
       destroyStub = linker.upcallStub(destroyMh, Gtk4.DESTROY_SIGNAL_DESC, callbackArena);
 
       // "script-message-received": void(*)(WebKitUserContentManager*, JSCValue*, gpointer)
-      var msgMh = lookup.findVirtual(GtkWebView.class, "onScriptMessage",
-          MethodType.methodType(void.class, MemorySegment.class, MemorySegment.class, MemorySegment.class))
-          .bindTo(this);
+      var msgMh =
+          lookup
+              .findVirtual(
+                  GtkWebView.class,
+                  "onScriptMessage",
+                  MethodType.methodType(
+                      void.class, MemorySegment.class, MemorySegment.class, MemorySegment.class))
+              .bindTo(this);
       msgStub = linker.upcallStub(msgMh, WebKit6.SCRIPT_MESSAGE_RECEIVED_DESC, callbackArena);
     } catch (NoSuchMethodException | IllegalAccessException e) {
       throw new RuntimeException("Failed to build upcall stubs", e);
@@ -386,9 +411,8 @@ public final class GtkWebView extends WebviewBase {
       WebKit6.webkitUcmRegisterHandler(ucManager, a.allocateFrom(HANDLER_NAME));
     }
     // The signal name includes the handler name so only messages for __webview__ fire here.
-    GLib.gSignalConnect(ucManager,
-        "script-message-received::" + HANDLER_NAME,
-        msgStub, MemorySegment.NULL);
+    GLib.gSignalConnect(
+        ucManager, "script-message-received::" + HANDLER_NAME, msgStub, MemorySegment.NULL);
 
     MemorySegment settings = WebKit6.webkitWebViewGetSettings(webView);
     WebKit6.webkitSettingsSetJsClipboard(settings, true);
@@ -410,5 +434,4 @@ public final class GtkWebView extends WebviewBase {
     Gtk4.gtkWidgetSetVisible(window, true);
     windowShown = true;
   }
-
 }

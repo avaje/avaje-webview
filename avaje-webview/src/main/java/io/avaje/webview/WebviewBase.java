@@ -9,7 +9,7 @@ import static java.lang.System.Logger.Level.*;
  * Abstract base for platform-specific {@link Webview} implementations.
  *
  * <p>Holds all shared logic: JS bridge injection, binding management, user-script tracking,
- * console-redirect, and thread-safe dispatch routing.  Subclasses implement the native layer.
+ * console-redirect, and thread-safe dispatch routing. Subclasses implement the native layer.
  */
 public abstract class WebviewBase implements Webview {
 
@@ -53,11 +53,11 @@ public abstract class WebviewBase implements Webview {
   // -------------------------------------------------------------------------
 
   /**
-   * Injects the JS bridge init script and sets up console redirection.
-   * Must be called on the UI/GTK thread after the user-content manager is configured.
+   * Injects the JS bridge init script and sets up console redirection. Must be called on the UI/GTK
+   * thread after the user-content manager is configured.
    *
-   * @param postFn JS expression for posting messages to Java, e.g.
-   *     {@code "function(msg){return window.webkit.messageHandlers.__webview__.postMessage(msg);}"}.
+   * @param postFn JS expression for posting messages to Java, e.g. {@code "function(msg){return
+   *     window.webkit.messageHandlers.__webview__.postMessage(msg);}"}.
    */
   protected final void setupJsBridge(String postFn) {
     addUserScriptInternal(buildInitScript(postFn));
@@ -65,8 +65,8 @@ public abstract class WebviewBase implements Webview {
   }
 
   /**
-   * Called by subclass when a {@code script-message-received} event arrives from WebKit.
-   * Parses the JSON message and dispatches to the matching {@link BindCallback}.
+   * Called by subclass when a {@code script-message-received} event arrives from WebKit. Parses the
+   * JSON message and dispatches to the matching {@link BindCallback}.
    */
   protected final void onMessage(String json) {
     String id = jsonGet(json, "id");
@@ -136,19 +136,21 @@ public abstract class WebviewBase implements Webview {
   @Override
   public void bind(@NonNull String name, @NonNull WebviewBinding handler) {
     bindings.put(name, adapt(name, handler));
-    dispatchImpl(() -> {
-      rebuildBindScript();
-      evalImpl("if(window.__webview__)window.__webview__.onBind(" + jsonEscape(name) + ")");
-    });
+    dispatchImpl(
+        () -> {
+          rebuildBindScript();
+          evalImpl("if(window.__webview__)window.__webview__.onBind(" + jsonEscape(name) + ")");
+        });
   }
 
   @Override
   public void unbind(@NonNull String name) {
     bindings.remove(name);
-    dispatchImpl(() -> {
-      rebuildBindScript();
-      evalImpl("if(window.__webview__)window.__webview__.onUnbind(" + jsonEscape(name) + ")");
-    });
+    dispatchImpl(
+        () -> {
+          rebuildBindScript();
+          evalImpl("if(window.__webview__)window.__webview__.onUnbind(" + jsonEscape(name) + ")");
+        });
   }
 
   @Override
@@ -189,17 +191,27 @@ public abstract class WebviewBase implements Webview {
   // -------------------------------------------------------------------------
 
   protected abstract void navigateImpl(String url);
+
   protected abstract void setTitleImpl(String title);
+
   protected abstract void setSizeImpl(int width, int height);
+
   protected abstract void setMinSizeImpl(int width, int height);
+
   protected abstract void setMaxSizeImpl(int width, int height);
+
   protected abstract void setFixedSizeImpl(int width, int height);
+
   protected abstract void setHtmlImpl(String html);
+
   protected abstract void evalImpl(String js);
+
   /** Schedule {@code r} to run on the UI/GTK thread. */
   protected abstract void dispatchImpl(Runnable r);
+
   /** Add a WebKit user script executed at document-start, top frame only. */
   protected abstract void nativeAddUserScript(String js);
+
   /** Remove all previously added user scripts. */
   protected abstract void nativeRemoveAllUserScripts();
 
@@ -239,24 +251,26 @@ public abstract class WebviewBase implements Webview {
   // -------------------------------------------------------------------------
 
   private void redirectConsole() {
-    bind("__$io_avaje_webview$log__", json -> {
-      int comma = json.indexOf(",");
-      if (comma == -1 || json.charAt(0) != '[') {
-        log.log(ERROR, "[Webview] " + json);
-        return "\"ok\"";
-      }
-      String function = json.substring(2, comma - 1);
-      String contents = json.substring(comma + 1, json.length() - 1);
-      String message = "[Webview | console." + function + "] " + contents;
-      switch (function) {
-        case "log", "info" -> log.log(INFO, message);
-        case "warn" -> log.log(WARNING, message);
-        case "error" -> log.log(ERROR, message);
-        case "debug" -> log.log(DEBUG, message);
-        default -> log.log(TRACE, "[unknown console function] " + message);
-      }
-      return "\"ok\"";
-    });
+    bind(
+        "__$io_avaje_webview$log__",
+        json -> {
+          int comma = json.indexOf(",");
+          if (comma == -1 || json.charAt(0) != '[') {
+            log.log(ERROR, "[Webview] " + json);
+            return "\"ok\"";
+          }
+          String function = json.substring(2, comma - 1);
+          String contents = json.substring(comma + 1, json.length() - 1);
+          String message = "[Webview | console." + function + "] " + contents;
+          switch (function) {
+            case "log", "info" -> log.log(INFO, message);
+            case "warn" -> log.log(WARNING, message);
+            case "error" -> log.log(ERROR, message);
+            case "debug" -> log.log(DEBUG, message);
+            default -> log.log(TRACE, "[unknown console function] " + message);
+          }
+          return "\"ok\"";
+        });
     // Inject as init script so the console override runs on every page (not just the current one)
     addUserScriptInternal(CONSOLE_REDIRECT_JS);
   }
@@ -313,50 +327,52 @@ public abstract class WebviewBase implements Webview {
   // -------------------------------------------------------------------------
 
   private static String buildInitScript(String postFn) {
-    return "(function(){'use strict';" +
-        "function generateId(){" +
-          "var crypto=window.crypto||window.msCrypto;" +
-          "var bytes=new Uint8Array(16);" +
-          "crypto.getRandomValues(bytes);" +
-          "return Array.prototype.slice.call(bytes).map(function(n){" +
-            "var s=n.toString(16);" +
-            "return((s.length%2)==1?'0':'')+s;" +
-          "}).join('');" +
-        "}" +
-        "var Webview=(function(){" +
-          "var _promises={};" +
-          "function Webview_(){}" +
-          "Webview_.prototype.post=function(message){return(" + postFn + ")(message);};" +
-          "Webview_.prototype.call=function(method){" +
-            "var _id=generateId();" +
-            "var _params=Array.prototype.slice.call(arguments,1);" +
-            "var promise=new Promise(function(resolve,reject){_promises[_id]={resolve,reject};});" +
-            "this.post(JSON.stringify({id:_id,method:method,params:_params}));" +
-            "return promise;" +
-          "};" +
-          "Webview_.prototype.onReply=function(id,status,result){" +
-            "var promise=_promises[id];" +
-            "if(result!==undefined){" +
-              "try{result=JSON.parse(result);}" +
-              "catch(e){promise.reject(new Error('Failed to parse binding result as JSON'));return;}" +
-            "}" +
-            "if(status===0){promise.resolve(result);}else{promise.reject(result);}" +
-          "};" +
-          "Webview_.prototype.onBind=function(name){" +
-            "if(window.hasOwnProperty(name))throw new Error('Property \"'+name+'\" already exists');" +
-            "window[name]=(function(){" +
-              "var params=[name].concat(Array.prototype.slice.call(arguments));" +
-              "return Webview_.prototype.call.apply(this,params);" +
-            "}).bind(this);" +
-          "};" +
-          "Webview_.prototype.onUnbind=function(name){" +
-            "if(!window.hasOwnProperty(name))throw new Error('Property \"'+name+'\" does not exist');" +
-            "delete window[name];" +
-          "};" +
-          "return Webview_;" +
-        "})();" +
-        "window.__webview__=new Webview();" +
-    "})()";
+    return "(function(){'use strict';"
+        + "function generateId(){"
+        + "var crypto=window.crypto||window.msCrypto;"
+        + "var bytes=new Uint8Array(16);"
+        + "crypto.getRandomValues(bytes);"
+        + "return Array.prototype.slice.call(bytes).map(function(n){"
+        + "var s=n.toString(16);"
+        + "return((s.length%2)==1?'0':'')+s;"
+        + "}).join('');"
+        + "}"
+        + "var Webview=(function(){"
+        + "var _promises={};"
+        + "function Webview_(){}"
+        + "Webview_.prototype.post=function(message){return("
+        + postFn
+        + ")(message);};"
+        + "Webview_.prototype.call=function(method){"
+        + "var _id=generateId();"
+        + "var _params=Array.prototype.slice.call(arguments,1);"
+        + "var promise=new Promise(function(resolve,reject){_promises[_id]={resolve,reject};});"
+        + "this.post(JSON.stringify({id:_id,method:method,params:_params}));"
+        + "return promise;"
+        + "};"
+        + "Webview_.prototype.onReply=function(id,status,result){"
+        + "var promise=_promises[id];"
+        + "if(result!==undefined){"
+        + "try{result=JSON.parse(result);}"
+        + "catch(e){promise.reject(new Error('Failed to parse binding result as JSON'));return;}"
+        + "}"
+        + "if(status===0){promise.resolve(result);}else{promise.reject(result);}"
+        + "};"
+        + "Webview_.prototype.onBind=function(name){"
+        + "if(window.hasOwnProperty(name))throw new Error('Property \"'+name+'\" already exists');"
+        + "window[name]=(function(){"
+        + "var params=[name].concat(Array.prototype.slice.call(arguments));"
+        + "return Webview_.prototype.call.apply(this,params);"
+        + "}).bind(this);"
+        + "};"
+        + "Webview_.prototype.onUnbind=function(name){"
+        + "if(!window.hasOwnProperty(name))throw new Error('Property \"'+name+'\" does not exist');"
+        + "delete window[name];"
+        + "};"
+        + "return Webview_;"
+        + "})();"
+        + "window.__webview__=new Webview();"
+        + "})()";
   }
 
   private String buildBindScript() {
@@ -393,7 +409,10 @@ public abstract class WebviewBase implements Webview {
       int end = vi + 1;
       while (end < json.length()) {
         char c = json.charAt(end);
-        if (c == '\\') { end += 2; continue; }
+        if (c == '\\') {
+          end += 2;
+          continue;
+        }
         if (c == '"') break;
         end++;
       }
@@ -405,11 +424,17 @@ public abstract class WebviewBase implements Webview {
       boolean inStr = false;
       while (i < json.length() && depth > 0) {
         char c = json.charAt(i);
-        if (!inStr && c == '"')      { inStr = true; }
-        else if (inStr && c == '\\') { i++; }
-        else if (inStr && c == '"')  { inStr = false; }
-        else if (c == first)         { depth++; }
-        else if (c == close)         { depth--; }
+        if (!inStr && c == '"') {
+          inStr = true;
+        } else if (inStr && c == '\\') {
+          i++;
+        } else if (inStr && c == '"') {
+          inStr = false;
+        } else if (c == first) {
+          depth++;
+        } else if (c == close) {
+          depth--;
+        }
         i++;
       }
       return json.substring(vi, i);
