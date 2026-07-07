@@ -97,7 +97,7 @@ public abstract sealed class WebviewBase implements Webview
     userScripts.add(emptyBind);
     nativeAddUserScript(emptyBind);
     if (redirectConsole) redirectConsole();
-    if (borderless) setupAppRegionDrag();
+    if (borderless && this instanceof Win32WebView) setupAppRegionDrag();
   }
 
   private void setupAppRegionDrag() {
