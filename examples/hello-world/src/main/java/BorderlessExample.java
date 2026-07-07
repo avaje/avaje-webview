@@ -25,13 +25,11 @@ String HTML =
       justify-content: space-between;
       padding: 0 8px;
       user-select: none;
-      -webkit-app-region: drag;
   }
 
   .titlebar-close {
       cursor: pointer;
       padding: 4px 10px;
-      -webkit-app-region: no-drag;
   }
 
   .titlebar-close:hover {
@@ -44,14 +42,27 @@ String HTML =
   </style>
 </head>
 <body>
-  <div class="titlebar">
+  <div class="titlebar" id="titlebar">
     <span>Borderless Window</span>
-    <span class="titlebar-close" onclick="closeApp()">✕</span>
+    <span class="titlebar-close" onclick="closeWindow()">✕</span>
   </div>
   <div class="content">
     <p>This window has no native title bar or border.</p>
     <p>Drag the purple bar above to move the window.</p>
   </div>
+
+  <script>
+    // Native decorations are gone (see .borderless(true) below), so dragging the
+    // colored bar has to start a native window-move ourselves via a bound function.
+    document.getElementById('titlebar').addEventListener('mousedown', event => {
+      if (event.button !== 0 || event.target.closest('.titlebar-close')) return;
+      startDrag();
+    });
+
+    function closeWindow() {
+      closeApp();
+    }
+  </script>
 </body>
 </html>
 """;
@@ -65,6 +76,13 @@ void main() {
           .borderless(true)
           .html(HTML)
           .build();
+
+  webview.bind(
+      "startDrag",
+      req -> {
+        webview.startWindowDrag();
+        return null;
+      });
 
   webview.bind(
       "closeApp",
