@@ -556,8 +556,7 @@ public final class Win32WebView extends WebviewBase {
 
       final var mainCls = "AvajeWebView_" + System.identityHashCode(this);
       registerClass(a, hInstance, mainCls, mainWndProcStub);
-      final var style =
-          borderless ? Win32.WS_OVERLAPPEDWINDOW & ~Win32.WS_CAPTION : Win32.WS_OVERLAPPEDWINDOW;
+      final var style = borderless ? Win32.WS_POPUP : Win32.WS_OVERLAPPEDWINDOW;
       hwnd =
           (MemorySegment)
               Win32.CreateWindowExW.invokeExact(

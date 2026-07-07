@@ -50,6 +50,7 @@ final class Win32 {
 
   // Window style / message constants
   static final int WS_OVERLAPPEDWINDOW = 0x00CF0000;
+  static final int WS_POPUP = 0x80000000;
   static final int WS_CHILD = 0x40000000;
   static final int WS_THICKFRAME = 0x00040000;
   static final int WS_MAXIMIZEBOX = 0x00010000;
