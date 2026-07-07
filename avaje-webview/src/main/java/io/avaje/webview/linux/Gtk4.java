@@ -1,6 +1,7 @@
 package io.avaje.webview.linux;
 
 import static java.lang.foreign.ValueLayout.ADDRESS;
+import static java.lang.foreign.ValueLayout.JAVA_DOUBLE;
 import static java.lang.foreign.ValueLayout.JAVA_INT;
 
 import java.lang.foreign.Arena;
@@ -127,6 +128,59 @@ final class Gtk4 {
    */
   private static final MethodHandle GTK_WINDOW_FULLSCREEN =
       downcall("gtk_window_fullscreen", FunctionDescriptor.ofVoid(ADDRESS));
+
+  /**
+   * {@code gtk_window_set_decorated(GtkWindow* window, gboolean setting) -> void}
+   *
+   * <p>Controls whether the window manager draws native decorations (title bar, borders,
+   * minimize/maximize/close buttons) around the window.
+   */
+  private static final MethodHandle GTK_WINDOW_SET_DECORATED =
+      downcall("gtk_window_set_decorated", FunctionDescriptor.ofVoid(ADDRESS, JAVA_INT));
+
+  /**
+   * {@code gtk_native_get_surface(GtkNative* self) -> GdkSurface*}
+   *
+   * <p>Every realized top-level {@code GtkWindow} implements {@code GtkNative}; this returns its
+   * backing {@code GdkSurface}, which also implements the {@code GdkToplevel} interface used by
+   * {@link #GDK_TOPLEVEL_BEGIN_MOVE}.
+   */
+  private static final MethodHandle GTK_NATIVE_GET_SURFACE =
+      downcall("gtk_native_get_surface", FunctionDescriptor.of(ADDRESS, ADDRESS));
+
+  /** {@code gtk_widget_get_display(GtkWidget* widget) -> GdkDisplay*} */
+  private static final MethodHandle GTK_WIDGET_GET_DISPLAY =
+      downcall("gtk_widget_get_display", FunctionDescriptor.of(ADDRESS, ADDRESS));
+
+  /** {@code gdk_display_get_default_seat(GdkDisplay* display) -> GdkSeat*} */
+  private static final MethodHandle GDK_DISPLAY_GET_DEFAULT_SEAT =
+      downcall("gdk_display_get_default_seat", FunctionDescriptor.of(ADDRESS, ADDRESS));
+
+  /** {@code gdk_seat_get_pointer(GdkSeat* seat) -> GdkDevice*} */
+  private static final MethodHandle GDK_SEAT_GET_POINTER =
+      downcall("gdk_seat_get_pointer", FunctionDescriptor.of(ADDRESS, ADDRESS));
+
+  /**
+   * {@code gdk_surface_get_device_position(GdkSurface*, GdkDevice*, double* x, double* y,
+   * GdkModifierType* mask) -> gboolean}
+   */
+  private static final MethodHandle GDK_SURFACE_GET_DEVICE_POSITION =
+      downcall(
+          "gdk_surface_get_device_position",
+          FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, ADDRESS, ADDRESS, ADDRESS));
+
+  /**
+   * {@code gdk_toplevel_begin_move(GdkToplevel*, GdkDevice*, int button, double x, double y,
+   * guint32 timestamp) -> void}
+   *
+   * <p>Asks the window manager/compositor to begin an interactive window-move grab, as if the user
+   * had pressed {@code button} at surface position {@code (x, y)} and started dragging.
+   */
+  private static final MethodHandle GDK_TOPLEVEL_BEGIN_MOVE =
+      downcall(
+          "gdk_toplevel_begin_move",
+          FunctionDescriptor.ofVoid(
+              ADDRESS, ADDRESS, JAVA_INT, JAVA_DOUBLE, JAVA_DOUBLE, JAVA_INT));
 
   /**
    * {@code gtk_widget_set_visible(GtkWidget* widget, gboolean visible) -> void}
@@ -321,6 +375,51 @@ final class Gtk4 {
   static void gtkWindowFullscreen(MemorySegment window) {
     try {
       GTK_WINDOW_FULLSCREEN.invokeExact(window);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * Shows or hides native window decorations (title bar, borders, min/max/close buttons).
+   *
+   * @param window a {@code GtkWindow*}
+   * @param decorated {@code false} to remove native decorations
+   */
+  static void gtkWindowSetDecorated(MemorySegment window, boolean decorated) {
+    try {
+      GTK_WINDOW_SET_DECORATED.invokeExact(window, decorated ? 1 : 0);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * Begins a native window-move grab on {@code window}'s toplevel surface, using the default seat's
+   * current pointer position as the drag origin and {@code GDK_CURRENT_TIME} (0) as the timestamp,
+   * since the triggering click was consumed by an unrelated JS event rather than a live GDK event
+   * we can forward.
+   *
+   * @param window a realized {@code GtkWindow*}
+   */
+  static void gtkWindowBeginMoveDrag(MemorySegment window) {
+    try (var a = Arena.ofConfined()) {
+      final var surface = (MemorySegment) GTK_NATIVE_GET_SURFACE.invokeExact(window);
+      if (surface.address() == 0L) return;
+      final var display = (MemorySegment) GTK_WIDGET_GET_DISPLAY.invokeExact(window);
+      final var seat = (MemorySegment) GDK_DISPLAY_GET_DEFAULT_SEAT.invokeExact(display);
+      final var pointer = (MemorySegment) GDK_SEAT_GET_POINTER.invokeExact(seat);
+      final var x = a.allocate(JAVA_DOUBLE);
+      final var y = a.allocate(JAVA_DOUBLE);
+      final var mask = a.allocate(JAVA_INT);
+      final var _ = (int) GDK_SURFACE_GET_DEVICE_POSITION.invokeExact(surface, pointer, x, y, mask);
+      GDK_TOPLEVEL_BEGIN_MOVE.invokeExact(
+          surface,
+          pointer,
+          1 /* GDK_BUTTON_PRIMARY */,
+          x.get(JAVA_DOUBLE, 0),
+          y.get(JAVA_DOUBLE, 0),
+          0 /* GDK_CURRENT_TIME */);
     } catch (final Throwable t) {
       throw new RuntimeException(t);
     }

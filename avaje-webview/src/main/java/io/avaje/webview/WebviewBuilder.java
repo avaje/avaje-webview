@@ -16,6 +16,7 @@ final class WebviewBuilder implements Builder {
   private int height = 600;
   private String html;
   private String url;
+  private boolean borderless;
 
   WebviewBuilder() {}
 
@@ -67,6 +68,12 @@ final class WebviewBuilder implements Builder {
   }
 
   @Override
+  public WebviewBuilder borderless(boolean borderless) {
+    this.borderless = borderless;
+    return this;
+  }
+
+  @Override
   public Webview build() {
     final var view = createForPlatform();
     if (title != null) view.setTitle(title);
@@ -82,9 +89,12 @@ final class WebviewBuilder implements Builder {
 
   private Webview createForPlatform() {
     final var os = System.getProperty("os.name", "").toLowerCase();
-    if (os.contains("linux")) return new GtkWebView(enableDeveloperTools, redirectConsole, width, height);
-    if (os.contains("mac")) return new CocoaWebView(enableDeveloperTools, redirectConsole, width, height);
-    if (os.contains("win")) return new Win32WebView(enableDeveloperTools, redirectConsole, width, height);
+    if (os.contains("win"))
+      return new Win32WebView(enableDeveloperTools, redirectConsole, width, height, borderless);
+    if (os.contains("mac"))
+      return new CocoaWebView(enableDeveloperTools, redirectConsole, width, height, borderless);
+    if (os.contains("linux"))
+      return new GtkWebView(enableDeveloperTools, redirectConsole, width, height, borderless);
     throw new UnsupportedOperationException(
         "Unsupported platform: " + System.getProperty("os.name"));
   }

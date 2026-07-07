@@ -203,6 +203,22 @@ public interface Webview extends Closeable, Runnable {
   Webview fullscreen();
 
   /**
+   * Begins a native window-move operation, as if the user had grabbed the title bar and started
+   * dragging.
+   *
+   * <p>Call this from a binding invoked on {@code mousedown} over a custom draggable area (e.g. a
+   * custom title bar) to make that area drag the window.
+   *
+   * <pre>{@code
+   * webview.bind("startDrag", req -> {
+   *   webview.startWindowDrag();
+   *   return null;
+   * });
+   * }</pre>
+   */
+  void startWindowDrag();
+
+  /**
    * Sets the icon for the webview window
    *
    * @param path to the icon file
@@ -282,6 +298,18 @@ public interface Webview extends Closeable, Runnable {
      * @return this builder
      */
     Builder navigate(String url);
+
+    /**
+     * Creates the window without native OS decorations (title bar, borders, and minimize/maximize/
+     * close buttons). Defaults to {@code false}. The window remains resizable via its edges.
+     *
+     * <p>Combine with {@link Webview#startWindowDrag()} to implement a custom draggable title bar,
+     * since a borderless window has no native title bar for the user to grab.
+     *
+     * @param borderless {@code true} to remove native window decorations
+     * @return this builder
+     */
+    Builder borderless(boolean borderless);
 
     /**
      * Builds a Webview using the configuration

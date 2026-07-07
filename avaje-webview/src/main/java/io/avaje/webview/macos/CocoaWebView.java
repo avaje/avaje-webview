@@ -31,7 +31,6 @@ import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
-import java.net.URI;
 import java.nio.file.Path;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
@@ -158,9 +157,12 @@ public final class CocoaWebView extends WebviewBase {
   // C function pointer (upcall stub) passed to dispatch_async_f to drain the pending queue
   private MemorySegment drainStub;
   private final ConcurrentLinkedQueue<Runnable> pendingDispatches = new ConcurrentLinkedQueue<>();
+  private final boolean borderless;
 
-  public CocoaWebView(boolean debug, boolean redirectConsole, int width, int height) {
+  public CocoaWebView(
+      boolean debug, boolean redirectConsole, int width, int height, boolean borderless) {
     super(redirectConsole);
+    this.borderless = borderless;
     openWindows.incrementAndGet();
     buildDrainStub();
 
@@ -395,6 +397,11 @@ public final class CocoaWebView extends WebviewBase {
   }
 
   @Override
+  protected void startWindowDragImpl() {
+    MacOSHelper.startWindowDrag(nsWindow);
+  }
+
+  @Override
   public void setIcon(Path path) {
     dispatchImpl(() -> MacOSHelper.setIcon(path));
   }
@@ -606,7 +613,7 @@ public final class CocoaWebView extends WebviewBase {
                   0d,
                   (double) width,
                   (double) height,
-                  NS_STANDARD_WINDOW_MASK,
+                  borderless ? NS_RESIZABLE : NS_STANDARD_WINDOW_MASK,
                   NS_BACKING_BUFFERED,
                   0 /* defer=NO */);
 

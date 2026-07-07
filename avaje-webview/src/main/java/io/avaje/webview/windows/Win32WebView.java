@@ -12,7 +12,6 @@ import java.lang.foreign.SymbolLookup;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
-import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -164,8 +163,12 @@ public final class Win32WebView extends WebviewBase {
   private MemorySegment mainWndProcStub, msgWndProcStub, widgetWndProcStub;
   private MemorySegment cachedQI, cachedAddRef, cachedRelease;
 
-  public Win32WebView(boolean debug, boolean redirectConsole, int width, int height) {
+  private final boolean borderless;
+
+  public Win32WebView(
+      boolean debug, boolean redirectConsole, int width, int height, boolean borderless) {
     super(redirectConsole);
+    this.borderless = borderless;
     Win32.coInitialize();
     Win32.enablePerMonitorDpiAwareness();
     buildWndProcStubs();
@@ -342,6 +345,11 @@ public final class Win32WebView extends WebviewBase {
   public Webview fullscreen() {
     dispatchImpl(() -> Win32.fullscreen(hwnd));
     return this;
+  }
+
+  @Override
+  protected void startWindowDragImpl() {
+    Win32.startWindowDrag(hwnd);
   }
 
   @Override
@@ -548,13 +556,15 @@ public final class Win32WebView extends WebviewBase {
 
       final var mainCls = "AvajeWebView_" + System.identityHashCode(this);
       registerClass(a, hInstance, mainCls, mainWndProcStub);
+      final var style =
+          borderless ? Win32.WS_OVERLAPPEDWINDOW & ~Win32.WS_CAPTION : Win32.WS_OVERLAPPEDWINDOW;
       hwnd =
           (MemorySegment)
               Win32.CreateWindowExW.invokeExact(
                   0,
                   a.allocateFrom(mainCls, StandardCharsets.UTF_16LE),
                   a.allocateFrom("", StandardCharsets.UTF_16LE),
-                  Win32.WS_OVERLAPPEDWINDOW,
+                  style,
                   Win32.CW_USEDEFAULT,
                   Win32.CW_USEDEFAULT,
                   0,

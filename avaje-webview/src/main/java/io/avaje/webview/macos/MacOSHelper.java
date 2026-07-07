@@ -58,6 +58,19 @@ final class MacOSHelper {
     }
   }
 
+  /**
+   * Begins a native window-move operation for {@code nsWindow}, as if the user had grabbed the
+   * title bar, using the current NSEvent ({@code [NSApp currentEvent]}) as the originating mouse
+   * event that {@code performWindowDragWithEvent:} requires.
+   */
+  static void startWindowDrag(MemorySegment nsWindow) {
+    try (var a = Arena.ofConfined()) {
+      final var app = send0(ObjC.getClass(a, "NSApplication"), sel(a, "sharedApplication"));
+      final var event = send0(app, sel(a, "currentEvent"));
+      sendVoid1(nsWindow, sel(a, "performWindowDragWithEvent:"), event);
+    }
+  }
+
   static void setIcon(Path iconPath) {
     try (var a = Arena.ofConfined()) {
       final var app = send0(ObjC.getClass(a, "NSApplication"), sel(a, "sharedApplication"));

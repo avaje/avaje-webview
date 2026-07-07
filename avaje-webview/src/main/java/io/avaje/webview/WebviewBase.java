@@ -195,6 +195,11 @@ public abstract sealed class WebviewBase implements Webview
   public abstract Webview fullscreen();
 
   @Override
+  public void startWindowDrag() {
+    dispatchImpl(this::startWindowDragImpl);
+  }
+
+  @Override
   public abstract void setIcon(Path path);
 
   @Override
@@ -243,6 +248,8 @@ public abstract sealed class WebviewBase implements Webview
   protected abstract void setFixedSizeImpl(int width, int height);
 
   protected abstract void setHtmlImpl(String html);
+
+  protected abstract void startWindowDragImpl();
 
   protected abstract void evalImpl(String js);
 

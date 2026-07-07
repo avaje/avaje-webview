@@ -20,6 +20,11 @@ final class LinuxHelper {
     Gtk4.gtkWindowMaximize(webview.nativeWindowPointer());
   }
 
+  /** Begins a native window-move grab, as if the user had grabbed the title bar. */
+  static void startWindowDrag(Webview webview) {
+    Gtk4.gtkWindowBeginMoveDrag(webview.nativeWindowPointer());
+  }
+
   /**
    * Applies a dark or light appearance to all GTK windows in this process.
    *

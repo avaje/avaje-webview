@@ -53,6 +53,9 @@ final class Win32 {
   static final int WS_CHILD = 0x40000000;
   static final int WS_THICKFRAME = 0x00040000;
   static final int WS_MAXIMIZEBOX = 0x00010000;
+  static final int WS_CAPTION = 0x00C00000;
+  static final int WM_NCLBUTTONDOWN = 0x00A1;
+  static final int HTCAPTION = 2;
   static final int CW_USEDEFAULT = 0x80000000;
   static final int SW_HIDE = 0;
   static final int SW_SHOW = 5;
@@ -377,6 +380,17 @@ final class Win32 {
           FunctionDescriptor.of(JAVA_LONG, ADDRESS, JAVA_INT, JAVA_LONG, ADDRESS));
 
   /**
+   * {@code ReleaseCapture() -> BOOL}
+   *
+   * <p>Releases the current mouse capture. Required before sending {@link #WM_NCLBUTTONDOWN} with
+   * {@link #HTCAPTION} to start a native window-move loop from a synthetic (non-hardware) message -
+   * without this, the window ignores the fake non-client click while it still holds mouse capture
+   * from the original client-area click.
+   */
+  static final MethodHandle ReleaseCapture =
+      downcall(USER32, "ReleaseCapture", FunctionDescriptor.of(JAVA_INT));
+
+  /**
    * {@code GetModuleHandleW(lpModuleName) -> HMODULE}
    *
    * <p>Returns the module handle for the current process when passed {@code NULL}.
@@ -574,6 +588,24 @@ final class Win32 {
                   screenW,
                   screenH,
                   SWP_NOZORDER | SWP_FRAMECHANGED);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * Begins a native window-move loop for {@code hwnd}, as if the user had clicked and dragged the
+   * title bar. Releases the current mouse capture first, then sends a synthetic {@link
+   * #WM_NCLBUTTONDOWN} with {@link #HTCAPTION}, which {@code DefWindowProc} handles by entering the
+   * standard move loop for as long as the mouse button stays down.
+   */
+  static void startWindowDrag(MemorySegment hwnd) {
+    try {
+      final var _ = (int) ReleaseCapture.invokeExact();
+      final var _ =
+          (long)
+              SendMessageW.invokeExact(
+                  hwnd, WM_NCLBUTTONDOWN, (long) HTCAPTION, MemorySegment.NULL);
     } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
