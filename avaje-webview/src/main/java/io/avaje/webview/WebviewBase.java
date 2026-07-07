@@ -53,10 +53,29 @@ public abstract sealed class WebviewBase implements Webview
       })();
       """;
 
-  private final boolean redirectConsole;
+  private static final String APP_REGION_DRAG_JS =
+      """
+      (function() {
+        'use strict';
+        document.addEventListener('mousedown', function(e) {
+          if (e.button !== 0) return;
+          var el = e.target;
+          while (el instanceof HTMLElement) {
+            var r = window.getComputedStyle(el).getPropertyValue('-webkit-app-region');
+            if (r === 'no-drag') return;
+            if (r === 'drag') { e.preventDefault(); __avaje_wv_drag__(); return; }
+            el = el.parentElement;
+          }
+        });
+      })();
+      """;
 
-  protected WebviewBase(boolean redirectConsole) {
+  private final boolean redirectConsole;
+  protected final boolean borderless;
+
+  protected WebviewBase(boolean redirectConsole, boolean borderless) {
     this.redirectConsole = redirectConsole;
+    this.borderless = borderless;
   }
 
   // JS bridge state, all mutations to userScripts/bindScriptIdx must happen on the main thread
@@ -78,6 +97,17 @@ public abstract sealed class WebviewBase implements Webview
     userScripts.add(emptyBind);
     nativeAddUserScript(emptyBind);
     if (redirectConsole) redirectConsole();
+    if (borderless) setupAppRegionDrag();
+  }
+
+  private void setupAppRegionDrag() {
+    bind(
+        "__avaje_wv_drag__",
+        req -> {
+          startWindowDragImpl();
+          return "null";
+        });
+    addUserScriptInternal(APP_REGION_DRAG_JS);
   }
 
   /**
@@ -96,18 +126,20 @@ public abstract sealed class WebviewBase implements Webview
 
   @Override
   public void setHTML(@Nullable String html) {
-    dispatchImpl(() -> {
-      syncBindScript();
-      setHtmlImpl(html != null ? html : "");
-    });
+    dispatchImpl(
+        () -> {
+          syncBindScript();
+          setHtmlImpl(html != null ? html : "");
+        });
   }
 
   @Override
   public void navigate(@Nullable String url) {
-    dispatchImpl(() -> {
-      syncBindScript();
-      navigateImpl(url == null ? "about:blank" : url);
-    });
+    dispatchImpl(
+        () -> {
+          syncBindScript();
+          navigateImpl(url == null ? "about:blank" : url);
+        });
   }
 
   @Override
@@ -157,7 +189,12 @@ public abstract sealed class WebviewBase implements Webview
     dispatchImpl(
         () -> {
           rebuildBindScript();
-          evalImpl("if(window.__webview__&&!window.hasOwnProperty(" + jsonEscape(name) + "))window.__webview__.onBind(" + jsonEscape(name) + ")");
+          evalImpl(
+              "if (window.__webview__ && !window.hasOwnProperty("
+                  + jsonEscape(name)
+                  + ")) window.__webview__.onBind("
+                  + jsonEscape(name)
+                  + ")");
         });
   }
 
@@ -167,7 +204,7 @@ public abstract sealed class WebviewBase implements Webview
     dispatchImpl(
         () -> {
           rebuildBindScript();
-          evalImpl("if(window.__webview__)window.__webview__.onUnbind(" + jsonEscape(name) + ")");
+          evalImpl("if (window.__webview__) window.__webview__.onUnbind(" + jsonEscape(name) + ")");
         });
   }
 
@@ -272,7 +309,7 @@ public abstract sealed class WebviewBase implements Webview
   void returnResult(String id, int status, String result) {
     final var escaped = result == null || result.isEmpty() ? "undefined" : jsonEscape(result);
     final var js =
-        "window.__webview__.onReply(" + jsonEscape(id) + "," + status + "," + escaped + ")";
+        "window.__webview__.onReply(" + jsonEscape(id) + ", " + status + ", " + escaped + ")";
     dispatchImpl(() -> evalImpl(js));
   }
 
@@ -438,63 +475,68 @@ public abstract sealed class WebviewBase implements Webview
    * @return the complete, minified bridge script ready for injection as a user script
    */
   private static String buildInitScript(String postFn) {
-    return "(function(){'use strict';"
-        + "function generateId(){"
-        + "var crypto=window.crypto||window.msCrypto;"
-        + "var bytes=new Uint8Array(16);"
-        + "crypto.getRandomValues(bytes);"
-        + "return Array.prototype.slice.call(bytes).map(function(n){"
-        + "var s=n.toString(16);"
-        + "return((s.length%2)==1?'0':'')+s;"
-        + "}).join('');"
-        + "}"
-        + "var Webview=(function(){"
-        + "var _promises={};"
-        + "function Webview_(){}"
-        + "Webview_.prototype.post=function(message){return("
-        + postFn
-        + ")(message);};"
-        + "Webview_.prototype.call=function(method){"
-        + "var _id=generateId();"
-        + "var _params=Array.prototype.slice.call(arguments,1);"
-        + "var promise=new Promise(function(resolve,reject){_promises[_id]={resolve,reject};});"
-        + "this.post(JSON.stringify({id:_id,method:method,params:_params}));"
-        + "return promise;"
-        + "};"
-        + "Webview_.prototype.onReply=function(id,status,result){"
-        + "var promise=_promises[id];"
-        + "if(result!==undefined){"
-        + "try{result=JSON.parse(result);}"
-        + "catch(e){promise.reject(new Error('Failed to parse binding result as JSON'));return;}"
-        + "}"
-        + "if(status===0){promise.resolve(result);}else{promise.reject(result);}"
-        + "};"
-        + "Webview_.prototype.onBind=function(name){"
-        + "if(window.hasOwnProperty(name))throw new Error('Property \"'+name+'\" already exists');"
-        + "window[name]=(function(){"
-        + "var params=[name].concat(Array.prototype.slice.call(arguments));"
-        + "return Webview_.prototype.call.apply(this,params);"
-        + "}).bind(this);"
-        + "};"
-        + "Webview_.prototype.onUnbind=function(name){"
-        + "if(!window.hasOwnProperty(name))throw new Error('Property \"'+name+'\" does not exist');"
-        + "delete window[name];"
-        + "};"
-        + "return Webview_;"
-        + "})();"
-        + "window.__webview__=new Webview();"
-        + "})()";
+    return String.format(
+        """
+        (function() {
+          'use strict';
+          function generateId() {
+            var crypto = window.crypto || window.msCrypto;
+            var bytes = new Uint8Array(16);
+            crypto.getRandomValues(bytes);
+            return Array.prototype.slice.call(bytes).map(function(n) {
+              var s = n.toString(16);
+              return ((s.length %% 2) == 1 ? '0' : '') + s;
+            }).join('');
+          }
+          var Webview = (function() {
+            var _promises = {};
+            function Webview_() {}
+            Webview_.prototype.post = function(message) {
+              return (%s)(message);
+            };
+            Webview_.prototype.call = function(method) {
+              var _id = generateId();
+              var _params = Array.prototype.slice.call(arguments, 1);
+              var promise = new Promise(function(resolve, reject) { _promises[_id] = { resolve, reject }; });
+              this.post(JSON.stringify({ id: _id, method: method, params: _params }));
+              return promise;
+            };
+            Webview_.prototype.onReply = function(id, status, result) {
+              var promise = _promises[id];
+              if (result !== undefined) {
+                try { result = JSON.parse(result); }
+                catch (e) { promise.reject(new Error('Failed to parse binding result as JSON')); return; }
+              }
+              if (status === 0) { promise.resolve(result); } else { promise.reject(result); }
+            };
+            Webview_.prototype.onBind = function(name) {
+              if (window.hasOwnProperty(name)) throw new Error('Property "' + name + '" already exists');
+              window[name] = (function() {
+                var params = [name].concat(Array.prototype.slice.call(arguments));
+                return Webview_.prototype.call.apply(this, params);
+              }).bind(this);
+            };
+            Webview_.prototype.onUnbind = function(name) {
+              if (!window.hasOwnProperty(name)) throw new Error('Property "' + name + '" does not exist');
+              delete window[name];
+            };
+            return Webview_;
+          })();
+          window.__webview__ = new Webview();
+        })()
+        """,
+        postFn);
   }
 
   private String buildBindScript() {
-    final var sb = new StringBuilder("(function(){'use strict';var methods=[");
+    final var sb = new StringBuilder("(function() {'use strict';  var methods = [");
     var first = true;
     for (final String name : bindings.keySet()) {
-      if (!first) sb.append(",");
+      if (!first) sb.append(", ");
       sb.append(jsonEscape(name));
       first = false;
     }
-    sb.append("];methods.forEach(function(n){window.__webview__.onBind(n);});})()");
+    sb.append("];\n  methods.forEach(function(n) { window.__webview__.onBind(n); });\n})()");
     return sb.toString();
   }
 

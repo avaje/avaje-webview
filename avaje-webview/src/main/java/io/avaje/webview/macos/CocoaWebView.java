@@ -157,12 +157,9 @@ public final class CocoaWebView extends WebviewBase {
   // C function pointer (upcall stub) passed to dispatch_async_f to drain the pending queue
   private MemorySegment drainStub;
   private final ConcurrentLinkedQueue<Runnable> pendingDispatches = new ConcurrentLinkedQueue<>();
-  private final boolean borderless;
-
   public CocoaWebView(
       boolean debug, boolean redirectConsole, int width, int height, boolean borderless) {
-    super(redirectConsole);
-    this.borderless = borderless;
+    super(redirectConsole, borderless);
     openWindows.incrementAndGet();
     buildDrainStub();
 

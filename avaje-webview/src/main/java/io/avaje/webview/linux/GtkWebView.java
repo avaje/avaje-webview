@@ -75,14 +75,11 @@ public final class GtkWebView extends WebviewBase {
   private final ConcurrentLinkedQueue<Runnable> pendingDispatches = new ConcurrentLinkedQueue<>();
   private final int initialWidth;
   private final int initialHeight;
-  private final boolean borderless;
-
   public GtkWebView(
       boolean debug, boolean redirectConsole, int width, int height, boolean borderless) {
-    super(redirectConsole);
+    super(redirectConsole, borderless);
     this.initialWidth = width;
     this.initialHeight = height;
-    this.borderless = borderless;
     openWindows.incrementAndGet();
 
     if (gtkThread == null || gtkThread == Thread.currentThread()) {

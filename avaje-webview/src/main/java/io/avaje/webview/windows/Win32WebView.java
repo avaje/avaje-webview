@@ -163,12 +163,9 @@ public final class Win32WebView extends WebviewBase {
   private MemorySegment mainWndProcStub, msgWndProcStub, widgetWndProcStub;
   private MemorySegment cachedQI, cachedAddRef, cachedRelease;
 
-  private final boolean borderless;
-
   public Win32WebView(
       boolean debug, boolean redirectConsole, int width, int height, boolean borderless) {
-    super(redirectConsole);
-    this.borderless = borderless;
+    super(redirectConsole, borderless);
     Win32.coInitialize();
     Win32.enablePerMonitorDpiAwareness();
     buildWndProcStubs();
