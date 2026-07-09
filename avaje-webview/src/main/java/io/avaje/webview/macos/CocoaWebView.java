@@ -708,7 +708,7 @@ public final class CocoaWebView extends WebviewBase {
                   0d,
                   (double) width,
                   (double) height,
-                  borderless ? NS_RESIZABLE : NS_STANDARD_WINDOW_MASK,
+                  borderless ? NS_RESIZABLE | NS_MINIATURIZABLE : NS_STANDARD_WINDOW_MASK,
                   NS_BACKING_BUFFERED,
                   0 /* defer=NO */);
 
