@@ -113,9 +113,6 @@ public final class Win32WebView extends WebviewBase {
 
   private volatile MemorySegment hwnd, hwndMsg, hwndWidget;
 
-  /** Parent window handle */
-  private final MemorySegment parentHwnd;
-
   private volatile ComController controller;
   private volatile ComWebView2 webView2;
 
@@ -177,16 +174,16 @@ public final class Win32WebView extends WebviewBase {
       int width,
       int height,
       boolean borderless,
-      MemorySegment parentHwnd) {
-    super(redirectConsole, borderless);
-    this.parentHwnd = parentHwnd == null ? MemorySegment.NULL : parentHwnd;
+      MemorySegment parentWindow) {
+    super(redirectConsole, borderless, parentWindow);
     Win32.coInitialize();
     Win32.enablePerMonitorDpiAwareness();
     buildWndProcStubs();
     createWindows();
-    if (this.parentHwnd.address() != 0) Win32.enableWindow(this.parentHwnd, false);
+    if (this.parentWindow.address() != 0) Win32.enableWindow(this.parentWindow, false);
     embedWebView2(debug);
     setSizeImpl(width, height);
+    Win32.centerWindow(hwnd, this.parentWindow);
   }
 
   @Override
@@ -216,9 +213,9 @@ public final class Win32WebView extends WebviewBase {
       } catch (final Throwable ignored) {
       }
     }
-    if (parentHwnd.address() != 0) {
-      Win32.enableWindow(parentHwnd, true);
-      Win32.setForegroundWindow(parentHwnd);
+    if (parentWindow.address() != 0) {
+      Win32.enableWindow(parentWindow, true);
+      Win32.setForegroundWindow(parentWindow);
     }
   }
 
@@ -584,7 +581,7 @@ public final class Win32WebView extends WebviewBase {
                   Win32.CW_USEDEFAULT,
                   0,
                   0,
-                  parentHwnd,
+                  parentWindow,
                   MemorySegment.NULL,
                   hInstance,
                   MemorySegment.NULL);

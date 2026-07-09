@@ -172,9 +172,6 @@ public final class CocoaWebView extends WebviewBase {
   private volatile MemorySegment wkWebView; // WKWebView*
   private volatile MemorySegment ucController; // WKUserContentController*
 
-  /** Parent window handle (NSWindow*) */
-  private final MemorySegment parentWindow;
-
   /** Intercepts clicks intended for the parent and redirects them into a flash of this window */
   private volatile MemorySegment parentClickGuard = MemorySegment.NULL;
 
@@ -203,8 +200,7 @@ public final class CocoaWebView extends WebviewBase {
       int height,
       boolean borderless,
       MemorySegment parentWindow) {
-    super(redirectConsole, borderless);
-    this.parentWindow = parentWindow == null ? MemorySegment.NULL : parentWindow;
+    super(redirectConsole, borderless, parentWindow);
     openWindows.incrementAndGet();
     buildDrainStub();
 
@@ -710,9 +706,11 @@ public final class CocoaWebView extends WebviewBase {
                   NS_BACKING_BUFFERED,
                   0 /* defer=NO */);
 
-      // initWithContentRect: ignores the origin we pass (0,0) and leaves the window at the
-      // bottom-left of the main screen; center() places it where users actually expect it.
-      MacOSHelper.center(nsWindow);
+      if (parentWindow.address() != 0) {
+        MacOSHelper.centerOnParent(nsWindow, parentWindow);
+      } else {
+        MacOSHelper.center(nsWindow);
+      }
 
       sendVoid1(nsWindow, sel(a, "setDelegate:"), createWindowDelegate(a));
       sendVoid1(nsWindow, sel(a, "setContentView:"), wkWebView);
@@ -856,7 +854,7 @@ public final class CocoaWebView extends WebviewBase {
       final var _ =
           (byte)
               CLASS_ADD_METHOD.invokeExact(cls, sel(a, "mouseDown:"), stub, a.allocateFrom("v@:@"));
-      final var _2 =
+      final var _ =
           (byte)
               CLASS_ADD_METHOD.invokeExact(
                   cls, sel(a, "rightMouseDown:"), stub, a.allocateFrom("v@:@"));

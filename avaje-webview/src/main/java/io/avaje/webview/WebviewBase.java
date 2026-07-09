@@ -72,10 +72,12 @@ public abstract sealed class WebviewBase implements Webview
 
   private final boolean redirectConsole;
   protected final boolean borderless;
+  protected final MemorySegment parentWindow;
 
-  protected WebviewBase(boolean redirectConsole, boolean borderless) {
+  protected WebviewBase(boolean redirectConsole, boolean borderless, MemorySegment parentWindow) {
     this.redirectConsole = redirectConsole;
     this.borderless = borderless;
+    this.parentWindow = parentWindow != null ? parentWindow : MemorySegment.NULL;
   }
 
   // JS bridge state, all mutations to userScripts/bindScriptIdx must happen on the main thread
@@ -103,7 +105,7 @@ public abstract sealed class WebviewBase implements Webview
   private void setupAppRegionDrag() {
     bind(
         "__avaje_wv_drag__",
-        req -> {
+        _ -> {
           startWindowDragImpl();
           return "null";
         });

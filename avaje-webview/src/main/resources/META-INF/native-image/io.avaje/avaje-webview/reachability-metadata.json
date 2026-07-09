@@ -153,6 +153,13 @@
         ]
       },
       {
+        "returnType": ["jdouble", "jdouble", "jdouble", "jdouble"],
+        "parameterTypes": [
+          "void*",
+          "void*"
+        ]
+      },
+      {
         "returnType": "void",
         "parameterTypes": [
           "void*",

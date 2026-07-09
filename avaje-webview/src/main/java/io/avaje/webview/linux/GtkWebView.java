@@ -51,9 +51,6 @@ public final class GtkWebView extends WebviewBase {
   private volatile MemorySegment webView; // WebKitWebView*
   private volatile MemorySegment ucManager; // WebKitUserContentManager*
 
-  /** Parent window handle */
-  private final MemorySegment parentWindow;
-
   private boolean windowShown = false;
   private volatile boolean closed = false;
   private volatile boolean windowDestroyed = false;
@@ -90,10 +87,9 @@ public final class GtkWebView extends WebviewBase {
       int height,
       boolean borderless,
       MemorySegment parentWindow) {
-    super(redirectConsole, borderless);
+    super(redirectConsole, borderless, parentWindow);
     this.initialWidth = width;
     this.initialHeight = height;
-    this.parentWindow = parentWindow == null ? MemorySegment.NULL : parentWindow;
     openWindows.incrementAndGet();
 
     if (gtkThread == null || gtkThread == Thread.currentThread()) {

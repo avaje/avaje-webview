@@ -71,6 +71,7 @@ final class Win32 {
   static final int WM_APP = 0x8000;
   static final int WA_INACTIVE = 0;
   static final int GWL_STYLE = -16;
+  static final int SWP_NOSIZE = 0x0001;
   static final int SWP_NOMOVE = 0x0002;
   static final int SWP_NOZORDER = 0x0004;
   static final int SWP_NOACTIVATE = 0x0010;
@@ -277,6 +278,15 @@ final class Win32 {
    */
   static final MethodHandle GetClientRect =
       downcall(USER32, "GetClientRect", FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS));
+
+  /**
+   * {@code GetWindowRect(hWnd, lpRect) -> BOOL}
+   *
+   * <p>Fills a {@link #RECT_LAYOUT} buffer with the screen coordinates of the window, including
+   * non-client area (title bar, borders). Used to determine the full window size for centering.
+   */
+  static final MethodHandle GetWindowRect =
+      downcall(USER32, "GetWindowRect", FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS));
 
   /**
    * {@code SetWindowPos(hWnd, hWndInsertAfter, X, Y, cx, cy, uFlags) -> BOOL}
@@ -564,6 +574,42 @@ final class Win32 {
     try (var a = Arena.ofConfined()) {
       final var _ =
           (int) SetWindowTextW.invokeExact(hwnd, a.allocateFrom(title, StandardCharsets.UTF_16LE));
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * Centers {@code hwnd} relative to {@code parentHwnd} when it is non-null, or relative to the
+   * primary screen when {@code parentHwnd} is null/zero. Called once after initial sizing so that
+   * the window appears at the expected position when it is first shown.
+   */
+  static void centerWindow(MemorySegment hwnd, MemorySegment parentHwnd) {
+    try (var a = Arena.ofConfined()) {
+      final var winRect = a.allocate(RECT_LAYOUT);
+      final var _ = (int) GetWindowRect.invokeExact(hwnd, winRect);
+      final int w = winRect.get(JAVA_INT, 8) - winRect.get(JAVA_INT, 0);
+      final int h = winRect.get(JAVA_INT, 12) - winRect.get(JAVA_INT, 4);
+      final int refX, refY, refW, refH;
+      if (parentHwnd.address() != 0) {
+        final var parentRect = a.allocate(RECT_LAYOUT);
+        final var _ = (int) GetWindowRect.invokeExact(parentHwnd, parentRect);
+        refX = parentRect.get(JAVA_INT, 0);
+        refY = parentRect.get(JAVA_INT, 4);
+        refW = parentRect.get(JAVA_INT, 8) - refX;
+        refH = parentRect.get(JAVA_INT, 12) - refY;
+      } else {
+        refX = 0;
+        refY = 0;
+        refW = (int) GetSystemMetrics.invokeExact(SM_CXSCREEN);
+        refH = (int) GetSystemMetrics.invokeExact(SM_CYSCREEN);
+      }
+      final int x = refX + (refW - w) / 2;
+      final int y = refY + (refH - h) / 2;
+      final var _ =
+          (int)
+              SetWindowPos.invokeExact(
+                  hwnd, MemorySegment.NULL, x, y, 0, 0, SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOSIZE);
     } catch (final Throwable t) {
       throw new RuntimeException(t);
     }

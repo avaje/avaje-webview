@@ -17,7 +17,7 @@ final class WebviewBuilder implements Builder {
   private String html;
   private String url;
   private boolean borderless;
-  private Webview parent;
+  private MemorySegment parent = MemorySegment.NULL;
 
   WebviewBuilder() {}
 
@@ -76,7 +76,7 @@ final class WebviewBuilder implements Builder {
 
   @Override
   public WebviewBuilder parent(Webview parent) {
-    this.parent = parent;
+    this.parent = parent.nativeWindowPointer();
     return this;
   }
 
@@ -96,16 +96,15 @@ final class WebviewBuilder implements Builder {
 
   private Webview createForPlatform() {
     final var os = System.getProperty("os.name", "").toLowerCase();
-    final var parentPtr = parent != null ? parent.nativeWindowPointer() : MemorySegment.NULL;
     if (os.contains("win"))
       return new Win32WebView(
-          enableDeveloperTools, redirectConsole, width, height, borderless, parentPtr);
+          enableDeveloperTools, redirectConsole, width, height, borderless, parent);
     if (os.contains("mac"))
       return new CocoaWebView(
-          enableDeveloperTools, redirectConsole, width, height, borderless, parentPtr);
+          enableDeveloperTools, redirectConsole, width, height, borderless, parent);
     if (os.contains("linux"))
       return new GtkWebView(
-          enableDeveloperTools, redirectConsole, width, height, borderless, parentPtr);
+          enableDeveloperTools, redirectConsole, width, height, borderless, parent);
     throw new UnsupportedOperationException(
         "Unsupported platform: " + System.getProperty("os.name"));
   }

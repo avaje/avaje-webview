@@ -1,5 +1,7 @@
 package io.avaje.webview.macos;
 
+import static java.lang.foreign.ValueLayout.JAVA_DOUBLE;
+
 import static io.avaje.webview.macos.ObjC.fromNSString;
 import static io.avaje.webview.macos.ObjC.nsString;
 import static io.avaje.webview.macos.ObjC.sel;
@@ -127,6 +129,28 @@ final class MacOSHelper {
   static void center(MemorySegment window) {
     try (var a = Arena.ofConfined()) {
       sendVoid0(window, sel(a, "center"));
+    }
+  }
+
+  /**
+   * Centers {@code nsWindow} relative to {@code parentWindow} by reading both frames and computing
+   * the origin that places the child at the center of the parent.
+   */
+  static void centerOnParent(MemorySegment nsWindow, MemorySegment parentWindow) {
+    try (var a = Arena.ofConfined()) {
+      final var frameSel = sel(a, "frame");
+      final var pFrame = (MemorySegment) ObjC.MSG_SEND_GET_FRAME.invokeExact(parentWindow, frameSel);
+      final var cFrame = (MemorySegment) ObjC.MSG_SEND_GET_FRAME.invokeExact(nsWindow, frameSel);
+      final double pX = pFrame.get(JAVA_DOUBLE, 0);
+      final double pY = pFrame.get(JAVA_DOUBLE, 8);
+      final double pW = pFrame.get(JAVA_DOUBLE, 16);
+      final double pH = pFrame.get(JAVA_DOUBLE, 24);
+      final double cW = cFrame.get(JAVA_DOUBLE, 16);
+      final double cH = cFrame.get(JAVA_DOUBLE, 24);
+      ObjC.MSG_SEND_SET_SIZE.invokeExact(
+          nsWindow, sel(a, "setFrameOrigin:"), pX + (pW - cW) / 2, pY + (pH - cH) / 2);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
     }
   }
 

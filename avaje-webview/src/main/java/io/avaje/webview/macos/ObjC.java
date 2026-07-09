@@ -9,7 +9,9 @@ import static java.lang.foreign.ValueLayout.JAVA_LONG;
 import java.lang.foreign.Arena;
 import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.Linker;
+import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.StructLayout;
 import java.lang.foreign.SymbolLookup;
 import java.lang.invoke.MethodHandle;
 
@@ -258,6 +260,22 @@ final class ObjC {
   static final MethodHandle MSG_SEND_SET_CONTENT_SIZE =
       LINKER.downcallHandle(
           MSG_SEND_ADDR, FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, JAVA_DOUBLE, JAVA_DOUBLE));
+
+  /** {@code NSRect} layout: x, y, width, height. */
+  static final StructLayout NS_RECT_LAYOUT =
+      MemoryLayout.structLayout(
+          JAVA_DOUBLE.withName("x"),
+          JAVA_DOUBLE.withName("y"),
+          JAVA_DOUBLE.withName("w"),
+          JAVA_DOUBLE.withName("h"));
+
+  /**
+   * {@code -[NSWindow frame] -> NSRect}
+   *
+   * <p>Returns the window's frame rectangle in screen coordinates.
+   */
+  static final MethodHandle MSG_SEND_GET_FRAME =
+      LINKER.downcallHandle(MSG_SEND_ADDR, FunctionDescriptor.of(NS_RECT_LAYOUT, ADDRESS, ADDRESS));
 
   /**
    * {@code -[NSView initWithFrame:] -> id}
