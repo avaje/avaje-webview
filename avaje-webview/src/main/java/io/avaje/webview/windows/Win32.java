@@ -49,6 +49,7 @@ final class Win32 {
   private static final SymbolLookup OLE32 = SymbolLookup.libraryLookup("ole32", Arena.global());
 
   // Window style / message constants
+  static final int WS_EX_APPWINDOW = 0x00040000;
   static final int WS_OVERLAPPEDWINDOW = 0x00CF0000;
   static final int WS_POPUP = 0x80000000;
   static final int WS_CHILD = 0x40000000;
@@ -68,6 +69,7 @@ final class Win32 {
   static final int WM_QUIT = 0x0012;
   static final int WM_ACTIVATE = 0x0006;
   static final int WM_GETMINMAXINFO = 0x0024;
+  static final int WM_NCCALCSIZE = 0x0083;
   static final int WM_SETTINGCHANGE = 0x001A;
   static final int WM_APP = 0x8000;
   static final int WA_INACTIVE = 0;

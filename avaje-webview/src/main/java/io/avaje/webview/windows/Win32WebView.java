@@ -480,6 +480,12 @@ public final class Win32WebView extends WebviewBase {
         }
         return 0;
       }
+      case Win32.WM_NCCALCSIZE -> {
+        // When borderless, return 0 to make the entire window frame the client
+        // area. This hides the title bar and borders visually while preserving WS_OVERLAPPEDWINDOW
+        // behaviours (taskbar button, minimize/maximize/restore, snapping, DPI handling).
+        if (borderless && wParam == 1L) return 0L;
+      }
       case Win32.WM_DPICHANGED -> {
         // Windows pre-computes the correctly scaled rect and passes it in lParam.
         final var suggested = MemorySegment.ofAddress(lParam).reinterpret(16);
@@ -575,14 +581,13 @@ public final class Win32WebView extends WebviewBase {
 
       final var mainCls = "AvajeWebView_" + System.identityHashCode(this);
       registerClass(a, hInstance, mainCls, mainWndProcStub);
-      final var style = borderless ? Win32.WS_POPUP : Win32.WS_OVERLAPPEDWINDOW;
       hwnd =
           (MemorySegment)
               Win32.CreateWindowExW.invokeExact(
                   0,
                   a.allocateFrom(mainCls, StandardCharsets.UTF_16LE),
                   a.allocateFrom("", StandardCharsets.UTF_16LE),
-                  style,
+                  Win32.WS_OVERLAPPEDWINDOW,
                   Win32.CW_USEDEFAULT,
                   Win32.CW_USEDEFAULT,
                   0,
