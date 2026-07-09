@@ -26,6 +26,7 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.Linker;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.SymbolLookup;
 import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
@@ -181,6 +182,10 @@ public final class CocoaWebView extends WebviewBase {
   private final AtomicBoolean windowClosed = new AtomicBoolean(false);
   private final CountDownLatch windowClosedLatch = new CountDownLatch(1);
 
+  private double childLastX, childLastY;
+  private boolean syncMoving;
+  private volatile boolean disableZoom;
+
   /**
    * Arena that owns the Panama upcall stubs (drainStub, script handler stub, window delegate stub).
    */
@@ -197,8 +202,10 @@ public final class CocoaWebView extends WebviewBase {
       int height,
       boolean borderless,
       boolean outline,
-      MemorySegment parentWindow) {
-    super(redirectConsole, borderless, outline, parentWindow);
+      boolean transparent,
+      MemorySegment parentWindow,
+      boolean moveParentWithChild) {
+    super(redirectConsole, borderless, outline, transparent, parentWindow, moveParentWithChild);
     openWindows.incrementAndGet();
     buildDrainStub();
 
@@ -322,6 +329,42 @@ public final class CocoaWebView extends WebviewBase {
     try (var a = Arena.ofConfined()) {
       MSG_SEND_SET_SIZE.invokeExact(
           nsWindow, sel(a, "setMaxSize:"), (double) width, (double) height);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  @Override
+  protected void disableMaximizeImpl() {
+    disableZoom = true;
+    if (closed) return;
+    try (var a = Arena.ofConfined()) {
+      final var buttonMh =
+          Linker.nativeLinker()
+              .downcallHandle(
+                  MSG_SEND_ADDR,
+                  FunctionDescriptor.of(
+                      ValueLayout.ADDRESS,
+                      ValueLayout.ADDRESS,
+                      ValueLayout.ADDRESS,
+                      ValueLayout.JAVA_LONG));
+      final var hideMh =
+          Linker.nativeLinker()
+              .downcallHandle(
+                  MSG_SEND_ADDR,
+                  FunctionDescriptor.ofVoid(
+                      ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+      final var zoomBtn =
+          (MemorySegment) buttonMh.invokeExact(nsWindow, sel(a, "standardWindowButton:"), 2L);
+      if (zoomBtn.address() != 0) hideMh.invokeExact(zoomBtn, sel(a, "setHidden:"), 1);
+
+      final long behavior =
+          ((MemorySegment) MSG_SEND_0.invokeExact(nsWindow, sel(a, "collectionBehavior"))).address();
+      Linker.nativeLinker()
+          .downcallHandle(
+              MSG_SEND_ADDR,
+              FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG))
+          .invokeExact(nsWindow, sel(a, "setCollectionBehavior:"), behavior | (1L << 9));
     } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
@@ -536,6 +579,47 @@ public final class CocoaWebView extends WebviewBase {
       }
     }
     windowClosedLatch.countDown();
+  }
+
+  /**
+   * Fires whenever the child window moves. Moves the parent window by the same delta so they stay
+   * locked together. Ignores movements caused by the parent dragging the child (via addChildWindow)
+   * by comparing both deltas and skipping when they match.
+   */
+  @SuppressWarnings("unused")
+  public void onWindowDidMove(MemorySegment self, MemorySegment cmd, MemorySegment notification) {
+    if (syncMoving || parentWindow.address() == 0) return;
+    try (var a = Arena.ofConfined()) {
+      final var frameSel = sel(a, "frame");
+      final var cf =
+          (MemorySegment)
+              ObjC.MSG_SEND_GET_FRAME.invokeExact((SegmentAllocator) a, nsWindow, frameSel);
+      final double cx = cf.get(ValueLayout.JAVA_DOUBLE, 0), cy = cf.get(ValueLayout.JAVA_DOUBLE, 8);
+      final double cdx = cx - childLastX, cdy = cy - childLastY;
+      childLastX = cx;
+      childLastY = cy;
+
+      if (cdx == 0 && cdy == 0) return;
+
+      final var pf =
+          (MemorySegment)
+              ObjC.MSG_SEND_GET_FRAME.invokeExact((SegmentAllocator) a, parentWindow, frameSel);
+      final double px = pf.get(ValueLayout.JAVA_DOUBLE, 0), py = pf.get(ValueLayout.JAVA_DOUBLE, 8);
+
+      syncMoving = true;
+      try {
+        ObjC.MSG_SEND_SET_SIZE.invokeExact(parentWindow, sel(a, "setFrameOrigin:"), px + cdx, py + cdy);
+      } finally {
+        syncMoving = false;
+      }
+    } catch (final Throwable ignored) {
+    }
+  }
+
+  @SuppressWarnings("unused")
+  public byte onWindowShouldZoom(
+      MemorySegment self, MemorySegment cmd, MemorySegment window, MemorySegment frame) {
+    return disableZoom ? (byte) 0 : (byte) 1;
   }
 
   /**
@@ -758,6 +842,36 @@ public final class CocoaWebView extends WebviewBase {
         }
       }
 
+      if (transparent) {
+        final var boolMh =
+            Linker.nativeLinker()
+                .downcallHandle(
+                    MSG_SEND_ADDR,
+                    FunctionDescriptor.ofVoid(
+                        ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+        boolMh.invokeExact(nsWindow, sel(a, "setOpaque:"), 0);
+        sendVoid1(nsWindow, sel(a, "setBackgroundColor:"),
+            send0(ObjC.getClass(a, "NSColor"), sel(a, "clearColor")));
+        // Prevent WKWebView from painting its default white fill.
+        final var falseNum =
+            (MemorySegment)
+                Linker.nativeLinker()
+                    .downcallHandle(
+                        MSG_SEND_ADDR,
+                        FunctionDescriptor.of(
+                            ValueLayout.ADDRESS,
+                            ValueLayout.ADDRESS,
+                            ValueLayout.ADDRESS,
+                            ValueLayout.JAVA_INT))
+                    .invokeExact(ObjC.getClass(a, "NSNumber"), sel(a, "numberWithBool:"), 0);
+        Linker.nativeLinker()
+            .downcallHandle(
+                MSG_SEND_ADDR,
+                FunctionDescriptor.ofVoid(
+                    ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS))
+            .invokeExact(wkWebView, sel(a, "setValue:forKey:"), falseNum, nsString(a, "drawsBackground"));
+      }
+
       if (parentWindow.address() != 0) {
         MacOSHelper.centerOnParent(nsWindow, parentWindow);
       } else {
@@ -770,7 +884,14 @@ public final class CocoaWebView extends WebviewBase {
       sendVoid1(wkWebView, sel(a, "setNavigationDelegate:"), createNavigationDelegate(a));
 
       if (parentWindow.address() != 0) {
-        MacOSHelper.addChildWindow(parentWindow, nsWindow);
+        if (!moveParentWithChild) {
+          MacOSHelper.addChildWindow(parentWindow, nsWindow);
+        } else {
+          final var frameSel = sel(a, "frame");
+          final var cf = (MemorySegment) ObjC.MSG_SEND_GET_FRAME.invokeExact((SegmentAllocator) a, nsWindow, frameSel);
+          childLastX = cf.get(ValueLayout.JAVA_DOUBLE, 0);
+          childLastY = cf.get(ValueLayout.JAVA_DOUBLE, 8);
+        }
         parentClickGuard = createClickGuardView(a);
         MacOSHelper.installFillAutoresizeMask(parentClickGuard);
         MacOSHelper.attachClickGuard(parentWindow, parentClickGuard);
@@ -818,6 +939,59 @@ public final class CocoaWebView extends WebviewBase {
           (byte)
               CLASS_ADD_METHOD.invokeExact(
                   cls, sel(a, "windowWillClose:"), stub, a.allocateFrom("v@:@"));
+
+      final var shouldZoomMh =
+          MethodHandles.lookup()
+              .findVirtual(
+                  CocoaWebView.class,
+                  "onWindowShouldZoom",
+                  MethodType.methodType(
+                      byte.class,
+                      MemorySegment.class,
+                      MemorySegment.class,
+                      MemorySegment.class,
+                      MemorySegment.class))
+              .bindTo(this);
+      final var shouldZoomStub =
+          Linker.nativeLinker()
+              .upcallStub(
+                  shouldZoomMh,
+                  FunctionDescriptor.of(
+                      ValueLayout.JAVA_BYTE,
+                      ValueLayout.ADDRESS,
+                      ValueLayout.ADDRESS,
+                      ValueLayout.ADDRESS,
+                      ObjC.NS_RECT_LAYOUT),
+                  callbackArena);
+      final var _ =
+          (byte)
+              CLASS_ADD_METHOD.invokeExact(
+                  cls,
+                  sel(a, "windowShouldZoom:toFrame:"),
+                  shouldZoomStub,
+                  a.allocateFrom("c@:@{NSRect={NSPoint=dd}{NSSize=dd}}"));
+
+      if (moveParentWithChild && parentWindow.address() != 0) {
+        final var moveMh =
+            MethodHandles.lookup()
+                .findVirtual(
+                    CocoaWebView.class,
+                    "onWindowDidMove",
+                    MethodType.methodType(
+                        void.class, MemorySegment.class, MemorySegment.class, MemorySegment.class))
+                .bindTo(this);
+        final var moveStub =
+            Linker.nativeLinker()
+                .upcallStub(
+                    moveMh,
+                    FunctionDescriptor.ofVoid(
+                        ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
+                    callbackArena);
+        final var _ =
+            (byte)
+                CLASS_ADD_METHOD.invokeExact(
+                    cls, sel(a, "windowDidMove:"), moveStub, a.allocateFrom("v@:@"));
+      }
 
       REGISTER_CLASS_PAIR.invokeExact(cls);
       return (MemorySegment) CLASS_CREATE_INSTANCE.invokeExact(cls, 0L);

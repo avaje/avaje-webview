@@ -352,6 +352,18 @@ public interface Webview extends Closeable, Runnable {
     Builder parent(Webview parent);
 
     /**
+     * Marks this window as owned by {@code parent} and optionally locks their positions together.
+     *
+     * <p>When {@code moveParentWithChild} is {@code true}, dragging the child window also moves
+     * the parent by the same delta, keeping them visually locked.
+     *
+     * @param parent the {@code Webview} that should be blocked while this window is open
+     * @param moveParentWithChild {@code true} to synchronise parent position with child
+     * @return this builder
+     */
+    Builder parent(Webview parent, boolean moveParentWithChild);
+
+    /**
      * Maximizes the window immediately after it is shown. Defaults to {@code false}.
      *
      * @param maximize {@code true} to start maximized
@@ -369,6 +381,35 @@ public interface Webview extends Closeable, Runnable {
     Builder fullscreen(boolean fullscreen);
 
     /**
+     * Controls whether the maximize button is shown on the native title bar. Defaults to {@code
+     * true}.
+     *
+     * <p>On Linux (GTK4) this has no effect.
+     *
+     * @param maximizable {@code false} to hide/disable the maximize button
+     * @return this builder
+     */
+    Builder maximizable(boolean maximizable);
+
+    /**
+     * Sets the minimum size the user can resize the window to.
+     *
+     * @param width minimum width in pixels
+     * @param height minimum height in pixels
+     * @return this builder
+     */
+    Builder minSize(int width, int height);
+
+    /**
+     * Sets the maximum size the user can resize the window to.
+     *
+     * @param width maximum width in pixels
+     * @param height maximum height in pixels
+     * @return this builder
+     */
+    Builder maxSize(int width, int height);
+
+    /**
      * Controls whether the user can resize the window. Defaults to {@code true}.
      *
      * <p>When set to {@code false}, the window is created at the specified {@link #width(int)} and
@@ -379,6 +420,15 @@ public interface Webview extends Closeable, Runnable {
      * @return this builder
      */
     Builder resizable(boolean resizable);
+
+    /**
+     * Enables a transparent window background so web content with a transparent or
+     * semi-transparent CSS background shows through to the desktop. Defaults to {@code false}.
+     *
+     * @param transparent {@code true} to enable transparency
+     * @return this builder
+     */
+    Builder transparent(boolean transparent);
 
     /**
      * Builds a Webview using the configuration

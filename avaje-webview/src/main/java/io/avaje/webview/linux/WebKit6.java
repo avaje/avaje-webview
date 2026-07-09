@@ -1,6 +1,7 @@
 package io.avaje.webview.linux;
 
 import static java.lang.foreign.ValueLayout.ADDRESS;
+import static java.lang.foreign.ValueLayout.JAVA_FLOAT;
 import static java.lang.foreign.ValueLayout.JAVA_INT;
 import static java.lang.foreign.ValueLayout.JAVA_LONG;
 
@@ -330,6 +331,19 @@ final class WebKit6 {
   private static final MethodHandle JSC_VALUE_TO_STRING =
       downcall("jsc_value_to_string", FunctionDescriptor.of(ADDRESS, ADDRESS));
 
+  /**
+   * {@code webkit_web_view_set_background_color(WebKitWebView* wv, const GdkRGBA* rgba) -> void}
+   *
+   * <p>Sets the base color the web view paints beneath page content before anything is
+   * rendered/composited. Passing an RGBA color with {@code alpha=0} stops WebKit from painting its
+   * default opaque white base, which is required for the GTK window behind it to show through.
+   *
+   * <p>{@code GdkRGBA} is a plain C struct of four {@code float}s: {@code red, green, blue, alpha}
+   * (16 bytes total, no padding), passed by pointer.
+   */
+  private static final MethodHandle WEBKIT_WEB_VIEW_SET_BACKGROUND_COLOR =
+      downcall("webkit_web_view_set_background_color", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
+
   private static MethodHandle downcall(String sym, FunctionDescriptor desc) {
     return LINKER.downcallHandle(
         LOOKUP
@@ -642,6 +656,30 @@ final class WebKit6 {
     // Must free with g_free, not the JVM GC - this pointer came from GLib's allocator.
     GLib.gFree(raw);
     return s;
+  }
+
+  /**
+   * Sets the base color painted beneath page content, e.g. {@code (0,0,0,0)} for fully transparent
+   * so a transparent GTK window shows through wherever the page itself doesn't paint.
+   *
+   * @param wv a {@code WebKitWebView*}
+   * @param red red channel, {@code 0.0}-{@code 1.0}
+   * @param green green channel, {@code 0.0}-{@code 1.0}
+   * @param blue blue channel, {@code 0.0}-{@code 1.0}
+   * @param alpha alpha channel, {@code 0.0} (transparent) - {@code 1.0} (opaque)
+   */
+  static void webkitWebViewSetBackgroundColor(
+      MemorySegment wv, float red, float green, float blue, float alpha) {
+    try (var a = Arena.ofConfined()) {
+      final var rgba = a.allocate(4 * JAVA_FLOAT.byteSize());
+      rgba.set(JAVA_FLOAT, 0, red);
+      rgba.set(JAVA_FLOAT, 4, green);
+      rgba.set(JAVA_FLOAT, 8, blue);
+      rgba.set(JAVA_FLOAT, 12, alpha);
+      WEBKIT_WEB_VIEW_SET_BACKGROUND_COLOR.invokeExact(wv, (MemorySegment) rgba);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
   }
 
   private WebKit6() {}

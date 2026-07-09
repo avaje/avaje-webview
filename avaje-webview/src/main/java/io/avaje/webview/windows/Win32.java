@@ -69,6 +69,7 @@ final class Win32 {
   static final int WM_QUIT = 0x0012;
   static final int WM_ACTIVATE = 0x0006;
   static final int WM_GETMINMAXINFO = 0x0024;
+  static final int WM_MOVING = 0x0216;
   static final int WM_NCCALCSIZE = 0x0083;
   static final int WM_SETTINGCHANGE = 0x001A;
   static final int WM_APP = 0x8000;
@@ -79,6 +80,7 @@ final class Win32 {
   static final int SWP_NOZORDER = 0x0004;
   static final int SWP_NOACTIVATE = 0x0010;
   static final int SWP_FRAMECHANGED = 0x0020;
+  static final int WS_EX_NOREDIRECTBITMAP = 0x00200000;
   static final int WM_DPICHANGED = 0x02E0;
   static final int SM_CXSCREEN = 0;
   static final int SM_CYSCREEN = 1;

@@ -131,6 +131,7 @@ public final class Win32WebView extends WebviewBase {
   private final ConcurrentLinkedQueue<Runnable> scriptDoneCallbacks = new ConcurrentLinkedQueue<>();
 
   private volatile int minW, minH, maxW, maxH;
+  private int parentOffsetX, parentOffsetY;
   private long navToken;
   private int currentDpi = Win32.DEFAULT_DPI;
 
@@ -170,8 +171,10 @@ public final class Win32WebView extends WebviewBase {
       int height,
       boolean borderless,
       boolean outline,
-      MemorySegment parentWindow) {
-    super(redirectConsole, borderless, outline, parentWindow);
+      boolean transparent,
+      MemorySegment parentWindow,
+      boolean moveParentWithChild) {
+    super(redirectConsole, borderless, outline, transparent, parentWindow, moveParentWithChild);
     Win32.coInitialize();
     Win32.enablePerMonitorDpiAwareness();
     buildWndProcStubs();
@@ -180,6 +183,18 @@ public final class Win32WebView extends WebviewBase {
     embedWebView2(debug);
     setSizeImpl(width, height);
     Win32.centerWindow(hwnd, this.parentWindow);
+    if (moveParentWithChild && this.parentWindow.address() != 0) {
+      try (var a = Arena.ofConfined()) {
+        final var cr = a.allocate(Win32.RECT_LAYOUT);
+        final var pr = a.allocate(Win32.RECT_LAYOUT);
+        final var _ = (int) Win32.GetWindowRect.invokeExact(hwnd, cr);
+        final var _ = (int) Win32.GetWindowRect.invokeExact(this.parentWindow, pr);
+        parentOffsetX = pr.get(JAVA_INT, 0) - cr.get(JAVA_INT, 0);
+        parentOffsetY = pr.get(JAVA_INT, 4) - cr.get(JAVA_INT, 4);
+      } catch (final Throwable t) {
+        throw new RuntimeException(t);
+      }
+    }
   }
 
   @Override
@@ -263,6 +278,31 @@ public final class Win32WebView extends WebviewBase {
   protected void setMaxSizeImpl(int width, int height) {
     maxW = width;
     maxH = height;
+  }
+
+  @Override
+  protected void disableMaximizeImpl() {
+    try {
+      final var style = (int) Win32.GetWindowLong.invokeExact(hwnd, Win32.GWL_STYLE);
+      final var _ =
+          (int) Win32.SetWindowLong.invokeExact(hwnd, Win32.GWL_STYLE, style & ~Win32.WS_MAXIMIZEBOX);
+      final var _ =
+          (int)
+              Win32.SetWindowPos.invokeExact(
+                  hwnd,
+                  MemorySegment.NULL,
+                  0,
+                  0,
+                  0,
+                  0,
+                  Win32.SWP_NOMOVE
+                      | Win32.SWP_NOSIZE
+                      | Win32.SWP_NOZORDER
+                      | Win32.SWP_NOACTIVATE
+                      | Win32.SWP_FRAMECHANGED);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
   }
 
   @Override
@@ -476,6 +516,26 @@ public final class Win32WebView extends WebviewBase {
         }
         return 0;
       }
+      case Win32.WM_MOVING -> {
+        if (moveParentWithChild && parentWindow.address() != 0) {
+          final var r = MemorySegment.ofAddress(lParam).reinterpret(16);
+          final int newLeft = r.get(JAVA_INT, 0);
+          final int newTop = r.get(JAVA_INT, 4);
+          try {
+            final var _ =
+                (int)
+                    Win32.SetWindowPos.invokeExact(
+                        parentWindow,
+                        MemorySegment.NULL,
+                        newLeft + parentOffsetX,
+                        newTop + parentOffsetY,
+                        0,
+                        0,
+                        Win32.SWP_NOSIZE | Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+          } catch (final Throwable ignored) {
+          }
+        }
+      }
       case Win32.WM_NCCALCSIZE -> {
         if (borderless && wParam == 1L) {
           if (outline) {
@@ -594,7 +654,7 @@ public final class Win32WebView extends WebviewBase {
       hwnd =
           (MemorySegment)
               Win32.CreateWindowExW.invokeExact(
-                  0,
+                  transparent ? Win32.WS_EX_NOREDIRECTBITMAP : 0,
                   a.allocateFrom(mainCls, StandardCharsets.UTF_16LE),
                   a.allocateFrom("", StandardCharsets.UTF_16LE),
                   Win32.WS_OVERLAPPEDWINDOW,
@@ -614,7 +674,9 @@ public final class Win32WebView extends WebviewBase {
       hwndWidget =
           (MemorySegment)
               Win32.CreateWindowExW.invokeExact(
-                  0x10000 /* WS_EX_CONTROLPARENT */,
+                  transparent
+                      ? (0x10000 | Win32.WS_EX_NOREDIRECTBITMAP) /* WS_EX_CONTROLPARENT */
+                      : 0x10000 /* WS_EX_CONTROLPARENT */,
                   a.allocateFrom(widgetCls, StandardCharsets.UTF_16LE),
                   MemorySegment.NULL,
                   Win32.WS_CHILD,
@@ -827,6 +889,7 @@ public final class Win32WebView extends WebviewBase {
   private void doInitTasks() {
     applySettings(debugMode);
     Win32.applyDarkMode(hwnd, isDarkTheme());
+    if (transparent) applyTransparency();
     setupJsBridge(POST_FN); // nativeAddUserScript uses nested pump; works from msgWndProc context
     resizeWidget(hwnd);
     try {
@@ -1028,6 +1091,10 @@ public final class Win32WebView extends WebviewBase {
     if (settings == null) return;
     settings.putIsStatusBarEnabled(false);
     settings.putAreDevToolsEnabled(debug);
+  }
+
+  private void applyTransparency() {
+    controller.putDefaultBackgroundColor(0);
   }
 
   private void resizeWidget(MemorySegment hWnd) {

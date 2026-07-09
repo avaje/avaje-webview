@@ -73,14 +73,23 @@ public abstract sealed class WebviewBase implements Webview
   private final boolean redirectConsole;
   protected final boolean borderless;
   protected final boolean outline;
+  protected final boolean transparent;
   protected final MemorySegment parentWindow;
+  protected final boolean moveParentWithChild;
 
   protected WebviewBase(
-      boolean redirectConsole, boolean borderless, boolean outline, MemorySegment parentWindow) {
+      boolean redirectConsole,
+      boolean borderless,
+      boolean outline,
+      boolean transparent,
+      MemorySegment parentWindow,
+      boolean moveParentWithChild) {
     this.redirectConsole = redirectConsole;
     this.borderless = borderless;
     this.outline = outline;
+    this.transparent = transparent;
     this.parentWindow = parentWindow != null ? parentWindow : MemorySegment.NULL;
+    this.moveParentWithChild = moveParentWithChild;
   }
 
   // JS bridge state, all mutations to userScripts/bindScriptIdx must happen on the main thread
@@ -170,6 +179,10 @@ public abstract sealed class WebviewBase implements Webview
   @Override
   public void setFixedSize(int width, int height) {
     dispatchImpl(() -> setFixedSizeImpl(width, height));
+  }
+
+  void disableMaximize() {
+    dispatchImpl(this::disableMaximizeImpl);
   }
 
   @Override
@@ -291,6 +304,8 @@ public abstract sealed class WebviewBase implements Webview
   protected abstract void setMaxSizeImpl(int width, int height);
 
   protected abstract void setFixedSizeImpl(int width, int height);
+
+  protected abstract void disableMaximizeImpl();
 
   protected abstract void setHtmlImpl(String html);
 

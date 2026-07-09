@@ -1,6 +1,7 @@
 package io.avaje.webview.linux;
 
 import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
 
 import io.avaje.webview.Webview;
@@ -42,8 +43,7 @@ final class LinuxHelper {
       if (settings.address() == 0L) throw new RuntimeException("Failed to get GTK settings");
       final var propertyName =
           arena.allocateFrom("gtk-application-prefer-dark-theme", StandardCharsets.UTF_8);
-      GLib.gObjectSet(
-          settings, propertyName, shouldBeDark ? 1 : 0, java.lang.foreign.MemorySegment.NULL);
+      GLib.gObjectSet(settings, propertyName, shouldBeDark ? 1 : 0, MemorySegment.NULL);
     }
   }
 }

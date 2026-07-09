@@ -3,6 +3,7 @@ package io.avaje.webview.linux;
 import static java.lang.foreign.ValueLayout.ADDRESS;
 import static java.lang.foreign.ValueLayout.JAVA_DOUBLE;
 import static java.lang.foreign.ValueLayout.JAVA_INT;
+import static java.lang.foreign.ValueLayout.JAVA_LONG;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.FunctionDescriptor;
@@ -266,6 +267,63 @@ final class Gtk4 {
    */
   private static final MethodHandle GTK_SETTINGS_GET_DEFAULT =
       downcall("gtk_settings_get_default", FunctionDescriptor.of(ADDRESS));
+
+  /**
+   * {@code GTK_STYLE_PROVIDER_PRIORITY_APPLICATION} - the priority used for app-level CSS so it
+   * overrides the active theme's stylesheet but can still be overridden by user themes/settings.
+   */
+  private static final int GTK_STYLE_PROVIDER_PRIORITY_APPLICATION = 600;
+
+  /**
+   * {@code gdk_display_get_default() -> GdkDisplay*}
+   *
+   * <p>Returns the default {@code GdkDisplay} for the process; used as the target for a
+   * process-wide CSS provider rather than requiring a realized widget to look one up.
+   */
+  private static final MethodHandle GDK_DISPLAY_GET_DEFAULT =
+      downcall("gdk_display_get_default", FunctionDescriptor.of(ADDRESS));
+
+  /**
+   * {@code gtk_widget_add_css_class(GtkWidget* widget, const char* css_class) -> void}
+   *
+   * <p>Adds a CSS style class to a widget so a targeted stylesheet rule (e.g. {@code
+   * .webview-transparent}) can match only this widget instance rather than every window.
+   */
+  private static final MethodHandle GTK_WIDGET_ADD_CSS_CLASS =
+      downcall("gtk_widget_add_css_class", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
+
+  /**
+   * {@code gtk_css_provider_new() -> GtkCssProvider*}
+   *
+   * <p>Creates a new, empty CSS provider. Returns a full (non-floating) GObject reference.
+   */
+  private static final MethodHandle GTK_CSS_PROVIDER_NEW =
+      downcall("gtk_css_provider_new", FunctionDescriptor.of(ADDRESS));
+
+  /**
+   * {@code gtk_css_provider_load_from_data(GtkCssProvider* provider, const char* data, gssize
+   * length) -> void}
+   *
+   * <p>Parses {@code data} as CSS and loads it into {@code provider}. GTK4 dropped the {@code
+   * GError**} out-param that GTK3 had; parse errors are reported asynchronously via the
+   * provider's {@code "parsing-error"} signal, which we don't connect to since our stylesheet is a
+   * fixed, known-valid literal.
+   */
+  private static final MethodHandle GTK_CSS_PROVIDER_LOAD_FROM_DATA =
+      downcall(
+          "gtk_css_provider_load_from_data", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, JAVA_LONG));
+
+  /**
+   * {@code gtk_style_context_add_provider_for_display(GdkDisplay* display, GtkStyleProvider*
+   * provider, guint priority) -> void}
+   *
+   * <p>Registers {@code provider} for every widget on {@code display}. The display retains its own
+   * reference, so the caller may drop its reference immediately after this call.
+   */
+  private static final MethodHandle GTK_STYLE_CONTEXT_ADD_PROVIDER_FOR_DISPLAY =
+      downcall(
+          "gtk_style_context_add_provider_for_display",
+          FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, JAVA_INT));
 
   private static MethodHandle downcall(String sym, FunctionDescriptor desc) {
     return LINKER.downcallHandle(
@@ -564,6 +622,37 @@ final class Gtk4 {
   static MemorySegment gtkSettingsGetDefault() {
     try {
       return (MemorySegment) GTK_SETTINGS_GET_DEFAULT.invokeExact();
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * Makes {@code window}'s background see-through so that whatever is behind it in the compositor
+   * (desktop, other windows) shows through wherever neither the window chrome nor the page content
+   * paints an opaque pixel.
+   *
+   * <p>This only affects the GTK-drawn window background; the caller must separately clear
+   * WebKit's own opaque base fill via {@link WebKit6#webkitWebViewSetBackgroundColor}, otherwise
+   * the page itself still renders an opaque white rectangle over the (now transparent) window.
+   *
+   * <p>Requires a compositor that supports an alpha channel for client windows: this works
+   * out-of-the-box on Wayland and on X11 with a compositing manager (e.g. picom) running. Without
+   * one, the "transparent" areas fall back to opaque black.
+   *
+   * @param window a {@code GtkWindow*}, not yet required to be realized
+   */
+  static void gtkMakeWindowTransparent(MemorySegment window) {
+    try (var a = Arena.ofConfined()) {
+      GTK_WIDGET_ADD_CSS_CLASS.invokeExact(window, (MemorySegment) a.allocateFrom("webview-transparent"));
+      final var provider = (MemorySegment) GTK_CSS_PROVIDER_NEW.invokeExact();
+      final var css = a.allocateFrom("window.webview-transparent { background-color: rgba(0,0,0,0); }");
+      GTK_CSS_PROVIDER_LOAD_FROM_DATA.invokeExact(provider, (MemorySegment) css, (long) -1);
+      final var display = (MemorySegment) GDK_DISPLAY_GET_DEFAULT.invokeExact();
+      GTK_STYLE_CONTEXT_ADD_PROVIDER_FOR_DISPLAY.invokeExact(
+          display, provider, GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+      // add_provider_for_display takes its own reference; drop ours now.
+      GLib.gObjectUnref(provider);
     } catch (final Throwable t) {
       throw new RuntimeException(t);
     }

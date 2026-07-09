@@ -17,6 +17,7 @@ final class ComController {
   private final MethodHandle moveFocus;
   private final MethodHandle close;
   private final MethodHandle getCoreWebView2;
+  private final MethodHandle putDefaultBgColor;
 
   /**
    * Binds all vtable method handles eagerly from the given {@code ICoreWebView2Controller} COM
@@ -31,6 +32,7 @@ final class ComController {
     moveFocus = Win32.resolve(ptr, 12, FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT));
     close = Win32.resolve(ptr, 24, FunctionDescriptor.of(JAVA_INT, ADDRESS));
     getCoreWebView2 = Win32.resolve(ptr, 25, FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS));
+    putDefaultBgColor = Win32.resolve(ptr, 27, FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT));
   }
 
   /**
@@ -101,6 +103,20 @@ final class ComController {
       if (hr != 0)
         throw new RuntimeException("get_CoreWebView2 failed: 0x" + Integer.toHexString(hr));
       return pWv2.get(ADDRESS, 0);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * Calls {@code ICoreWebView2Controller2::put_DefaultBackgroundColor}.
+   *
+   * <p>{@code color} is a packed {@code COREWEBVIEW2_COLOR} struct (A, R, G, B as bytes in
+   * little-endian order). Pass {@code 0} for fully transparent ({@code A=0,R=0,G=0,B=0}).
+   */
+  void putDefaultBackgroundColor(int color) {
+    try {
+      final var _ = (int) putDefaultBgColor.invokeExact(ptr, color);
     } catch (final Throwable t) {
       throw new RuntimeException(t);
     }

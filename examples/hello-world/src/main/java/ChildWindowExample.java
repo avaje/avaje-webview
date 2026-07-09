@@ -80,7 +80,7 @@ void main() {
 
   main.bind(
       "openChild",
-      req -> {
+      _ -> {
         // Build and run the child on its own platform thread - each Webview.run() blocks
         // its calling thread until that window closes, so the child needs its own thread
         // while the main window keeps pumping on this one.
@@ -92,8 +92,8 @@ void main() {
                           .title("Please wait")
                           .width(320)
                           .height(180)
-                          .parent(main) // disables `main` until this window closes
-                          .html(CHILD_HTML)
+                          .parent(main, true) // disables `main` until this window closes
+                          .html(CHILD_HTML).maximizable(false)
                           .build()) {
                     child.bind(
                         "closeDialog",

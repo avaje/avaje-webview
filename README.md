@@ -78,6 +78,9 @@ Webview webview = Webview.builder()
     .width(1200)
     .height(800)
     .enableDeveloperTools(true) // Enable right-click > Inspect
+    .resizable(false)           // Lock to width/height, no user resize
+    .maximize(true)             // Start maximized (ignored if fullscreen(true))
+    .fullscreen(true)           // Start fullscreen, takes precedence over maximize
     .build();
 
 // Set window constraints after creation
@@ -94,6 +97,43 @@ webview.fullscreen();
 // Dark mode
 webview.setDarkAppearance(true);
 ```
+
+### Borderless Windows
+
+```java
+Webview webview = Webview.builder()
+    .borderless(true) // No title bar, borders, or minimize/maximize/close buttons
+    .build();
+```
+
+Combine with `webview.startWindowDrag()` to implement a custom draggable title bar, since a
+borderless window has no native title bar for the user to grab.
+
+Keep the native outline (drop shadow and thin border) while still removing the title bar:
+
+```java
+Webview webview = Webview.builder()
+    .borderless(true, true) // outline=true keeps the native border/shadow
+    .build();
+```
+
+- **Windows**: only the title bar area is removed; left/right/bottom borders and the DWM shadow remain.
+- **macOS**: uses a transparent, hidden title bar so the window shadow/border are retained.
+- **Linux**: the outline flag has no effect.
+
+### Child Windows
+
+```java
+Webview parent = Webview.builder().title("Parent").build();
+
+Webview child = Webview.builder()
+    .title("Child")
+    .parent(parent) // Blocks the parent's input until this window closes
+    .build();
+```
+
+The parent window is disabled (blocked from mouse/keyboard input) as soon as the child is built,
+and re-enabled automatically when the child closes.
 
 ### Set Window Icon
 
@@ -218,8 +258,14 @@ All subsequent windows dispatch their init to that thread automatically.
 
 ## Console output
 
-`console.log`, `console.warn`, `console.error`, etc. are automatically forwarded to
-`java.lang.System.Logger` under the name `io.avaje.webview`. Configure your logging
+```java
+Webview webview = Webview.builder()
+    .redirectConsole(true) // Defaults to false
+    .build();
+```
+
+With `redirectConsole(true)`, `console.log`, `console.warn`, `console.error`, etc. are forwarded
+to `java.lang.System.Logger` under the name `io.avaje.webview`. Configure your logging
 framework to see webview JS console output.
 
 ## Notable changes from upstream

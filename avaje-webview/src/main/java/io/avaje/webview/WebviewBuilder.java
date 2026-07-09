@@ -22,6 +22,10 @@ final class WebviewBuilder implements Builder {
   private boolean maximize;
   private boolean fullscreen;
   private boolean resizable = true;
+  private boolean maximizable = true;
+  private boolean moveParentWithChild;
+  private boolean transparent;
+  private int minWidth, minHeight, maxWidth, maxHeight = -1;
 
   WebviewBuilder() {}
 
@@ -92,6 +96,13 @@ final class WebviewBuilder implements Builder {
   }
 
   @Override
+  public WebviewBuilder parent(Webview parent, boolean moveParentWithChild) {
+    this.parent = parent.nativeWindowPointer();
+    this.moveParentWithChild = moveParentWithChild;
+    return this;
+  }
+
+  @Override
   public WebviewBuilder maximize(boolean maximize) {
     this.maximize = maximize;
     return this;
@@ -104,14 +115,40 @@ final class WebviewBuilder implements Builder {
   }
 
   @Override
+  public WebviewBuilder maximizable(boolean maximizable) {
+    this.maximizable = maximizable;
+    return this;
+  }
+
+  @Override
+  public WebviewBuilder minSize(int width, int height) {
+    this.minWidth = width;
+    this.minHeight = height;
+    return this;
+  }
+
+  @Override
+  public WebviewBuilder maxSize(int width, int height) {
+    this.maxWidth = width;
+    this.maxHeight = height;
+    return this;
+  }
+
+  @Override
   public WebviewBuilder resizable(boolean resizable) {
     this.resizable = resizable;
     return this;
   }
 
   @Override
+  public WebviewBuilder transparent(boolean transparent) {
+    this.transparent = transparent;
+    return this;
+  }
+
+  @Override
   public Webview build() {
-    final var view = createForPlatform();
+    final WebviewBase view = createForPlatform();
     if (title != null) view.setTitle(title);
     if (url != null) {
       view.navigate(url);
@@ -127,21 +164,25 @@ final class WebviewBuilder implements Builder {
     }
     if (!resizable) {
       view.setFixedSize(width, height);
+    } else {
+      if (!maximizable) view.disableMaximize();
+      if (minWidth > 0) view.setMinSize(minWidth, minHeight);
+      if (maxWidth > 0) view.setMaxSize(maxWidth, maxHeight);
     }
     return view;
   }
 
-  private Webview createForPlatform() {
+  private WebviewBase createForPlatform() {
     final var os = System.getProperty("os.name", "").toLowerCase();
     if (os.contains("win"))
       return new Win32WebView(
-          enableDeveloperTools, redirectConsole, width, height, borderless, outline, parent);
+          enableDeveloperTools, redirectConsole, width, height, borderless, outline, transparent, parent, moveParentWithChild);
     if (os.contains("mac"))
       return new CocoaWebView(
-          enableDeveloperTools, redirectConsole, width, height, borderless, outline, parent);
+          enableDeveloperTools, redirectConsole, width, height, borderless, outline, transparent, parent, moveParentWithChild);
     if (os.contains("linux"))
       return new GtkWebView(
-          enableDeveloperTools, redirectConsole, width, height, borderless, outline, parent);
+          enableDeveloperTools, redirectConsole, width, height, borderless, outline, transparent, parent, moveParentWithChild);
     throw new UnsupportedOperationException(
         "Unsupported platform: " + System.getProperty("os.name"));
   }

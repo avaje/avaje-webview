@@ -82,8 +82,10 @@ public final class GtkWebView extends WebviewBase {
       int height,
       boolean borderless,
       boolean outline,
-      MemorySegment parentWindow) {
-    super(redirectConsole, borderless, outline, parentWindow);
+      boolean transparent,
+      MemorySegment parentWindow,
+      boolean moveParentWithChild) {
+    super(redirectConsole, borderless, outline, transparent, parentWindow, moveParentWithChild);
     this.initialWidth = width;
     this.initialHeight = height;
     openWindows.incrementAndGet();
@@ -219,6 +221,11 @@ public final class GtkWebView extends WebviewBase {
   protected void setMaxSizeImpl(int width, int height) {
     // GTK4 removed geometry hints
     // No equivalent exists in GTK4 without writing a custom size-allocate handler.
+  }
+
+  @Override
+  protected void disableMaximizeImpl() {
+    // GTK4 has no API to disable only the maximize button without subclassing or CSS hacks
   }
 
   @Override
@@ -468,6 +475,7 @@ public final class GtkWebView extends WebviewBase {
   private void initWindowAndWebView(boolean debug) {
     window = Gtk4.gtkWindowNew();
     if (borderless) Gtk4.gtkWindowSetDecorated(window, false);
+    if (transparent) Gtk4.gtkMakeWindowTransparent(window);
     GLib.gSignalConnect(window, "destroy", destroyStub, MemorySegment.NULL);
     if (parentWindow.address() != 0L) {
       Gtk4.gtkWindowSetTransientFor(window, parentWindow);
@@ -480,6 +488,7 @@ public final class GtkWebView extends WebviewBase {
     // set). g_object_ref_sink atomically claims ownership by clearing the floating flag, giving us
     // a stable +1 reference that we control.
     GLib.gObjectRefSink(webView);
+    if (transparent) WebKit6.webkitWebViewSetBackgroundColor(webView, 0f, 0f, 0f, 0f);
 
     ucManager = WebKit6.webkitWebViewGetUserContentManager(webView);
     try (var a = Arena.ofConfined()) {

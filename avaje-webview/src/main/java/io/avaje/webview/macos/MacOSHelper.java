@@ -15,6 +15,7 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.Linker;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 import java.nio.file.Path;
 
@@ -146,8 +147,8 @@ final class MacOSHelper {
     try (var a = Arena.ofConfined()) {
       final var frameSel = sel(a, "frame");
       final var pFrame =
-          (MemorySegment) ObjC.MSG_SEND_GET_FRAME.invokeExact(parentWindow, frameSel);
-      final var cFrame = (MemorySegment) ObjC.MSG_SEND_GET_FRAME.invokeExact(nsWindow, frameSel);
+          (MemorySegment) ObjC.MSG_SEND_GET_FRAME.invokeExact((SegmentAllocator) a, parentWindow, frameSel);
+      final var cFrame = (MemorySegment) ObjC.MSG_SEND_GET_FRAME.invokeExact((SegmentAllocator) a, nsWindow, frameSel);
       final double pX = pFrame.get(JAVA_DOUBLE, 0);
       final double pY = pFrame.get(JAVA_DOUBLE, 8);
       final double pW = pFrame.get(JAVA_DOUBLE, 16);
