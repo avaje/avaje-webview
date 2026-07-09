@@ -60,6 +60,12 @@ final class MacOSHelper {
     }
   }
 
+  static void minimize(MemorySegment nsWindow) {
+    try (var a = Arena.ofConfined()) {
+      sendVoid1(nsWindow, sel(a, "miniaturize:"), MemorySegment.NULL);
+    }
+  }
+
   /**
    * Begins a native window-move operation for {@code nsWindow}, as if the user had grabbed the
    * title bar, using the current NSEvent ({@code [NSApp currentEvent]}) as the originating mouse

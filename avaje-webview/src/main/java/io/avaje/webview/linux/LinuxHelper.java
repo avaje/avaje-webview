@@ -15,6 +15,11 @@ final class LinuxHelper {
     Gtk4.gtkWindowFullscreen(webview.nativeWindowPointer());
   }
 
+  /** Asks the window manager to minimize (iconify) the window. */
+  static void minimizeWindow(Webview webview) {
+    Gtk4.gtkWindowMinimize(webview.nativeWindowPointer());
+  }
+
   /** Requests the window manager to maximize the window. */
   static void maximizeWindow(Webview webview) {
     Gtk4.gtkWindowMaximize(webview.nativeWindowPointer());

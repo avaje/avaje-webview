@@ -234,6 +234,9 @@ public abstract sealed class WebviewBase implements Webview
   public abstract Webview fullscreen();
 
   @Override
+  public abstract Webview minimizeWindow();
+
+  @Override
   public void startWindowDrag() {
     dispatchImpl(this::startWindowDragImpl);
   }

@@ -27,12 +27,12 @@ String HTML =
       user-select: none;
   }
 
-  .titlebar-close {
+  .titlebar-btn {
       cursor: pointer;
       padding: 4px 10px;
   }
 
-  .titlebar-close:hover {
+  .titlebar-btn:hover {
       background: rgba(255, 255, 255, 0.2);
   }
 
@@ -44,7 +44,10 @@ String HTML =
 <body>
   <div class="titlebar" id="titlebar">
     <span>Borderless Window</span>
-    <span class="titlebar-close" onclick="closeWindow()">✕</span>
+    <div>
+      <span class="titlebar-btn" onclick="minimizeWindow()">−</span>
+      <span class="titlebar-btn" onclick="closeWindow()">✕</span>
+    </div>
   </div>
   <div class="content">
     <p>This window has no native title bar or border.</p>
@@ -55,9 +58,13 @@ String HTML =
     // Native decorations are gone (see .borderless(true) below), so dragging the
     // colored bar has to start a native window-move ourselves via a bound function.
     document.getElementById('titlebar').addEventListener('mousedown', event => {
-      if (event.button !== 0 || event.target.closest('.titlebar-close')) return;
+      if (event.button !== 0 || event.target.closest('.titlebar-btn')) return;
       startDrag();
     });
+
+    function minimizeWindow() {
+      minimizeApp();
+    }
 
     function closeWindow() {
       closeApp();
@@ -81,6 +88,13 @@ void main() {
       "startDrag",
       req -> {
         webview.startWindowDrag();
+        return null;
+      });
+
+  webview.bind(
+      "minimizeApp",
+      req -> {
+        webview.minimizeWindow();
         return null;
       });
 

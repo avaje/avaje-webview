@@ -18,6 +18,8 @@ final class WebviewBuilder implements Builder {
   private String url;
   private boolean borderless;
   private MemorySegment parent = MemorySegment.NULL;
+  private boolean maximize;
+  private boolean fullscreen;
 
   WebviewBuilder() {}
 
@@ -81,6 +83,18 @@ final class WebviewBuilder implements Builder {
   }
 
   @Override
+  public WebviewBuilder maximize(boolean maximize) {
+    this.maximize = maximize;
+    return this;
+  }
+
+  @Override
+  public WebviewBuilder fullscreen(boolean fullscreen) {
+    this.fullscreen = fullscreen;
+    return this;
+  }
+
+  @Override
   public Webview build() {
     final var view = createForPlatform();
     if (title != null) view.setTitle(title);
@@ -90,6 +104,11 @@ final class WebviewBuilder implements Builder {
       view.setHTML(html);
     } else {
       view.navigate("about:blank");
+    }
+    if (fullscreen) {
+      view.fullscreen();
+    } else if (maximize) {
+      view.maximizeWindow();
     }
     return view;
   }

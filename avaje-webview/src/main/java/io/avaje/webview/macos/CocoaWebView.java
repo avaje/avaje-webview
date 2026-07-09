@@ -459,6 +459,12 @@ public final class CocoaWebView extends WebviewBase {
   }
 
   @Override
+  public Webview minimizeWindow() {
+    dispatchImpl(() -> MacOSHelper.minimize(nsWindow));
+    return this;
+  }
+
+  @Override
   protected void startWindowDragImpl() {
     MacOSHelper.startWindowDrag(nsWindow);
   }

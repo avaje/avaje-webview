@@ -133,10 +133,17 @@ final class Gtk4 {
       downcall("gtk_window_destroy", FunctionDescriptor.ofVoid(ADDRESS));
 
   /**
+   * {@code gtk_window_minimize(GtkWindow* window) -> void}
+   *
+   * <p>Asks the window manager to minimize the window to the taskbar.
+   */
+  private static final MethodHandle GTK_WINDOW_MINIMIZE =
+      downcall("gtk_window_minimize", FunctionDescriptor.ofVoid(ADDRESS));
+
+  /**
    * {@code gtk_window_maximize(GtkWindow* window) -> void}
    *
-   * <p>Asks the window manager to maximize the window. The request is asynchronous; the actual
-   * resize happens on the next event loop iteration when the compositor responds.
+   * <p>Asks the window manager to maximize the window.
    */
   private static final MethodHandle GTK_WINDOW_MAXIMIZE =
       downcall("gtk_window_maximize", FunctionDescriptor.ofVoid(ADDRESS));
@@ -144,8 +151,7 @@ final class Gtk4 {
   /**
    * {@code gtk_window_fullscreen(GtkWindow* window) -> void}
    *
-   * <p>Asks the window manager to switch the window to fullscreen mode. Like {@link
-   * #GTK_WINDOW_MAXIMIZE}, the transition is compositor-driven and asynchronous.
+   * <p>Asks the window manager to switch the window to fullscreen mode.
    */
   private static final MethodHandle GTK_WINDOW_FULLSCREEN =
       downcall("gtk_window_fullscreen", FunctionDescriptor.ofVoid(ADDRESS));
@@ -413,6 +419,19 @@ final class Gtk4 {
   static void gtkWindowDestroy(MemorySegment window) {
     try {
       GTK_WINDOW_DESTROY.invokeExact(window);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * Asks the window manager to minimize (iconify) the window to the taskbar.
+   *
+   * @param window a {@code GtkWindow*}
+   */
+  static void gtkWindowMinimize(MemorySegment window) {
+    try {
+      GTK_WINDOW_MINIMIZE.invokeExact(window);
     } catch (final Throwable t) {
       throw new RuntimeException(t);
     }

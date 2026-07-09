@@ -312,6 +312,12 @@ public final class GtkWebView extends WebviewBase {
   }
 
   @Override
+  public Webview minimizeWindow() {
+    dispatchImpl(() -> LinuxHelper.minimizeWindow(this));
+    return this;
+  }
+
+  @Override
   protected void startWindowDragImpl() {
     LinuxHelper.startWindowDrag(this);
   }
