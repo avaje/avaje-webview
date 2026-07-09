@@ -20,7 +20,10 @@ String HTML =
     }
 
     .card {
-      background: transparent;
+      background: rgba(255,255,255,0.12);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.2);
       border-radius: 16px;
       padding: 32px 40px;
       color: #fff;

@@ -79,8 +79,11 @@ Webview webview = Webview.builder()
     .height(800)
     .enableDeveloperTools(true) // Enable right-click > Inspect
     .resizable(false)           // Lock to width/height, no user resize
+    .maximizable(false)         // Hide/disable the maximize button (ignored on Linux)
     .maximize(true)             // Start maximized (ignored if fullscreen(true))
     .fullscreen(true)           // Start fullscreen, takes precedence over maximize
+    .minSize(600, 400)          // Minimum size the user can resize to
+    .maxSize(1920, 1080)        // Maximum size the user can resize to
     .build();
 
 // Set window constraints after creation
@@ -121,6 +124,20 @@ Webview webview = Webview.builder()
 - **macOS**: uses a transparent, hidden title bar so the window shadow/border are retained.
 - **Linux**: the outline flag has no effect.
 
+### Transparent Windows
+
+```java
+Webview webview = Webview.builder()
+    .borderless(true)
+    .transparent(true) // Window background is see-through wherever the page doesn't paint
+    .html("<body style='background:transparent'>...</body>")
+    .build();
+```
+
+Combine with a page that only paints part of its area (e.g. `background: transparent` plus a
+`backdrop-filter: blur(...)` card) to get a native-looking translucent window. Usually paired with
+`borderless(true)` so there's no opaque title bar left behind.
+
 ### Child Windows
 
 ```java
@@ -134,6 +151,15 @@ Webview child = Webview.builder()
 
 The parent window is disabled (blocked from mouse/keyboard input) as soon as the child is built,
 and re-enabled automatically when the child closes.
+
+Pass `true` as a second argument to `parent(...)` to keep the parent locked to the child's
+position while dragging (Windows and macOS only currently):
+
+```java
+Webview child = Webview.builder()
+    .parent(parent, true) // parent moves with the child when dragged
+    .build();
+```
 
 ### Set Window Icon
 
