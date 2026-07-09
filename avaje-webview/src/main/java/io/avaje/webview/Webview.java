@@ -312,6 +312,18 @@ public interface Webview extends Closeable, Runnable {
     Builder borderless(boolean borderless);
 
     /**
+     * Marks this window as owned by {@code parent}, making it behave like a modal child/dialog
+     * window.
+     *
+     * <p>The parent window is disabled (blocked from receiving mouse/keyboard input) as soon as
+     * this window is built, and automatically re-enabled when this window closes.
+     *
+     * @param parent the {@code Webview} that should be blocked while this window is open
+     * @return this builder
+     */
+    Builder parent(Webview parent);
+
+    /**
      * Builds a Webview using the configuration
      *
      * @return a configured Webview instance

@@ -259,6 +259,18 @@ final class ObjC {
       LINKER.downcallHandle(
           MSG_SEND_ADDR, FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, JAVA_DOUBLE, JAVA_DOUBLE));
 
+  /**
+   * {@code -[NSView initWithFrame:] -> id}
+   *
+   * <p>Same {@code NSRect}-as-four-inline-doubles ABI as {@link #MSG_SEND_NSWINDOW_INIT}.This must
+   * be called on every freshly allocated {@code NSView} before use.
+   */
+  static final MethodHandle MSG_SEND_INIT_WITH_FRAME =
+      LINKER.downcallHandle(
+          MSG_SEND_ADDR,
+          FunctionDescriptor.of(
+              ADDRESS, ADDRESS, ADDRESS, JAVA_DOUBLE, JAVA_DOUBLE, JAVA_DOUBLE, JAVA_DOUBLE));
+
   private static MethodHandle downcall(SymbolLookup lib, String sym, FunctionDescriptor desc) {
     return LINKER.downcallHandle(
         lib.find(sym).orElseThrow(() -> new UnsatisfiedLinkError("ObjC symbol not found: " + sym)),

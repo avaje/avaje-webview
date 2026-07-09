@@ -71,6 +71,101 @@ final class MacOSHelper {
     }
   }
 
+  /**
+   * {@code -[NSWindow addChildWindow:ordered:]} - attaches {@code childWindow} to {@code
+   * parentWindow} so the window manager keeps it stacked above the parent and moves it together.
+   * {@code ordered = NSWindowAbove (1)}.
+   */
+  static void addChildWindow(MemorySegment parentWindow, MemorySegment childWindow) {
+    try (var a = Arena.ofConfined()) {
+      Linker.nativeLinker()
+          .downcallHandle(
+              ObjC.MSG_SEND_ADDR,
+              FunctionDescriptor.ofVoid(
+                  ValueLayout.ADDRESS,
+                  ValueLayout.ADDRESS,
+                  ValueLayout.ADDRESS,
+                  ValueLayout.JAVA_LONG))
+          .invokeExact(
+              parentWindow, sel(a, "addChildWindow:ordered:"), childWindow, 1L /* NSWindowAbove */);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * {@code -[NSWindow removeChildWindow:]} - detaches a window added via {@link #addChildWindow}.
+   */
+  static void removeChildWindow(MemorySegment parentWindow, MemorySegment childWindow) {
+    try (var a = Arena.ofConfined()) {
+      sendVoid1(parentWindow, sel(a, "removeChildWindow:"), childWindow);
+    }
+  }
+
+  /**
+   * {@code -[NSWindow setAlphaValue:]} - sets window opacity (0.0-1.0). Used to briefly dip and
+   * restore a child window's opacity to "flash" it when the user clicks its disabled parent.
+   */
+  static void setAlphaValue(MemorySegment window, double alpha) {
+    try (var a = Arena.ofConfined()) {
+      Linker.nativeLinker()
+          .downcallHandle(
+              ObjC.MSG_SEND_ADDR,
+              FunctionDescriptor.ofVoid(
+                  ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_DOUBLE))
+          .invokeExact(window, sel(a, "setAlphaValue:"), alpha);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * {@code -[NSWindow center]} - centers {@code window} on the screen it mostly occupies. Without
+   * this, {@code initWithContentRect:} leaves the window at its raw origin, which is the
+   * bottom-left corner of the main screen in Cocoa's coordinate system.
+   */
+  static void center(MemorySegment window) {
+    try (var a = Arena.ofConfined()) {
+      sendVoid0(window, sel(a, "center"));
+    }
+  }
+
+  /**
+   * Installs a fill autoresizing mask on {@code view} (already created with an oversized frame -
+   * see {@link ObjC#MSG_SEND_INIT_WITH_FRAME}) so it keeps covering the parent as it resizes.
+   * {@code NSViewWidthSizable (1<<1) | NSViewHeightSizable (1<<4) = 18}.
+   */
+  static void installFillAutoresizeMask(MemorySegment view) {
+    try (var a = Arena.ofConfined()) {
+      Linker.nativeLinker()
+          .downcallHandle(
+              ObjC.MSG_SEND_ADDR,
+              FunctionDescriptor.ofVoid(
+                  ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG))
+          .invokeExact(view, sel(a, "setAutoresizingMask:"), 18L);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * Adds {@code guardView} as the frontmost subview of {@code window}'s content view, so it
+   * intercepts every click before the real content underneath sees it.
+   */
+  static void attachClickGuard(MemorySegment window, MemorySegment guardView) {
+    try (var a = Arena.ofConfined()) {
+      final var contentView = send0(window, sel(a, "contentView"));
+      sendVoid1(contentView, sel(a, "addSubview:"), guardView);
+    }
+  }
+
+  /** Detaches a guard view added via {@link #attachClickGuard}. */
+  static void removeClickGuard(MemorySegment guardView) {
+    try (var a = Arena.ofConfined()) {
+      sendVoid0(guardView, sel(a, "removeFromSuperview"));
+    }
+  }
+
   static void setIcon(Path iconPath) {
     try (var a = Arena.ofConfined()) {
       final var app = send0(ObjC.getClass(a, "NSApplication"), sel(a, "sharedApplication"));

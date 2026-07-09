@@ -253,6 +253,22 @@ final class Win32 {
       downcall(USER32, "SetFocus", FunctionDescriptor.of(ADDRESS, ADDRESS));
 
   /**
+   * {@code EnableWindow(hWnd, bEnable) -> BOOL}
+   *
+   * <p>Enables or disables mouse/keyboard input to a window. Used to block interaction with a
+   * parent window while an owned (modal-style) child window is open.
+   */
+  static final MethodHandle EnableWindow =
+      downcall(USER32, "EnableWindow", FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT));
+
+  /**
+   * {@code SetForegroundWindow(hWnd) -> BOOL}. Brings the window to the foreground and activates
+   * it. Used to restore focus to the parent window after a modal-style child window closes.
+   */
+  static final MethodHandle SetForegroundWindow =
+      downcall(USER32, "SetForegroundWindow", FunctionDescriptor.of(JAVA_INT, ADDRESS));
+
+  /**
    * {@code GetClientRect(hWnd, lpRect) -> BOOL}
    *
    * <p>Fills a {@link #RECT_LAYOUT} buffer with the client-area dimensions of {@code hWnd}. Client
@@ -517,6 +533,27 @@ final class Win32 {
   static void showWindow(MemorySegment hwnd, int cmd) {
     try {
       final var _ = (int) ShowWindow.invokeExact(hwnd, cmd);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * Enables or disables mouse/keyboard input to {@code hwnd}. Passing {@code false} blocks the
+   * window from receiving input (clicks produce the system "ding") until re-enabled.
+   */
+  static void enableWindow(MemorySegment hwnd, boolean enable) {
+    try {
+      final var _ = (int) EnableWindow.invokeExact(hwnd, enable ? 1 : 0);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /** Brings {@code hwnd} to the foreground and activates it. */
+  static void setForegroundWindow(MemorySegment hwnd) {
+    try {
+      final var _ = (int) SetForegroundWindow.invokeExact(hwnd);
     } catch (final Throwable t) {
       throw new RuntimeException(t);
     }

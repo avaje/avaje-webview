@@ -96,17 +96,38 @@ final class Gtk4 {
       downcall("gtk_window_set_child", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
 
   /**
+   * {@code gtk_window_set_transient_for(GtkWindow* window, GtkWindow* parent) -> void}
+   *
+   * <p>Marks {@code window} as logically attached to {@code parent}: the window manager keeps it
+   * stacked above the parent and typically minimizes/restores it together with the parent.
+   */
+  private static final MethodHandle GTK_WINDOW_SET_TRANSIENT_FOR =
+      downcall("gtk_window_set_transient_for", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
+
+  /**
+   * {@code gtk_window_set_modal(GtkWindow* window, gboolean modal) -> void}
+   *
+   * <p>Combined with {@link #GTK_WINDOW_SET_TRANSIENT_FOR}, tells the window manager this is a
+   * modal dialog relative to its transient parent.
+   */
+  private static final MethodHandle GTK_WINDOW_SET_MODAL =
+      downcall("gtk_window_set_modal", FunctionDescriptor.ofVoid(ADDRESS, JAVA_INT));
+
+  /**
+   * {@code gtk_widget_set_sensitive(GtkWidget* widget, gboolean sensitive) -> void}
+   *
+   * <p>Enables or disables input to every widget in the tree rooted at {@code widget}.
+   */
+  private static final MethodHandle GTK_WIDGET_SET_SENSITIVE =
+      downcall("gtk_widget_set_sensitive", FunctionDescriptor.ofVoid(ADDRESS, JAVA_INT));
+
+  /**
    * {@code gtk_window_destroy(GtkWindow* window) -> void}
    *
    * <p>Destroys the window unconditionally, bypassing the {@code "close-request"} veto mechanism.
    * GTK emits the {@code "destroy"} signal synchronously during this call, so our {@code
    * GtkWebView#onWindowDestroy} upcall runs and decrements {@code openWindows} before {@code
    * gtkWindowDestroy} returns.
-   *
-   * <p>Added in GTK 4.0; replaces the old pattern of calling {@code gtk_widget_destroy()} on the
-   * window. Prefer this over {@code gtk_window_close} for programmatic shutdown because it
-   * guarantees teardown even if third-party code has connected a vetoing {@code close-request}
-   * handler.
    */
   private static final MethodHandle GTK_WINDOW_DESTROY =
       downcall("gtk_window_destroy", FunctionDescriptor.ofVoid(ADDRESS));
@@ -333,6 +354,49 @@ final class Gtk4 {
   static void gtkWindowSetChild(MemorySegment window, MemorySegment child) {
     try {
       GTK_WINDOW_SET_CHILD.invokeExact(window, child);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * Marks {@code window} as transient for {@code parent} so the window manager keeps it attached
+   * (stacked above, minimized/restored together).
+   *
+   * @param window a {@code GtkWindow*}
+   * @param parent a {@code GtkWindow*}
+   */
+  static void gtkWindowSetTransientFor(MemorySegment window, MemorySegment parent) {
+    try {
+      GTK_WINDOW_SET_TRANSIENT_FOR.invokeExact(window, parent);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * Marks {@code window} as a modal dialog relative to its transient parent.
+   *
+   * @param window a {@code GtkWindow*}
+   * @param modal {@code true} to mark modal
+   */
+  static void gtkWindowSetModal(MemorySegment window, boolean modal) {
+    try {
+      GTK_WINDOW_SET_MODAL.invokeExact(window, modal ? 1 : 0);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * Enables or disables input to {@code widget} and its descendants.
+   *
+   * @param widget a {@code GtkWidget*}
+   * @param sensitive {@code false} blocks input (clicks are ignored) until re-enabled
+   */
+  static void gtkWidgetSetSensitive(MemorySegment widget, boolean sensitive) {
+    try {
+      GTK_WIDGET_SET_SENSITIVE.invokeExact(widget, sensitive ? 1 : 0);
     } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
