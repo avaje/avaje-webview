@@ -1,5 +1,9 @@
 name: GraalVM Native Image builds
 on: [workflow_dispatch] ##, push, pull_request]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: Build on ${{ matrix.os }}
@@ -39,9 +43,12 @@ jobs:
         env:
           cache-name: maven-cache
         with:
-          path:
-            ~/.m2
-          key: build-${{ env.cache-name }}
+          path: |
+            ~/.m2/repository
+            !~/.m2/repository/io/avaje
+          key: native-${{ env.cache-name }}-${{ matrix.os }}-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            native-${{ env.cache-name }}-${{ matrix.os }}-
 
       - name: maven version
         run: mvn --version
