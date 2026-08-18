@@ -23,9 +23,8 @@ package io.avaje.webview;
 /**
  * A callback interface for handling function calls invoked from the JavaScript environment.
  *
- * <p>When a function is registered via {@link Webview#bind(String, WebviewBindCallback)}, calling
- * that function in JavaScript serializes the arguments into a JSON array and passes them to this
- * {@code apply} method.
+ * <p>Once a name is registered with {@link Webview#bind(String, WebviewBinding)}, calling it from
+ * JavaScript serializes the arguments to a JSON array and hands them to {@code apply}.
  */
 @FunctionalInterface
 public interface WebviewBinding {

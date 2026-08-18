@@ -43,17 +43,16 @@ import io.avaje.webview.Webview;
 import io.avaje.webview.WebviewBase;
 
 /**
- * macOS Cocoa + WKWebView implementation via Objective-C runtime Panama FFI.
+ * macOS Cocoa + WKWebView, driven through the Objective-C runtime with Panama.
  *
- * <p>Thread model: all Cocoa calls must happen on the OS main thread. The JVM's main thread isn't
- * automatically the OS main thread, so callers must pass -XstartOnFirstThread. Cross-thread calls
- * (dispatch()) queue a Runnable then use dispatch_async_f to wake the main thread, which drains the
- * queue via the drainStub C function pointer.
+ * <p>Cocoa only accepts calls on the OS main thread, and the JVM main thread is that thread only
+ * under {@code -XstartOnFirstThread}. Hence the first window has to be built there, and its {@link
+ * #run()} is what calls [NSApplication run].
  *
- * <p>The first window must be created on the OS main thread (pass {@code -XstartOnFirstThread}).
- * Additional windows may be created from any thread after the first window's {@link #run()} is
- * active - they dispatch their init to the main thread via dispatch_async_f and block until done.
- * Their {@link #run()} blocks on a {@link CountDownLatch} rather than calling [NSApplication run].
+ * <p>Later windows can come from any thread: they push their init onto the main queue with
+ * dispatch_async_f and wait for it, and their {@link #run()} parks on a {@link CountDownLatch}.
+ * dispatch() follows the same route: queue the Runnable, wake the main thread, let drainStub run
+ * it.
  */
 public final class CocoaWebView extends WebviewBase {
 
@@ -72,37 +71,28 @@ public final class CocoaWebView extends WebviewBase {
   // NSWindowStyleMaskFullSizeContentView: content view extends under the title bar
   private static final long NS_FULL_SIZE_CONTENT_VIEW = 0x8000L;
 
-  /** NSBackingStoreBuffered = 2. The only backing store type on modern macOS. */
+  /** NSBackingStoreBuffered = 2, the only backing store type left on macOS. */
   private static final long NS_BACKING_BUFFERED = 2L;
 
   /**
-   * WKUserScriptInjectionTimeAtDocumentStart = 0.
-   *
-   * <p>Scripts injected at document-start run after the DOM is created but <em>before</em> any page
-   * scripts execute. This guarantees {@code window.__webview__} is defined before any application
-   * JavaScript runs, preventing race conditions where app code calls a binding that hasn't been
-   * registered yet.
+   * WKUserScriptInjectionTimeAtDocumentStart = 0. Runs once the DOM exists but before any page
+   * script, so {@code window.__webview__} is in place before app code can call a binding.
    */
   private static final long WK_INJECT_AT_DOCUMENT_START = 0L;
 
   /**
-   * The GCD main dispatch queue, loaded as a raw exported symbol (not a function).
-   *
-   * <p>{@code _dispatch_main_q} is the global main queue object exported by libdispatch. We load it
-   * as a {@link MemorySegment} address (not via a function call) because it is a data symbol, not a
-   * function. The main queue is the only GCD queue guaranteed to drain on the OS main thread,
-   * making it the correct target for all AppKit/Cocoa work dispatched from background threads.
+   * {@code _dispatch_main_q}, the GCD main queue. It is a data symbol rather than a function, so it
+   * is looked up as a plain address. The only queue that drains on the OS main thread, so all
+   * AppKit work from other threads goes here.
    */
   private static final MemorySegment DISPATCH_MAIN_QUEUE;
 
   /**
-   * {@code dispatch_async_f(dispatch_queue_t queue, void* context, dispatch_function_t work)}
+   * {@code dispatch_async_f(dispatch_queue_t queue, void* context, dispatch_function_t work)}.
    *
-   * <p>Enqueues a C function pointer for asynchronous execution on {@code queue}. We prefer this
-   * over the block-based {@code dispatch_async()} because it takes a plain {@code void(*)(void*)} C
-   * function pointer rather than an Obj-C block - no block descriptor allocation needed, and Panama
-   * upcall stubs are exactly {@code void(*)(void*)} shaped. We pass {@code NULL} as context because
-   * the drain stub already captures {@code this} via Panama's {@code bindTo} binding.
+   * <p>Used instead of block-based {@code dispatch_async} because it takes a plain {@code
+   * void(*)(void*)}, the exact shape of a Panama upcall stub, with no block descriptor to allocate.
+   * Context is always {@code NULL}; the drain stub is already bound to {@code this}.
    */
   private static final MethodHandle DISPATCH_ASYNC_F;
 
@@ -116,7 +106,7 @@ public final class CocoaWebView extends WebviewBase {
   /**
    * {@code dispatch_after_f(dispatch_time_t when, dispatch_queue_t queue, void* context,
    * dispatch_function_t work)}. Same {@code void(*)(void*)} C-function-pointer shape as {@link
-   * #DISPATCH_ASYNC_F}, just deferred to a deadline .
+   * #DISPATCH_ASYNC_F}, only deferred to a deadline.
    */
   private static final MethodHandle DISPATCH_AFTER_F;
 
@@ -128,23 +118,18 @@ public final class CocoaWebView extends WebviewBase {
   private static final AtomicReference<Thread> nsAppThread = new AtomicReference<>();
 
   static {
-    // Turns out WebKit.framework must be explicitly dlopen'd before any ObjC class lookup for
-    // WKWebView,
-    // WKWebViewConfiguration, WKUserScript, etc. Without this, objc_getClass("WKWebView") returns
-    // NULL silently, and you go insane for hours trying to figure out what is happening.
+    // WebKit.framework has to be dlopen'd before any ObjC class lookup for WKWebView,
+    // WKWebViewConfiguration, WKUserScript etc. Skip it and objc_getClass("WKWebView") quietly
+    // hands back NULL, which costs hours to work out.
     SymbolLookup.libraryLookup(
         "/System/Library/Frameworks/WebKit.framework/WebKit", Arena.global());
 
     final var linker = Linker.nativeLinker();
     final var lookup = SymbolLookup.loaderLookup().or(linker.defaultLookup());
-    // _dispatch_main_q is a data symbol (a dispatch_queue_t struct), not a function.
-    // We load its address directly and pass it as the queue argument to dispatch_async_f.
     DISPATCH_MAIN_QUEUE =
         lookup
             .find("_dispatch_main_q")
             .orElseThrow(() -> new UnsatisfiedLinkError("_dispatch_main_q"));
-    // dispatch_async_f(queue, context, work) - work is void(*)(void*)
-    // We pass NULL context; drainStub already captures `this` via the upcall binding.
     DISPATCH_ASYNC_F =
         linker.downcallHandle(
             lookup.find("dispatch_async_f").orElseThrow(),
@@ -205,7 +190,7 @@ public final class CocoaWebView extends WebviewBase {
 
     final var current = Thread.currentThread();
     if (nsAppThread.compareAndSet(null, current)) {
-      // First window - must be on the OS main thread (requires -XstartOnFirstThread).
+      // First window has to land on the OS main thread.
       if (!MacOSHelper.startedOnFirstThread()) {
         nsAppThread.set(null);
         throw new IllegalStateException(
@@ -214,11 +199,10 @@ public final class CocoaWebView extends WebviewBase {
       initWindowAndWebView(debug, width, height);
       initNSApp();
     } else if (current == nsAppThread.get()) {
-      // Additional window created from the main thread itself.
+      // Already on the main thread, init inline.
       initWindowAndWebView(debug, width, height);
     } else {
-      // Background thread - dispatch init to the main thread and block until done.
-      // dispatch_async_f always targets the OS main queue, which [NSApplication run] drains.
+      // Other threads hand init to the main queue and wait; [NSApplication run] drains it.
       final var initLatch = new CountDownLatch(1);
       pendingDispatches.add(
           () -> {
@@ -240,13 +224,13 @@ public final class CocoaWebView extends WebviewBase {
   @Override
   public void run() {
     if (Thread.currentThread() == nsAppThread.get()) {
-      // Main thread drives the Cocoa event loop; blocks until [app stop:] is sent.
+      // Drives the Cocoa event loop, returns when [app stop:] is sent.
       try (var a = Arena.ofConfined()) {
         final var app = send0(ObjC.getClass(a, "NSApplication"), sel(a, "sharedApplication"));
         sendVoid0(app, sel(a, "run"));
       }
     } else {
-      // Non-main thread blocks until this window's delegate fires onWindowWillClose.
+      // Otherwise wait for our own delegate's onWindowWillClose.
       try {
         windowClosedLatch.await();
       } catch (final InterruptedException e) {
@@ -281,7 +265,6 @@ public final class CocoaWebView extends WebviewBase {
       return;
     }
     try (var a = Arena.ofConfined()) {
-      // NSURL → NSURLRequest → [WKWebView loadRequest:]
       final var nsUrl =
           send1(ObjC.getClass(a, "NSURL"), sel(a, "URLWithString:"), nsString(a, url));
       final var request = send1(ObjC.getClass(a, "NSURLRequest"), sel(a, "requestWithURL:"), nsUrl);
@@ -390,12 +373,10 @@ public final class CocoaWebView extends WebviewBase {
     try (var a = Arena.ofConfined()) {
       MSG_SEND_SET_CONTENT_SIZE.invokeExact(
           nsWindow, sel(a, "setContentSize:"), (double) width, (double) height);
-      // NSWindow.styleMask is an NSUInteger (pointer-sized). objc_msgSend returns it in a
-      // pointer-width register, so MSG_SEND_0 (ADDRESS return) captures the raw bits correctly.
-      // We strip the NS_RESIZABLE bit (bit 3) with a bitwise AND and write it back via a one-shot
-      // descriptor - there is no pre-declared handle for (window, sel, NSUInteger)→void because
-      // the layout (ADDRESS, ADDRESS, JAVA_LONG) differs from the all-ADDRESS MSG_SEND_VOID_1.
-      // This is the only way to prevent user resizing in AppKit without subclassing NSWindow.
+      // Clearing NS_RESIZABLE is the only way to block user resizing short of subclassing
+      // NSWindow. styleMask is an NSUInteger, so it comes back in a pointer-width register and
+      // MSG_SEND_0 picks up the raw bits; the setter needs a one-off (ADDRESS, ADDRESS, JAVA_LONG)
+      // descriptor since MSG_SEND_VOID_1 is all ADDRESS.
       final var styleSel = sel(a, "styleMask");
       var mask = ((MemorySegment) MSG_SEND_0.invokeExact(nsWindow, styleSel)).address();
       mask &= ~NS_RESIZABLE;
@@ -426,8 +407,7 @@ public final class CocoaWebView extends WebviewBase {
       return;
     }
     try (var a = Arena.ofConfined()) {
-      // NULL completionHandler = fire-and-forget. WKWebView evaluates the script asynchronously;
-      // results flow back through the postMessage JS bridge, not through this completion handler.
+      // NULL completionHandler: results come back over the postMessage bridge, not from here.
       MSG_SEND_EVAL_JS.invokeExact(
           wkWebView,
           sel(a, "evaluateJavaScript:completionHandler:"),
@@ -440,7 +420,7 @@ public final class CocoaWebView extends WebviewBase {
 
   @Override
   protected void dispatchImpl(Runnable r) {
-    // Queue first, then kick the main thread. The drain stub polls the queue when it fires.
+    // Queue first, then kick the main thread. The drain stub polls when it fires.
     pendingDispatches.add(r);
     try {
       DISPATCH_ASYNC_F.invokeExact(DISPATCH_MAIN_QUEUE, MemorySegment.NULL, drainStub);
@@ -450,9 +430,9 @@ public final class CocoaWebView extends WebviewBase {
   }
 
   /**
-   * Runs {@code r} on the main thread after {@code delayMillis}. Unlike {@link #dispatchImpl},
-   * which drains a shared FIFO queue immediately, this builds a one-off upcall stub per call so the
-   * delay is honored precisely.
+   * Runs {@code r} on the main thread after {@code delayMillis}. Builds a one-off upcall stub per
+   * call rather than going through the shared queue {@link #dispatchImpl} drains, since the delay
+   * belongs to this callback alone.
    */
   private void dispatchAfterImpl(long delayMillis, Runnable r) {
     try {
@@ -537,16 +517,14 @@ public final class CocoaWebView extends WebviewBase {
     dispatchImpl(() -> MacOSHelper.setIcon(path));
   }
 
-  /**
-   * Called by libdispatch on the OS main thread when dispatchImpl fires. ctx is always NULL here.
-   */
+  /** Called by libdispatch on the main thread when dispatchImpl fires. ctx is always NULL. */
   @SuppressWarnings("unused")
   public void drainDispatchQueue(MemorySegment ctx) {
     Runnable r;
     while ((r = pendingDispatches.poll()) != null) r.run();
   }
 
-  /** Called by our synthetic WKScriptMessageHandler class when JS posts a message. */
+  /** Called by the synthetic WKScriptMessageHandler class when JS posts a message. */
   @SuppressWarnings("unused")
   public void onScriptMessage(
       MemorySegment self, MemorySegment cmd, MemorySegment controller, MemorySegment message) {
@@ -558,8 +536,8 @@ public final class CocoaWebView extends WebviewBase {
   }
 
   /**
-   * Called by our synthetic WKNavigationDelegate when the first navigation finishes. Shows the
-   * window and removes the delegate so subsequent navigations don't re-trigger the show logic.
+   * Called by the synthetic WKNavigationDelegate once the first navigation finishes. Shows the
+   * window and clears the delegate so later navigations don't show it again.
    */
   @SuppressWarnings("unused")
   public void onNavigationFinished(
@@ -580,8 +558,8 @@ public final class CocoaWebView extends WebviewBase {
   }
 
   /**
-   * Fires on the main thread whenever the window is about to close. The AtomicBoolean ensures the
-   * shutdown sequence runs exactly once regardless of who initiated the close.
+   * Fires on the main thread as the window is about to close. Guarded by an AtomicBoolean since
+   * either the user or {@link #close()} can get here first.
    */
   @SuppressWarnings("unused")
   public void onWindowWillClose(MemorySegment self, MemorySegment cmd, MemorySegment notification) {
@@ -606,9 +584,9 @@ public final class CocoaWebView extends WebviewBase {
   }
 
   /**
-   * Fires whenever the child window moves. Moves the parent window by the same delta so they stay
-   * locked together. Ignores movements caused by the parent dragging the child (via addChildWindow)
-   * by comparing both deltas and skipping when they match.
+   * Fires when the child window moves, and shifts the parent by the same delta to keep the two
+   * locked together. Moves the parent itself caused (via addChildWindow) are skipped by comparing
+   * the two deltas.
    */
   @SuppressWarnings("unused")
   public void onWindowDidMove(MemorySegment self, MemorySegment cmd, MemorySegment notification) {
@@ -652,10 +630,9 @@ public final class CocoaWebView extends WebviewBase {
   }
 
   /**
-   * Called by the click-guard overlay view (see {@link #createClickGuardView}) when the user clicks
-   * anywhere on {@link #parentWindow} while this window owns it. Does not forward the click - the
-   * guard view swallows it by never calling {@code super} - and instead flashes this window so the
-   * user notices it needs attention.
+   * Called by the click-guard overlay (see {@link #createClickGuardView}) on a click anywhere in
+   * {@link #parentWindow} while this window owns it. The click is swallowed, not forwarded, and
+   * this window flashes instead so the user sees where the input has to go.
    */
   @SuppressWarnings("unused")
   public void onParentClickBlocked(MemorySegment self, MemorySegment cmd, MemorySegment event) {
@@ -672,14 +649,9 @@ public final class CocoaWebView extends WebviewBase {
   }
 
   /**
-   * Wraps {@link #drainDispatchQueue} in a Panama upcall stub
-   *
-   * <p>Panama's {@code upcallStub} allocates a small native trampoline in executable memory. When
-   * libdispatch calls the stub, the trampoline marshals the C {@code void*} argument to a {@link
-   * MemorySegment} and invokes the bound {@link java.lang.invoke.MethodHandle}. {@code
-   * bindTo(this)} locks the stub to this specific {@code CocoaWebView} instance so that {@code
-   * pendingDispatches.poll()} always drains the correct queue, regardless of which window triggered
-   * the {@code dispatch_async_f} call.
+   * Wraps {@link #drainDispatchQueue} in a Panama upcall stub for libdispatch to call. {@code
+   * bindTo(this)} pins the stub to one {@code CocoaWebView}, so it always drains this window's
+   * queue no matter which window triggered the {@code dispatch_async_f}.
    */
   private void buildDrainStub() {
     try {
@@ -699,9 +671,8 @@ public final class CocoaWebView extends WebviewBase {
   }
 
   /**
-   * One-time NSApplication setup. setActivationPolicy:NSApplicationActivationPolicyRegular (=0)
-   * makes this a normal foreground app with a Dock icon; without it the process is a background
-   * agent.
+   * One-time NSApplication setup. Activation policy Regular (=0) makes this a normal foreground app
+   * with a Dock icon; without it the process stays a background agent.
    */
   private static void initNSApp() {
     if (nsAppInitDone) {
@@ -710,7 +681,7 @@ public final class CocoaWebView extends WebviewBase {
     try (var a = Arena.ofConfined()) {
       final var NSApp = ObjC.getClass(a, "NSApplication");
       final var app = send0(NSApp, sel(a, "sharedApplication"));
-      // setActivationPolicy: takes NSInteger - needs a custom descriptor (not in ObjC presets)
+      // setActivationPolicy: takes an NSInteger, so no preset descriptor fits
       Linker.nativeLinker()
           .downcallHandle(
               MSG_SEND_ADDR,
@@ -727,18 +698,18 @@ public final class CocoaWebView extends WebviewBase {
   /**
    * Creates NSWindow + WKWebView and wires the JS message handler.
    *
-   * <p>Order matters: the WKScriptMessageHandler must be registered on the WKUserContentController
-   * *before* WKWebView is created so it's present from the first load.
+   * <p>Order matters: the WKScriptMessageHandler has to be on the WKUserContentController before
+   * the WKWebView is created, otherwise it misses the first load.
    */
   private void initWindowAndWebView(boolean debug, int width, int height) {
     try (var a = Arena.ofConfined()) {
-      // Configuration object that WKWebView reads at creation time (can't change it after).
+      // WKWebView reads this at creation time and ignores later changes.
       final var WKConfig = ObjC.getClass(a, "WKWebViewConfiguration");
       final var config = send0(send0(WKConfig, sel(a, "alloc")), sel(a, "init"));
 
       ucController = send0(config, sel(a, "userContentController"));
 
-      // Register our synthetic WKScriptMessageHandler so JS can call postMessage().
+      // Synthetic WKScriptMessageHandler, so JS can call postMessage().
       final var handler = createScriptHandler(a);
       send2(
           ucController,
@@ -747,7 +718,7 @@ public final class CocoaWebView extends WebviewBase {
           nsString(a, HANDLER_NAME));
 
       if (debug) {
-        // WKPreferences.developerExtrasEnabled - KVC setValue:forKey: works on all macOS versions.
+        // developerExtrasEnabled has no setter, but KVC reaches it on every macOS version.
         final var prefs = send0(config, sel(a, "preferences"));
         final var nsYes =
             (MemorySegment)
@@ -784,10 +755,8 @@ public final class CocoaWebView extends WebviewBase {
                   config);
 
       if (debug) {
-        // WKWebView.inspectable = YES - macOS 13.3+ (Sonoma). Guarded with respondsToSelector:
-        // because calling an unknown selector via objc_msgSend is undefined behavior - the slot
-        // in the vtable may contain garbage or NULL on older macOS. respondsToSelector: queries
-        // the runtime dispatch table safely before we attempt the call.
+        // WKWebView.inspectable landed in macOS 13.3, and objc_msgSend on a selector the class
+        // doesn't have is undefined behaviour, so ask respondsToSelector: first.
         final var inspSel = sel(a, "setInspectable:");
         final var responds =
             (byte)
@@ -810,12 +779,10 @@ public final class CocoaWebView extends WebviewBase {
         }
       }
 
-      // NS_BACKING_BUFFERED is the only backing type that works on modern macOS.
-      // defer=0 (NO) means create the window now rather than lazily when first displayed.
       final long styleMask;
       if (borderless && outline) {
-        // Full-size content view keeps the native shadow and border while the title bar
-        // is made transparent and hidden below, so content extends to the window top.
+        // Full-size content view keeps the native shadow and border; the title bar is made
+        // transparent below so content reaches the top of the window.
         styleMask = NS_STANDARD_WINDOW_MASK | NS_FULL_SIZE_CONTENT_VIEW;
       } else if (borderless) {
         styleMask = NS_RESIZABLE | NS_MINIATURIZABLE;
@@ -833,7 +800,7 @@ public final class CocoaWebView extends WebviewBase {
                   (double) height,
                   styleMask,
                   NS_BACKING_BUFFERED,
-                  0 /* defer=NO */);
+                  0 /* defer=NO, create the window now */);
       if (borderless && outline) {
         // Make the title bar transparent so web content renders underneath it.
         Linker.nativeLinker()
@@ -849,7 +816,7 @@ public final class CocoaWebView extends WebviewBase {
                 FunctionDescriptor.ofVoid(
                     ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG))
             .invokeExact(nsWindow, sel(a, "setTitleVisibility:"), 1L /* NSWindowTitleHidden */);
-        // Hide the close / miniaturise / zoom traffic-light buttons.
+        // Hide the traffic-light buttons.
         final var buttonMh =
             Linker.nativeLinker()
                 .downcallHandle(
@@ -887,7 +854,7 @@ public final class CocoaWebView extends WebviewBase {
             nsWindow,
             sel(a, "setBackgroundColor:"),
             send0(ObjC.getClass(a, "NSColor"), sel(a, "clearColor")));
-        // Prevent WKWebView from painting its default white fill.
+        // Otherwise WKWebView paints its default white fill over the transparency.
         final var falseNum =
             (MemorySegment)
                 Linker.nativeLinker()
@@ -919,7 +886,7 @@ public final class CocoaWebView extends WebviewBase {
 
       sendVoid1(nsWindow, sel(a, "setDelegate:"), createWindowDelegate(a));
       sendVoid1(nsWindow, sel(a, "setContentView:"), wkWebView);
-      // Navigation delegate shows the window once the first page finishes loading.
+      // The navigation delegate shows the window once the first page has loaded.
       sendVoid1(wkWebView, sel(a, "setNavigationDelegate:"), createNavigationDelegate(a));
 
       if (parentWindow.address() != 0) {
@@ -939,18 +906,12 @@ public final class CocoaWebView extends WebviewBase {
       }
 
       setupJsBridge(POST_FN);
-      // Window is shown from onNavigationFinished when the first page load completes.
     } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
   }
 
-  /**
-   * Synthesizes an NSWindowDelegate at runtime to intercept windowWillClose:.
-   *
-   * <p>Same pattern as createScriptHandler: allocate a class pair, add a method wired to a Panama
-   * upcall stub, register the pair, and return an instance.
-   */
+  /** Synthesizes an NSWindowDelegate at runtime to intercept windowWillClose:. */
   private MemorySegment createWindowDelegate(Arena a) {
     try {
       final var superCls = ObjC.getClass(a, "NSObject");
@@ -1043,7 +1004,7 @@ public final class CocoaWebView extends WebviewBase {
 
   /**
    * Synthesizes a {@code WKNavigationDelegate} that shows the window after the first navigation
-   * finishes. The delegate sets itself to {@code nil} on first call to avoid re-triggering.
+   * finishes, then clears itself so it only fires once.
    */
   private MemorySegment createNavigationDelegate(Arena a) {
     try {
@@ -1088,10 +1049,10 @@ public final class CocoaWebView extends WebviewBase {
   }
 
   /**
-   * Synthesizes an {@code NSView} subclass whose {@code mouseDown:}/{@code rightMouseDown:} both
-   * call back into {@link #onParentClickBlocked} and never invoke {@code super} - so the click
-   * never reaches whatever real content is underneath. An instance of this class is installed as an
-   * overlay over {@link #parentWindow}'s content view for as long as this window is open.
+   * Synthesizes an {@code NSView} subclass whose {@code mouseDown:}/{@code rightMouseDown:} call
+   * {@link #onParentClickBlocked} and never chain to {@code super}, so clicks never reach the
+   * content below. One instance sits over {@link #parentWindow}'s content view while this window is
+   * open.
    */
   private MemorySegment createClickGuardView(Arena a) {
     try {
@@ -1144,7 +1105,6 @@ public final class CocoaWebView extends WebviewBase {
       final var cls =
           (MemorySegment) ALLOC_CLASS_PAIR.invokeExact(superCls, a.allocateFrom(clsName), 0L);
 
-      // Bind the upcall stub to `this` so callbacks hit the right CocoaWebView instance.
       final var mh =
           MethodHandles.lookup()
               .findVirtual(
@@ -1168,7 +1128,6 @@ public final class CocoaWebView extends WebviewBase {
                       ValueLayout.ADDRESS), // WKScriptMessage*
                   callbackArena);
 
-      // "v@:@@" - ObjC type encoding for (void)(id, SEL, id, id)
       final var _ =
           (byte)
               CLASS_ADD_METHOD.invokeExact(

@@ -19,23 +19,14 @@ import java.nio.charset.StandardCharsets;
  * Panama FFM downcall handles and helpers for {@code user32}, {@code kernel32}, {@code dwmapi},
  * {@code advapi32}, and {@code ole32}.
  *
- * <h2>Constants</h2>
+ * <p>The {@code WS_*}, {@code WM_*}, {@code SW_*} and {@code SM_*} constants mirror {@code
+ * winuser.h}. {@link #MSG_LAYOUT} and {@link #RECT_LAYOUT} carry the x64 layouts of {@code MSG} and
+ * {@code RECT}; {@code MINMAXINFO} gets raw byte offsets ({@code MINMAX_*}) instead, since it is
+ * only ever written and a full struct descriptor would earn nothing.
  *
- * <p>Window style and message constants ({@code WS_*}, {@code WM_*}, {@code SW_*}, {@code SM_*})
- * mirror {@code winuser.h}.
- *
- * <h2>Struct layouts and offsets</h2>
- *
- * <p>{@link #MSG_LAYOUT} and {@link #RECT_LAYOUT} describe x64 ABI memory layouts for the {@code
- * MSG} and {@code RECT} structs. The {@code MINMAX_*} longs are raw byte offsets into a {@code
- * MINMAXINFO} buffer; they are used with direct {@link MemorySegment} access rather than a named
- * layout to avoid building a full 40-byte struct descriptor for a write-only use case.
- *
- * <h2>Helper methods</h2>
- *
- * <p>Typed wrappers like {@link #fullscreen}, {@link #applyDarkMode}, and {@link #regQueryString}
- * compose multiple MethodHandle calls into a single operation, converting {@code Throwable} to
- * {@link RuntimeException} and hiding {@code invokeExact} boilerplate from call sites.
+ * <p>Wrappers such as {@link #fullscreen}, {@link #applyDarkMode} and {@link #regQueryString} fold
+ * several handle calls into one operation and keep {@code invokeExact} boilerplate and checked
+ * {@code Throwable} out of the call sites.
  */
 final class Win32 {
 
@@ -180,8 +171,8 @@ final class Win32 {
   /**
    * {@code DefWindowProcW(hWnd, Msg, wParam, lParam) -> LRESULT}
    *
-   * <p>Default message handler. must be called for any message the WndProc does not handle.
-   * Skipping it causes visual glitches (e.g. missing title bar paint) and breaks system behaviors
+   * <p>The default message handler, which every message a WndProc does not handle has to reach.
+   * Skipping it leaves visual glitches such as an unpainted title bar and breaks system behaviour
    * like ALT+F4.
    */
   static final MethodHandle DefWindowProcW =
@@ -381,7 +372,7 @@ final class Win32 {
       downcall(USER32, "SetWindowTextW", FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS));
 
   /**
-   * {@code InvalidateRect(hWnd, lpRect, bErase) -> BOOL} - marks a region dirty, triggering a
+   * {@code InvalidateRect(hWnd, lpRect, bErase) -> BOOL} marks a region dirty, triggering a
    * repaint.
    */
   static final MethodHandle InvalidateRect =
@@ -414,10 +405,10 @@ final class Win32 {
   /**
    * {@code ReleaseCapture() -> BOOL}
    *
-   * <p>Releases the current mouse capture. Required before sending {@link #WM_NCLBUTTONDOWN} with
-   * {@link #HTCAPTION} to start a native window-move loop from a synthetic (non-hardware) message -
-   * without this, the window ignores the fake non-client click while it still holds mouse capture
-   * from the original client-area click.
+   * <p>Releases the current mouse capture, which has to happen before a synthetic {@link
+   * #WM_NCLBUTTONDOWN} with {@link #HTCAPTION} can start a native window-move loop. While the
+   * window still holds capture from the original client-area click it ignores the fake non-client
+   * one.
    */
   static final MethodHandle ReleaseCapture =
       downcall(USER32, "ReleaseCapture", FunctionDescriptor.of(JAVA_INT));
@@ -759,9 +750,8 @@ final class Win32 {
   /**
    * Reads a {@code REG_SZ} string value from the registry, or returns {@code null} on any error.
    *
-   * <p>Uses a two-call pattern: first call with a null data buffer to retrieve the required byte
-   * count, second call with an allocated buffer to read the value. The key is closed in a {@code
-   * finally} block regardless of whether the value read succeeds.
+   * <p>Two calls: one with a null buffer to learn the byte count, then one with a buffer that
+   * size to read the value. The key is closed in a {@code finally} either way.
    *
    * @param rootKey predefined key constant ({@link #HKEY_LOCAL_MACHINE} or {@link
    *     #HKEY_CURRENT_USER})
@@ -872,9 +862,9 @@ final class Win32 {
   /**
    * Initializes COM on the calling thread as a Single-Threaded Apartment (STA).
    *
-   * <p>WebView2 requires STA. The HRESULT is logged to stdout: {@code S_OK} (0x0) = first init on
-   * this thread, {@code S_FALSE} (0x1) = already STA (safe to continue), {@code RPC_E_CHANGED_MODE}
-   * (0x80010106) = thread is MTA (programming error).
+   * <p>WebView2 needs STA. The HRESULT is logged to stdout: {@code S_OK} (0x0) for a first init on
+   * this thread, {@code S_FALSE} (0x1) for an existing STA, which is fine to continue on, and
+   * {@code RPC_E_CHANGED_MODE} (0x80010106) when the thread is already MTA, which is a bug.
    */
   static void coInitialize() {
     try {
@@ -899,7 +889,7 @@ final class Win32 {
 
   /**
    * Frees a COM-allocated memory block (e.g. a {@code LPWSTR} output from a WebView2 event
-   * argument). Silently ignores failures - this is best-effort cleanup.
+   * argument). Failures are ignored, this is best-effort cleanup.
    */
   static void coTaskMemFree(MemorySegment ptr) {
     try {
@@ -920,8 +910,8 @@ final class Win32 {
   /**
    * Reads the function pointer at vtable slot {@code idx} of a COM object.
    *
-   * <p>A COM object's first field is a pointer to its vtable (an array of function pointers). This
-   * method dereferences the vtable pointer and returns the address at position {@code idx}.
+   * <p>The first field of a COM object points at its vtable, an array of function pointers. This
+   * follows that pointer and returns the address sitting at {@code idx}.
    */
   static MemorySegment vtableFn(MemorySegment comObj, int idx) {
     final var vtable =

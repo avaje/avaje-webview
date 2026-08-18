@@ -20,11 +20,10 @@ import java.lang.invoke.MethodHandle;
  *
  * <h2>objc_msgSend and the MSG_SEND_* handles</h2>
  *
- * <p>Every Objective-C method call compiles down to {@code objc_msgSend(receiver, selector,
- * args...)}. We resolve the raw symbol address once ({@link #MSG_SEND_ADDR}) and then create
- * multiple {@link MethodHandle} views over it, each with a different {@link FunctionDescriptor}
- * matching the exact argument and return type layout of the target method. Panama re-uses the same
- * native code entry point; only the Java-side type contract differs.
+ * <p>Every Objective-C method call comes down to {@code objc_msgSend(receiver, selector,
+ * args...)}. The symbol address is resolved once into {@link #MSG_SEND_ADDR}, and each handle below
+ * is a separate {@link MethodHandle} view over it with the {@link FunctionDescriptor} its target
+ * method needs. Same native entry point throughout, only the Java-side type contract changes.
  */
 final class ObjC {
 
@@ -99,9 +98,8 @@ final class ObjC {
   /**
    * Raw address of {@code objc_msgSend}.
    *
-   * <p>We expose this as a {@link MemorySegment} (not a {@link MethodHandle}) so that call sites
-   * that need one-off descriptors can build their own handle against the same native entry point
-   * without an extra library lookup.
+   * <p>Kept as a {@link MemorySegment} rather than a {@link MethodHandle} so a call site needing
+   * its own descriptor can build a handle against the same entry point without a second lookup.
    */
   static final MemorySegment MSG_SEND_ADDR =
       OBJC_LIB.find("objc_msgSend").orElseThrow(() -> new UnsatisfiedLinkError("objc_msgSend"));
@@ -142,21 +140,18 @@ final class ObjC {
   /**
    * {@code -[NSWindow initWithContentRect:styleMask:backing:defer:]}
    *
-   * <p>{@code NSRect} is a C struct {@code {CGFloat x, CGFloat y, CGFloat width, CGFloat height}}.
-   * A small struct like this is passed in floating- point registers as four consecutive {@code
-   * double} values.
-   *
-   * <p>Parameter breakdown:
+   * <p>{@code NSRect} is a C struct {@code {CGFloat x, CGFloat y, CGFloat width, CGFloat height}},
+   * small enough to travel in floating-point registers as four consecutive doubles.
    *
    * <ul>
-   *   <li>{@code receiver} (ADDRESS) - uninitialized {@code NSWindow*} from {@code +alloc}
-   *   <li>{@code sel} (ADDRESS) - {@code initWithContentRect:styleMask:backing:defer:}
-   *   <li>{@code contentRect.x, .y, .width, .height} (4× JAVA_DOUBLE) - initial frame in screen
+   *   <li>{@code receiver} (ADDRESS): uninitialized {@code NSWindow*} from {@code +alloc}
+   *   <li>{@code sel} (ADDRESS): {@code initWithContentRect:styleMask:backing:defer:}
+   *   <li>{@code contentRect.x, .y, .width, .height} (4× JAVA_DOUBLE): initial frame in screen
    *       coordinates (origin is ignored; AppKit places the window at a default position)
-   *   <li>{@code styleMask} (JAVA_LONG) - NSUInteger bitmask of window chrome flags
-   *   <li>{@code backing} (JAVA_LONG) - {@code NSBackingStoreBuffered = 2}, the only valid value on
+   *   <li>{@code styleMask} (JAVA_LONG): NSUInteger bitmask of window chrome flags
+   *   <li>{@code backing} (JAVA_LONG): {@code NSBackingStoreBuffered = 2}, the only valid value on
    *       modern macOS; the other enum values (Retained, Nonretained) were removed
-   *   <li>{@code defer} (JAVA_INT / BOOL) - {@code 0} (NO) creates the backing store immediately
+   *   <li>{@code defer} (JAVA_INT / BOOL): {@code 0} (NO) creates the backing store immediately
    *       rather than lazily; required so the window is usable before the first run-loop cycle
    * </ul>
    */
@@ -178,10 +173,9 @@ final class ObjC {
   /**
    * {@code -[WKWebView initWithFrame:configuration:]}
    *
-   * <p>Same {@code NSRect}-as-four-doubles ABI as {@link #MSG_SEND_NSWINDOW_INIT}. The {@code
-   * configuration} argument is a {@code WKWebViewConfiguration*} (ADDRESS). The configuration
-   * object is read at construction time; properties changed on it after {@code
-   * initWithFrame:configuration:} returns have no effect.
+   * <p>Same NSRect-as-four-doubles ABI as {@link #MSG_SEND_NSWINDOW_INIT}, with a {@code
+   * WKWebViewConfiguration*} on the end. That configuration is read during construction, so
+   * changing it afterwards does nothing.
    */
   static final MethodHandle MSG_SEND_WKWEBVIEW_INIT =
       LINKER.downcallHandle(
@@ -199,12 +193,12 @@ final class ObjC {
   /**
    * {@code -[WKUserScript initWithSource:injectionTime:forMainFrameOnly:]}
    *
-   * <p>Parameter types beyond {@code (receiver, sel, source)}:
+   * <p>Argument types past {@code (receiver, sel, source)}:
    *
    * <ul>
-   *   <li>{@code injectionTime} - {@code WKUserScriptInjectionTime}, which is an {@code NSInteger}
+   *   <li>{@code injectionTime}: {@code WKUserScriptInjectionTime}, which is an {@code NSInteger}
    *       (= {@code long} on 64-bit platforms). Maps to {@code JAVA_LONG}.
-   *   <li>{@code forMainFrameOnly} - {@code BOOL}. In Obj-C's ABI, BOOL is {@code signed char}, but
+   *   <li>{@code forMainFrameOnly}: {@code BOOL}. In Obj-C's ABI, BOOL is {@code signed char}, but
    *       arguments passed through {@code objc_msgSend} are promoted to {@code int} by C's default
    *       argument promotion rules. Maps to {@code JAVA_INT}.
    * </ul>
@@ -217,27 +211,25 @@ final class ObjC {
   /**
    * {@code -[WKWebView evaluateJavaScript:completionHandler:] -> void}
    *
-   * <p>The {@code completionHandler} argument is a block pointer ({@code ^(id result, NSError*
-   * error){}}). We always pass {@code NULL} (fire-and-forget) because we don't need the JavaScript
-   * return value or error information from the eval call.
+   * <p>{@code completionHandler} is a block pointer, {@code ^(id result, NSError* error){}}, and
+   * always {@code NULL} here since neither the JS return value nor the error is wanted.
    */
   static final MethodHandle MSG_SEND_EVAL_JS =
       LINKER.downcallHandle(
           MSG_SEND_ADDR, FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, ADDRESS, ADDRESS));
 
-  /** {@code -[NSWindow setTitle:] -> void} Sets the Title */
+  /** {@code -[NSWindow setTitle:] -> void}, sets the window title. */
   static final MethodHandle MSG_SEND_SET_TITLE =
       LINKER.downcallHandle(MSG_SEND_ADDR, FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, ADDRESS));
 
   /**
    * {@code -[NSWindow setMinSize:] / -[NSWindow setMaxSize:] -> void}
    *
-   * <p>{@code NSSize} is a C struct {@code {CGFloat width, CGFloat height}} - two consecutive
+   * <p>{@code NSSize} is a C struct {@code {CGFloat width, CGFloat height}}, two consecutive
    * doubles passed inline in floating-point registers. Both {@code -setMinSize:} and {@code
    * -setMaxSize:} share this descriptor.
    *
-   * <p>Passing {@code (0.0, 0.0)} to {@code setMaxSize:} is interpreted by AppKit as "no maximum
-   * size constraint".
+   * <p>AppKit reads {@code (0.0, 0.0)} passed to {@code setMaxSize:} as no maximum at all.
    */
   static final MethodHandle MSG_SEND_SET_SIZE =
       LINKER.downcallHandle(
@@ -246,9 +238,8 @@ final class ObjC {
   /**
    * {@code -[NSWindow setContentSize:] -> void}
    *
-   * <p>Structurally identical to {@link #MSG_SEND_SET_SIZE} (two inline doubles for NSSize). This
-   * sets the current window content area size, while setMinSize/setMaxSize constrain the resizable
-   * range.
+   * <p>Same shape as {@link #MSG_SEND_SET_SIZE}, two inline doubles for the NSSize. Sets the
+   * current content area size, where setMinSize/setMaxSize only bound the resizable range.
    */
   static final MethodHandle MSG_SEND_SET_CONTENT_SIZE =
       LINKER.downcallHandle(
@@ -273,8 +264,8 @@ final class ObjC {
   /**
    * {@code -[NSView initWithFrame:] -> id}
    *
-   * <p>Same {@code NSRect}-as-four-inline-doubles ABI as {@link #MSG_SEND_NSWINDOW_INIT}. This must
-   * be called on every freshly allocated {@code NSView} before use.
+   * <p>Same NSRect-as-four-doubles ABI as {@link #MSG_SEND_NSWINDOW_INIT}. Every freshly allocated
+   * {@code NSView} needs this before use.
    */
   static final MethodHandle MSG_SEND_INIT_WITH_FRAME =
       LINKER.downcallHandle(
@@ -291,9 +282,9 @@ final class ObjC {
   /**
    * Looks up an Obj-C class by name: {@code objc_getClass(name)}.
    *
-   * <p>Performs a hash lookup in the ObjC runtime's class table. The class must already be
-   * registered (its framework must be dlopen'd). {@code a.allocateFrom(name)} writes a
-   * null-terminated UTF-8 C string into the arena for the duration of the call.
+   * <p>A hash lookup in the ObjC runtime's class table, so the class has to be registered already
+   * and its framework dlopen'd. {@code a.allocateFrom(name)} holds the null-terminated UTF-8 name
+   * for the length of the call.
    *
    * @param a an arena that must outlive this call (the string is freed when the arena closes)
    * @param name the unqualified ObjC class name, e.g. {@code "NSWindow"}

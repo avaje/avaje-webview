@@ -16,24 +16,20 @@ import java.lang.invoke.MethodHandle;
  * FFM bindings for WebKitGTK 6.0 ({@code libwebkitgtk-6.0}) and its embedded JavaScriptCore ({@code
  * libjavascriptcoregtk-6.0}).
  *
- * <p><b>All calls must happen on the GTK thread.</b> WebKitGTK is not thread-safe; it runs its own
- * web-process via IPC, but the GTK widget API itself must only be touched from the thread that
- * called {@code gtk_init}.
+ * <p>Everything here belongs on the GTK thread. WebKitGTK runs the page in its own process over
+ * IPC, but the widget API in this process is as thread-hostile as the rest of GTK.
  */
 final class WebKit6 {
 
   /**
-   * Injection frame scope: top frame only.
-   *
-   * <p>Corresponds to {@code WEBKIT_USER_CONTENT_INJECT_TOP_FRAME} (value {@code 1}) in the
-   * WebKitGTK C headers. When passed to {@link #WEBKIT_USER_SCRIPT_NEW}, the script runs only in
-   * the top-level browsing context, not in {@code <iframe>} sub-frames.
+   * {@code WEBKIT_USER_CONTENT_INJECT_TOP_FRAME}. Passed to {@link #WEBKIT_USER_SCRIPT_NEW}, it
+   * keeps the script to the top-level browsing context and out of {@code <iframe>} sub-frames.
    */
   static final int WEBKIT_USER_CONTENT_INJECT_TOP_FRAME = 1;
 
   /**
-   * Injection time: at document start, before the page's own {@code <script>} tags, ensuring that
-   * {@code window.__webview__} exists by the time application code tries to call it.
+   * {@code WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START}, which runs the script before the page's
+   * own {@code <script>} tags, so {@code window.__webview__} is there when app code looks for it.
    */
   static final int WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START = 0;
 
@@ -43,9 +39,8 @@ final class WebKit6 {
    * <p>C callback signature: {@code void(*)(WebKitUserContentManager* manager, JSCValue*
    * js_message, gpointer user_data)}
    *
-   * <p>Note the signal name suffix {@code "::<handler_name>"} registered via {@link
-   * GLib#gSignalConnect}: this scopes delivery so only messages for the {@code __webview__} handler
-   * fire our callback, even if other message handlers are registered on the same UCM.
+   * <p>The {@code "::<handler_name>"} suffix used with {@link GLib#gSignalConnect} narrows
+   * delivery to the {@code __webview__} handler, leaving any other handler on the same UCM alone.
    */
   static final FunctionDescriptor SCRIPT_MESSAGE_RECEIVED_DESC =
       FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, ADDRESS);
@@ -78,14 +73,12 @@ final class WebKit6 {
   /**
    * {@code webkit_web_view_new() -> WebKitWebView*}
    *
-   * <p>Creates a new {@code WebKitWebView} widget with a private, per-instance {@code
-   * WebKitWebViewConfiguration} (separate from any shared process pool). The widget appears as a
-   * normal {@code GtkWidget*} to GTK and can be embedded as the content widget of a {@code
-   * GtkWindow}.
+   * <p>Creates a {@code WebKitWebView} with its own {@code WebKitWebViewConfiguration}, outside
+   * any shared process pool. To GTK it is an ordinary {@code GtkWidget*} and can go straight in as
+   * a {@code GtkWindow}'s content widget.
    *
-   * <p><b>Reference:</b> returns a floating {@code GObject} reference. Caller must call {@link
-   * GLib#gObjectRefSink} to claim ownership before GTK's container management can inadvertently
-   * free it.
+   * <p>The reference comes back floating, so {@link GLib#gObjectRefSink} has to claim it before
+   * GTK's container handling can free the view out from under the caller.
    */
   private static final MethodHandle WEBKIT_WEB_VIEW_NEW =
       downcall("webkit_web_view_new", FunctionDescriptor.of(ADDRESS));
@@ -94,12 +87,11 @@ final class WebKit6 {
    * {@code webkit_web_view_get_user_content_manager(WebKitWebView* wv) ->
    * WebKitUserContentManager*}
    *
-   * <p>Returns the {@code WebKitUserContentManager} associated with this web view. This object
-   * controls which user scripts and message handlers are active.
+   * <p>Returns the view's {@code WebKitUserContentManager}, which holds the active user scripts
+   * and message handlers.
    *
-   * <p><b>Borrowed reference:</b> do NOT call {@code g_object_ref} or {@code g_object_unref} on the
-   * returned pointer. It is owned by the {@code WebKitWebView} and is freed when the view is
-   * destroyed.
+   * <p>A borrowed reference, so no {@code g_object_ref} or {@code g_object_unref} on it. The web
+   * view owns it and frees it on destruction.
    */
   private static final MethodHandle WEBKIT_WEB_VIEW_GET_USER_CONTENT_MANAGER =
       downcall("webkit_web_view_get_user_content_manager", FunctionDescriptor.of(ADDRESS, ADDRESS));
@@ -107,11 +99,11 @@ final class WebKit6 {
   /**
    * {@code webkit_web_view_get_settings(WebKitWebView* wv) -> WebKitSettings*}
    *
-   * <p>Returns the {@code WebKitSettings} object for this view, which controls JS clipboard access,
-   * developer extras, and many other per-view engine settings.
+   * <p>Returns the view's {@code WebKitSettings}, covering JS clipboard access, developer extras
+   * and the rest of the per-view engine settings.
    *
-   * <p><b>Borrowed reference:</b> same semantics as {@link
-   * #WEBKIT_WEB_VIEW_GET_USER_CONTENT_MANAGER}. Owned by the web view.
+   * <p>Borrowed and owned by the web view, same as {@link
+   * #WEBKIT_WEB_VIEW_GET_USER_CONTENT_MANAGER}.
    */
   private static final MethodHandle WEBKIT_WEB_VIEW_GET_SETTINGS =
       downcall("webkit_web_view_get_settings", FunctionDescriptor.of(ADDRESS, ADDRESS));
@@ -119,9 +111,8 @@ final class WebKit6 {
   /**
    * {@code webkit_web_view_load_uri(WebKitWebView* wv, const gchar* uri) -> void}
    *
-   * <p>Navigates the web view to the given URI. The URI must be an absolute URI with a scheme (e.g.
-   * {@code "https://..."}, {@code "file:///..."}). The navigation is asynchronous; the page is not
-   * loaded when this returns.
+   * <p>Navigates the web view to an absolute URI with a scheme, such as {@code "https://..."} or
+   * {@code "file:///..."}. Asynchronous, so nothing is loaded yet when this returns.
    */
   private static final MethodHandle WEBKIT_WEB_VIEW_LOAD_URI =
       downcall("webkit_web_view_load_uri", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
@@ -143,21 +134,21 @@ final class WebKit6 {
    * <p>Evaluates JavaScript in the web view asynchronously. The eight C arguments map as:
    *
    * <ol>
-   *   <li>{@code wv} - the web view
-   *   <li>{@code script} - null-terminated JS source (ADDRESS)
-   *   <li>{@code length} - byte length of {@code script}, or {@code -1} to use {@code strlen()}
+   *   <li>{@code wv}: the web view
+   *   <li>{@code script}: null-terminated JS source (ADDRESS)
+   *   <li>{@code length}: byte length of {@code script}, or {@code -1} to use {@code strlen()}
    *       (JAVA_LONG = {@code gssize})
-   *   <li>{@code world_name} - JS world name; {@code NULL} = default world
-   *   <li>{@code source_uri} - displayed in DevTools as the script origin; {@code NULL} = none
-   *   <li>{@code cancellable} - {@code GCancellable*}; {@code NULL} = not cancellable
-   *   <li>{@code callback} - {@code GAsyncReadyCallback} for the result; {@code NULL} =
-   *       fire-and-forget (we don't need JS return values here)
-   *   <li>{@code user_data} - passed to {@code callback}; {@code NULL} since callback is NULL
+   *   <li>{@code world_name}: JS world name; {@code NULL} = default world
+   *   <li>{@code source_uri}: displayed in DevTools as the script origin; {@code NULL} = none
+   *   <li>{@code cancellable}: {@code GCancellable*}; {@code NULL} = not cancellable
+   *   <li>{@code callback}: {@code GAsyncReadyCallback} for the result; {@code NULL} =
+   *       fire-and-forget
+   *   <li>{@code user_data}: passed to {@code callback}; {@code NULL} since callback is NULL
    * </ol>
    *
-   * We pass {@code NULL} for the last four arguments because we only use eval for side effects
-   * (injecting binding stubs, returning results via {@code window.__webview__.onReply}), not to
-   * capture JS return values.
+   * <p>The last four are always {@code NULL}. Eval is only used for side effects here, injecting
+   * binding stubs and delivering results through {@code window.__webview__.onReply}, never to read
+   * a JS return value.
    */
   private static final MethodHandle WEBKIT_WEB_VIEW_EVALUATE_JAVASCRIPT =
       downcall(
@@ -170,12 +161,11 @@ final class WebKit6 {
    *
    * <p>Returns the URI of the currently loaded page, or {@code NULL} if no page is loaded yet.
    *
-   * <p><b>Owned by the web view:</b> do NOT free the returned pointer. It is valid until the web
-   * view navigates to a new URI or is destroyed.
+   * <p>Owned by the web view, so the pointer must not be freed, and it lasts only until the next
+   * navigation or destruction.
    *
-   * <p>We use this before calling {@link #webkitWebViewEvaluateJavascript} to guard against calling
-   * eval on a bare (no-page) web view, which would assert {@code WEBKIT_IS_WEB_VIEW} and crash in
-   * debug builds.
+   * <p>Checked before {@link #webkitWebViewEvaluateJavascript}, since eval on a view with no page
+   * loaded trips the {@code WEBKIT_IS_WEB_VIEW} assert and crashes debug builds.
    */
   private static final MethodHandle WEBKIT_WEB_VIEW_GET_URI =
       downcall("webkit_web_view_get_uri", FunctionDescriptor.of(ADDRESS, ADDRESS));
@@ -208,8 +198,8 @@ final class WebKit6 {
    * {@code webkit_settings_set_enable_developer_extras(WebKitSettings* s, gboolean enabled) ->
    * void}
    *
-   * <p>Enables the WebKit Inspector (right-click -> Inspect Element). Must be true before a page is
-   * loaded for the context menu item to appear.
+   * <p>Enables the WebKit Inspector, reached through right-click then Inspect Element. Has to be
+   * set before a page loads or the menu item never appears.
    */
   private static final MethodHandle WEBKIT_SETTINGS_SET_DEV_EXTRAS =
       downcall(
@@ -223,12 +213,11 @@ final class WebKit6 {
    * <p>Registers a named JS message handler so that JavaScript inside the web view can post
    * messages to Java by calling: {@code window.webkit.messageHandlers.<name>.postMessage(data)}
    *
-   * <p>After this call, posting a message fires the {@code "script-message-received::<name>"}
-   * signal on the UCM. We connect our upcall stub to that signal in {@link GtkWebView} during
-   * window initialisation.
+   * <p>Once registered, posting a message fires {@code "script-message-received::<name>"} on the
+   * UCM, which {@link GtkWebView} connects its upcall stub to during window setup.
    *
-   * <p>Returns {@code gboolean}: non-zero if registration succeeded (fails only if the name is
-   * already registered). We discard the return value.
+   * <p>The {@code gboolean} return is discarded; it only goes false when the name is already
+   * registered.
    */
   private static final MethodHandle WEBKIT_UCM_REGISTER_HANDLER =
       downcall(
@@ -239,12 +228,11 @@ final class WebKit6 {
    * {@code webkit_user_content_manager_add_script(WebKitUserContentManager* ucm, WebKitUserScript*
    * script) -> void}
    *
-   * <p>Adds a user script to the content manager. The script will run on every page load according
-   * to the injection time and frame scope set when the script was created.
+   * <p>Adds a user script to the content manager. It runs on every page load, at the injection
+   * time and frame scope it was created with.
    *
-   * <p>The UCM retains its own reference to the script, so the caller may call {@link
-   * #webkitUserScriptUnref} immediately after this call. The script remains active until {@link
-   * #webkitUcmRemoveAllScripts} is called or the UCM is destroyed.
+   * <p>The UCM takes its own reference, so {@link #webkitUserScriptUnref} can follow immediately.
+   * The script stays active until {@link #webkitUcmRemoveAllScripts} or the UCM goes away.
    */
   private static final MethodHandle WEBKIT_UCM_ADD_SCRIPT =
       downcall(
@@ -253,10 +241,9 @@ final class WebKit6 {
   /**
    * {@code webkit_user_content_manager_remove_all_scripts(WebKitUserContentManager* ucm) -> void}
    *
-   * <p>Removes all user scripts from the UCM. Used when the set of JS bindings changes (a new
-   * {@code bind()} or {@code unbind()} call) so we can atomically replace the entire binding script
-   * with the updated version. Removing and re-adding is simpler than WebKit's script identity API,
-   * which requires tracking individual script objects.
+   * <p>Removes every user script from the UCM. Each {@code bind()} or {@code unbind()} replaces
+   * the whole set this way, which avoids tracking individual script objects through WebKit's script
+   * identity API.
    */
   private static final MethodHandle WEBKIT_UCM_REMOVE_ALL_SCRIPTS =
       downcall(
@@ -270,20 +257,18 @@ final class WebKit6 {
    * <p>Creates a new {@code WebKitUserScript} object.
    *
    * <ul>
-   *   <li>{@code source} - the JavaScript source string
-   *   <li>{@code frames} - {@link #WEBKIT_USER_CONTENT_INJECT_TOP_FRAME} = top frame only
-   *   <li>{@code time} - {@link #WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START} = before page JS
-   *   <li>{@code allow_list} - {@code const gchar**} array of URI patterns; {@code NULL} = all
+   *   <li>{@code source}: the JavaScript source string
+   *   <li>{@code frames}: {@link #WEBKIT_USER_CONTENT_INJECT_TOP_FRAME} = top frame only
+   *   <li>{@code time}: {@link #WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START} = before page JS
+   *   <li>{@code allow_list}: {@code const gchar**} array of URI patterns; {@code NULL} = all
    *       origins are allowed
-   *   <li>{@code block_list} - {@code const gchar**} array of URI patterns to exclude; {@code NULL}
+   *   <li>{@code block_list}: {@code const gchar**} array of URI patterns to exclude; {@code NULL}
    *       = no exclusions
    * </ul>
    *
-   * <p>We pass {@code NULL} for both list args (the last two {@code ADDRESS} params) to apply the
-   * script to every page unconditionally.
+   * <p>Both list arguments are {@code NULL}, so the script applies to every page.
    *
-   * <p>Returns a new reference; caller must call {@link #webkitUserScriptUnref} when done (after
-   * handing it to the UCM).
+   * <p>Returns a new reference, released with {@link #webkitUserScriptUnref} once the UCM has it.
    */
   private static final MethodHandle WEBKIT_USER_SCRIPT_NEW =
       downcall(
@@ -294,8 +279,8 @@ final class WebKit6 {
    * {@code webkit_user_script_unref(WebKitUserScript* script) -> void}
    *
    * <p>Decrements the reference count of a {@code WebKitUserScript}. Call this after {@link
-   * #webkitUcmAddScript} because the UCM has taken its own reference - our caller copy is no longer
-   * needed. Failing to unref leaks a small heap allocation per script.
+   * #webkitUcmAddScript} because the UCM has taken its own reference, so the caller copy is no
+   * longer needed. Failing to unref leaks a small heap allocation per script.
    */
   private static final MethodHandle WEBKIT_USER_SCRIPT_UNREF =
       downcall("webkit_user_script_unref", FunctionDescriptor.ofVoid(ADDRESS));
@@ -303,13 +288,11 @@ final class WebKit6 {
   /**
    * {@code jsc_value_to_string(JSCValue* value) -> gchar*}
    *
-   * <p>Converts a JavaScriptCore value to a UTF-8 {@code gchar*} string. The JS postMessage call
-   * passes our bridge JSON as a {@code JSCValue}; this extracts the actual string so Java can parse
-   * it.
+   * <p>Converts a JavaScriptCore value to a UTF-8 {@code gchar*}. postMessage hands the bridge
+   * JSON over as a {@code JSCValue}, and this pulls the string back out for Java to parse.
    *
-   * <p><b>Caller owns the string:</b> the returned {@code gchar*} is a fresh GLib allocation. The
-   * caller <em>must</em> call {@link GLib#gFree} on it after copying to Java - see {@link
-   * #jscValueToString}.
+   * <p>The {@code gchar*} is a fresh GLib allocation owned by the caller, so {@link GLib#gFree}
+   * has to follow the copy into Java. See {@link #jscValueToString}.
    */
   private static final MethodHandle JSC_VALUE_TO_STRING =
       downcall("jsc_value_to_string", FunctionDescriptor.of(ADDRESS, ADDRESS));
@@ -317,12 +300,11 @@ final class WebKit6 {
   /**
    * {@code webkit_web_view_set_background_color(WebKitWebView* wv, const GdkRGBA* rgba) -> void}
    *
-   * <p>Sets the base color the web view paints beneath page content before anything is
-   * rendered/composited. Passing an RGBA color with {@code alpha=0} stops WebKit from painting its
-   * default opaque white base, which is required for the GTK window behind it to show through.
+   * <p>Sets the base colour the web view paints under page content. At {@code alpha=0} WebKit
+   * stops painting its opaque white base, which is what lets the GTK window behind show through.
    *
-   * <p>{@code GdkRGBA} is a plain C struct of four {@code float}s: {@code red, green, blue, alpha}
-   * (16 bytes total, no padding), passed by pointer.
+   * <p>{@code GdkRGBA} is four {@code float}s (red, green, blue, alpha), 16 bytes with no padding,
+   * passed by pointer.
    */
   private static final MethodHandle WEBKIT_WEB_VIEW_SET_BACKGROUND_COLOR =
       downcall("webkit_web_view_set_background_color", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
@@ -352,7 +334,7 @@ final class WebKit6 {
   /**
    * Returns the borrowed {@code WebKitUserContentManager} owned by the given web view.
    *
-   * <p>Do NOT ref or unref the returned pointer - it is owned by {@code wv}.
+   * <p>Owned by {@code wv}, so do NOT ref or unref the returned pointer.
    *
    * @param wv a {@code WebKitWebView*}
    * @return a borrowed {@code WebKitUserContentManager*}
@@ -368,7 +350,7 @@ final class WebKit6 {
   /**
    * Returns the borrowed {@code WebKitSettings} owned by the given web view.
    *
-   * <p>Do NOT ref or unref the returned pointer - it is owned by {@code wv}.
+   * <p>Owned by {@code wv}, so do NOT ref or unref the returned pointer.
    *
    * @param wv a {@code WebKitWebView*}
    * @return a borrowed {@code WebKitSettings*}
@@ -413,9 +395,9 @@ final class WebKit6 {
   /**
    * Evaluates JavaScript in the web view asynchronously (fire-and-forget).
    *
-   * <p>All trailing optional arguments ({@code world_name}, {@code source_uri}, {@code
-   * cancellable}, {@code callback}, {@code user_data}) are passed as {@code NULL} because we do not
-   * need the JS return value.
+   * <p>The trailing optional arguments ({@code world_name}, {@code source_uri}, {@code
+   * cancellable}, {@code callback}, {@code user_data}) are all {@code NULL}, as nothing here reads
+   * a JS return value.
    *
    * @param wv a {@code WebKitWebView*}
    * @param js null-terminated JavaScript source
@@ -427,15 +409,15 @@ final class WebKit6 {
           wv,
           js,
           length,
-          // world_name=NULL -> default JS world (same as page scripts)
+          // world_name: default JS world, the one page scripts run in
           MemorySegment.NULL,
-          // source_uri=NULL -> no DevTools origin label needed
+          // source_uri: no DevTools origin label
           MemorySegment.NULL,
-          // cancellable=NULL -> not cancellable
+          // cancellable
           MemorySegment.NULL,
-          // callback=NULL -> fire-and-forget; we don't need the return value
+          // callback: fire-and-forget
           MemorySegment.NULL,
-          // user_data=NULL -> no data to pass to callback
+          // user_data
           MemorySegment.NULL);
     } catch (final Throwable t) {
       throw new RuntimeException(t);
@@ -445,9 +427,8 @@ final class WebKit6 {
   /**
    * Returns the URI of the currently loaded page.
    *
-   * <p>Returns a borrowed pointer owned by the web view - do NOT free it. Returns a zero-address
-   * segment if no page has been loaded yet, which we use as a guard before calling {@link
-   * #webkitWebViewEvaluateJavascript}.
+   * <p>Borrowed from the web view, so do NOT free it. A zero-address segment means no page has
+   * loaded yet, which is the guard used before {@link #webkitWebViewEvaluateJavascript}.
    *
    * @param wv a {@code WebKitWebView*}
    * @return a borrowed {@code const gchar*}, or a zero-address segment if no page is loaded
@@ -467,7 +448,6 @@ final class WebKit6 {
    * @param enable {@code true} to allow JS clipboard read/write
    */
   static void webkitSettingsSetJsClipboard(MemorySegment settings, boolean enable) {
-    // gboolean = C int; pass 1/0
     try {
       WEBKIT_SETTINGS_SET_JS_CLIPBOARD.invokeExact(settings, enable ? 1 : 0);
     } catch (final Throwable t) {
@@ -478,8 +458,8 @@ final class WebKit6 {
   /**
    * Enables or disables forwarding of web-process console messages to stdout.
    *
-   * <p>Useful during development; should be disabled in production to avoid leaking internal log
-   * output.
+   * <p>Handy during development, best left off in production so internal log output stays out of
+   * stdout.
    *
    * @param settings a borrowed {@code WebKitSettings*}
    * @param enable {@code true} to forward console messages
@@ -514,11 +494,11 @@ final class WebKit6 {
    * <p>After this call, {@code window.webkit.messageHandlers.<name>.postMessage(data)} from JS
    * fires the {@code "script-message-received::<name>"} GObject signal on the UCM.
    *
-   * <p>The return value (gboolean success) is discarded - failure only occurs if the name is
-   * already registered, which would be a programming error caught in development.
+   * <p>The {@code gboolean} success return is discarded; it only goes false on a name that is
+   * already registered, which would be a bug caught long before release.
    *
    * @param manager a borrowed {@code WebKitUserContentManager*}
-   * @param name null-terminated handler name (we use {@code "__webview__"})
+   * @param name null-terminated handler name, {@code "__webview__"} here
    */
   static void webkitUcmRegisterHandler(MemorySegment manager, MemorySegment name) {
     try {
@@ -580,9 +560,9 @@ final class WebKit6 {
               source,
               injectedFrames,
               injectionTime,
-              // allow_list=NULL -> apply to all origins
+              // allow_list: every origin
               MemorySegment.NULL,
-              // block_list=NULL -> do not exclude any origin
+              // block_list: no exclusions
               MemorySegment.NULL);
     } catch (final Throwable t) {
       throw new RuntimeException(t);
@@ -618,9 +598,9 @@ final class WebKit6 {
     } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
-    // reinterpret is required as FFM has no size metadata for natively-allocated strings,
+    // FFM carries no size for a natively allocated string, hence the reinterpret.
     final var s = raw.reinterpret(Long.MAX_VALUE).getString(0);
-    // Must free with g_free, as this pointer came from GLib's allocator.
+    // Allocated by GLib, so g_free is the only correct way to release it.
     GLib.gFree(raw);
     return s;
   }
@@ -633,7 +613,7 @@ final class WebKit6 {
    * @param red red channel, {@code 0.0}-{@code 1.0}
    * @param green green channel, {@code 0.0}-{@code 1.0}
    * @param blue blue channel, {@code 0.0}-{@code 1.0}
-   * @param alpha alpha channel, {@code 0.0} (transparent) - {@code 1.0} (opaque)
+   * @param alpha alpha channel, from {@code 0.0} (transparent) to {@code 1.0} (opaque)
    */
   static void webkitWebViewSetBackgroundColor(
       MemorySegment wv, float red, float green, float blue, float alpha) {

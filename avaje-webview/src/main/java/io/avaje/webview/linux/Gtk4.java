@@ -15,17 +15,16 @@ import java.lang.invoke.MethodHandle;
 /**
  * Panama FFM bindings for GTK4 ({@code libgtk-4}).
  *
- * <p><b>Single-threaded constraint:</b> GTK is not thread-safe. Every method in this class must be
- * called on the thread that invoked {@link #gtkInitCheck()} (the "GTK thread"). Calls from other
- * threads corrupt internal GTK state in ways that produce intermittent crashes. We enforce this in
- * {@link GtkWebView} by checking {@code Thread.currentThread() == gtkThread} before each GTK call
- * and routing cross-thread work through {@link GLib#gIdleAddFull}.
+ * <p>GTK is not thread-safe, so every method here belongs on the thread that called {@link
+ * #gtkInitCheck()}. Calls from anywhere else corrupt GTK state and show up later as intermittent
+ * crashes. {@link GtkWebView} keeps to that by comparing against {@code gtkThread} before each call
+ * and sending anything else through {@link GLib#gIdleAddFull}.
  */
 final class Gtk4 {
 
   /**
-   * {@code FunctionDescriptor} for the GTK {@code "destroy"} signal on {@code GtkWidget}. {@code
-   * void(*)(GtkWidget* widget, gpointer user_data)}. Both
+   * {@code FunctionDescriptor} for the GTK {@code "destroy"} signal on {@code GtkWidget}: {@code
+   * void(*)(GtkWidget* widget, gpointer user_data)}.
    */
   static final FunctionDescriptor DESTROY_SIGNAL_DESC = FunctionDescriptor.ofVoid(ADDRESS, ADDRESS);
 
@@ -38,9 +37,8 @@ final class Gtk4 {
   /**
    * {@code gtk_init_check() -> gboolean}
    *
-   * <p>Initializes GTK and connects to the display server (X11 or Wayland). Returns {@code FALSE}
-   *
-   * <p>Return type is {@code gboolean} = C {@code int} = {@code JAVA_INT}. Non-zero means success.
+   * <p>Initializes GTK and connects to the display server, X11 or Wayland. The {@code gboolean}
+   * return is non-zero on success, zero when there is no usable display.
    */
   private static final MethodHandle GTK_INIT_CHECK =
       downcall("gtk_init_check", FunctionDescriptor.of(JAVA_INT));
@@ -48,10 +46,9 @@ final class Gtk4 {
   /**
    * {@code gtk_window_new() -> GtkWidget*}
    *
-   * <p>Creates a new top-level window. Returns a {@code GtkWidget*} cast to {@code ADDRESS}. The
-   * new window starts with a floating GObject reference; GTK's widget hierarchy management will
-   * sink it when the window becomes a root widget. Since we are the root, we let GTK manage the
-   * lifecycle and do not call {@code g_object_ref_sink} on the window (only on the WebView child).
+   * <p>Creates a new top-level window, returned as a {@code GtkWidget*}. It starts with a floating
+   * GObject reference that GTK sinks once the window becomes a root widget, so unlike the WebView
+   * child it is left to GTK rather than sunk here.
    */
   private static final MethodHandle GTK_WINDOW_NEW =
       downcall("gtk_window_new", FunctionDescriptor.of(ADDRESS));
@@ -67,7 +64,7 @@ final class Gtk4 {
   /**
    * {@code gtk_window_set_default_size(GtkWindow* window, gint width, gint height) -> void}
    *
-   * <p>Sets the window's <em>default</em> size
+   * <p>Sets the size the window opens at. Not a minimum, the user can still resize below it.
    */
   private static final MethodHandle GTK_WINDOW_SET_DEFAULT_SIZE =
       downcall(
@@ -78,9 +75,8 @@ final class Gtk4 {
    *
    * <p>Controls whether the user can drag the window border to resize it.
    *
-   * <p><b>Ordering constraint:</b> call this <em>before</em> {@link #GTK_WINDOW_SET_DEFAULT_SIZE}
-   * when making a window fixed-size. GTK only honors the default size change when the resizable
-   * state is already in its final value.
+   * <p>Call this before {@link #GTK_WINDOW_SET_DEFAULT_SIZE} when fixing a window's size, as GTK
+   * only takes the new default size once the resizable state has settled.
    */
   private static final MethodHandle GTK_WINDOW_SET_RESIZABLE =
       downcall("gtk_window_set_resizable", FunctionDescriptor.ofVoid(ADDRESS, JAVA_INT));
@@ -88,10 +84,9 @@ final class Gtk4 {
   /**
    * {@code gtk_window_set_child(GtkWindow* window, GtkWidget* child) -> void}
    *
-   * <p>Sets the single content widget of the window. GTK4 windows have exactly one direct child,
-   * calling this a second time replaces the previous child. The window takes ownership of the
-   * child's floating reference (effectively calling {@code g_object_ref_sink}) so we must have
-   * called {@link GLib#gObjectRefSink} beforehand to hold our own reference.
+   * <p>Sets the single content widget of the window. A GTK4 window has exactly one direct child,
+   * so a second call replaces the first. The window sinks the child's floating reference, which is
+   * why {@link GLib#gObjectRefSink} has to run first for the caller to keep a reference of its own.
    */
   private static final MethodHandle GTK_WINDOW_SET_CHILD =
       downcall("gtk_window_set_child", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
@@ -125,10 +120,9 @@ final class Gtk4 {
   /**
    * {@code gtk_window_destroy(GtkWindow* window) -> void}
    *
-   * <p>Destroys the window unconditionally, bypassing the {@code "close-request"} veto mechanism.
-   * GTK emits the {@code "destroy"} signal synchronously during this call, so our {@code
-   * GtkWebView#onWindowDestroy} upcall runs and decrements {@code openWindows} before {@code
-   * gtkWindowDestroy} returns.
+   * <p>Destroys the window outright, past the {@code "close-request"} veto. The {@code "destroy"}
+   * signal is emitted synchronously, so {@code GtkWebView#onWindowDestroy} has already run and
+   * decremented {@code openWindows} by the time this returns.
    */
   private static final MethodHandle GTK_WINDOW_DESTROY =
       downcall("gtk_window_destroy", FunctionDescriptor.ofVoid(ADDRESS));
@@ -169,8 +163,8 @@ final class Gtk4 {
   /**
    * {@code gtk_window_set_titlebar(GtkWindow* window, GtkWidget* titlebar) -> void}
    *
-   * <p>Replaces the window's title bar widget. Used to swap in a zero-height {@code GtkBox} so the
-   * window keeps its decorated=true
+   * <p>Replaces the window's title bar widget. A zero-height {@code GtkBox} goes in here, which
+   * leaves the window decorated but with nothing drawn where the title bar would be.
    */
   private static final MethodHandle GTK_WINDOW_SET_TITLEBAR =
       downcall("gtk_window_set_titlebar", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
@@ -186,9 +180,9 @@ final class Gtk4 {
   /**
    * {@code gtk_native_get_surface(GtkNative* self) -> GdkSurface*}
    *
-   * <p>Every realized top-level {@code GtkWindow} implements {@code GtkNative}; this returns its
-   * backing {@code GdkSurface}, which also implements the {@code GdkToplevel} interface used by
-   * {@link #GDK_TOPLEVEL_BEGIN_MOVE}.
+   * <p>Every realized top-level {@code GtkWindow} implements {@code GtkNative}, and this returns
+   * its backing {@code GdkSurface}, which is also the {@code GdkToplevel} that {@link
+   * #GDK_TOPLEVEL_BEGIN_MOVE} wants.
    */
   private static final MethodHandle GTK_NATIVE_GET_SURFACE =
       downcall("gtk_native_get_surface", FunctionDescriptor.of(ADDRESS, ADDRESS));
@@ -230,15 +224,11 @@ final class Gtk4 {
   /**
    * {@code gtk_widget_set_visible(GtkWidget* widget, gboolean visible) -> void}
    *
-   * <p>Shows or hides a widget. GTK4 removed the convenience {@code gtk_widget_show()} and {@code
-   * gtk_widget_hide()} functions; {@code gtk_widget_set_visible} with {@code TRUE/FALSE} is the
-   * canonical GTK4 replacement.
+   * <p>Shows or hides a widget. GTK4 dropped {@code gtk_widget_show()} and {@code
+   * gtk_widget_hide()} in favour of this.
    *
-   * <p>We call this with {@code 1} (visible) on both the WebKitWebView child and the GtkWindow
-   * itself during window creation. The widget must be visible before the window's first draw pass;
-   * failing to show the child results in an empty grey window.
-   *
-   * <p>{@code gboolean} = C {@code int} = {@code JAVA_INT}.
+   * <p>Window creation shows both the WebKitWebView child and the GtkWindow itself. The child has
+   * to be visible before the first draw pass, or the window comes up empty and grey.
    */
   private static final MethodHandle GTK_WIDGET_SET_VISIBLE =
       downcall("gtk_widget_set_visible", FunctionDescriptor.ofVoid(ADDRESS, JAVA_INT));
@@ -257,12 +247,11 @@ final class Gtk4 {
   /**
    * {@code gtk_widget_grab_focus(GtkWidget* widget) -> gboolean}
    *
-   * <p>Moves keyboard focus to the widget. We call this on the WebKitWebView immediately after
-   * showing the window so that keyboard shortcuts (Ctrl+R, Ctrl+F, etc.) work without the user
-   * having to click inside the web content first.
+   * <p>Moves keyboard focus to the widget. Called on the WebKitWebView right after the window is
+   * shown so shortcuts such as Ctrl+R and Ctrl+F work before the user has clicked into the page.
    *
-   * <p>Returns {@code gboolean} (non-zero if focus was successfully moved), but we discard the
-   * return value — focus failing is non-fatal; the user can still click to focus.
+   * <p>The {@code gboolean} return, non-zero when focus moved, is discarded as failing to focus is
+   * harmless.
    */
   private static final MethodHandle GTK_WIDGET_GRAB_FOCUS =
       downcall("gtk_widget_grab_focus", FunctionDescriptor.of(JAVA_INT, ADDRESS));
@@ -273,17 +262,17 @@ final class Gtk4 {
    * <p>Returns the singleton {@code GtkSettings} object for the default display. Used to set {@code
    * gtk-application-prefer-dark-theme} when {@code setDarkAppearance(true)} is called.
    *
-   * <p><b>Reference semantics:</b> this is a <em>borrowed</em> reference, do NOT call {@code
-   * g_object_unref} on it. The settings object is owned by GTK and lives for the process lifetime.
+   * <p>A borrowed reference, so do NOT call {@code g_object_unref} on it. GTK owns the settings
+   * object and keeps it for the life of the process.
    *
-   * <p>Returns {@code NULL} if GTK has not been initialized, hence the null-address guard in {@link
-   * LinuxHelper#setWindowAppearance}.
+   * <p>Returns {@code NULL} before GTK is initialized, which is what the null-address guard in
+   * {@link LinuxHelper#setWindowAppearance} is for.
    */
   private static final MethodHandle GTK_SETTINGS_GET_DEFAULT =
       downcall("gtk_settings_get_default", FunctionDescriptor.of(ADDRESS));
 
   /**
-   * {@code GTK_STYLE_PROVIDER_PRIORITY_APPLICATION} - the priority used for app-level CSS so it
+   * {@code GTK_STYLE_PROVIDER_PRIORITY_APPLICATION}, the priority for app-level CSS so it
    * overrides the active theme's stylesheet but can still be overridden by user themes/settings.
    */
   private static final int GTK_STYLE_PROVIDER_PRIORITY_APPLICATION = 600;
@@ -404,8 +393,7 @@ final class Gtk4 {
   /**
    * Enables or disables user resizing of the window.
    *
-   * <p>GTK's {@code gboolean} is a C {@code int}, so we convert to {@code 1}/{@code 0} before
-   * calling the native function.
+   * <p>GTK's {@code gboolean} is a C {@code int}, hence the {@code 1}/{@code 0} conversion.
    *
    * @param window a {@code GtkWindow*}
    * @param resizable {@code true} to allow user resizing; {@code false} to fix the size
@@ -576,8 +564,8 @@ final class Gtk4 {
   /**
    * Begins a native window-move grab on {@code window}'s toplevel surface, using the default seat's
    * current pointer position as the drag origin and {@code GDK_CURRENT_TIME} (0) as the timestamp,
-   * since the triggering click was consumed by an unrelated JS event rather than a live GDK event
-   * we can forward.
+   * since the triggering click arrived as a JS event rather than a live GDK event that could be
+   * forwarded.
    *
    * @param window a realized {@code GtkWindow*}
    */
@@ -623,7 +611,7 @@ final class Gtk4 {
   /**
    * Sets the minimum size of a widget, constraining the parent window's minimum dimensions.
    *
-   * @param widget a {@code GtkWidget*} — typically the WebKitWebView content widget
+   * @param widget a {@code GtkWidget*}, usually the WebKitWebView content widget
    * @param w minimum width in device pixels; {@code -1} for no minimum
    * @param h minimum height in device pixels; {@code -1} for no minimum
    */
@@ -638,13 +626,13 @@ final class Gtk4 {
   /**
    * Moves keyboard focus to the widget so shortcuts work without a user click.
    *
-   * <p>Return value (whether focus moved successfully) is discarded — focus failure is non-fatal.
+   * <p>The gboolean return, whether focus actually moved, is discarded as failing is harmless.
    *
-   * @param widget a {@code GtkWidget*} — typically the WebKitWebView
+   * @param widget a {@code GtkWidget*}, usually the WebKitWebView
    */
   static void gtkWidgetGrabFocus(MemorySegment widget) {
     try {
-      // Return value is gboolean: non-zero = focus moved. Discarded — non-fatal if focus fails.
+      // gboolean return, non-zero if focus moved. Nothing breaks when it does not.
       final var _ = (int) GTK_WIDGET_GRAB_FOCUS.invokeExact(widget);
     } catch (final Throwable t) {
       throw new RuntimeException(t);
@@ -654,8 +642,8 @@ final class Gtk4 {
   /**
    * Returns the singleton {@code GtkSettings} object for the default display.
    *
-   * <p>This is a borrowed reference — do NOT unref the returned pointer. Returns {@code NULL} if
-   * GTK is not initialized.
+   * <p>A borrowed reference, so do NOT unref the returned pointer. Returns {@code NULL} before GTK
+   * is initialized.
    *
    * @return a {@code GtkSettings*} borrowed reference
    */
@@ -672,13 +660,13 @@ final class Gtk4 {
    * (desktop, other windows) shows through wherever neither the window chrome nor the page content
    * paints an opaque pixel.
    *
-   * <p>This only affects the GTK-drawn window background; the caller must separately clear WebKit's
-   * own opaque base fill via {@link WebKit6#webkitWebViewSetBackgroundColor}, otherwise the page
-   * itself still renders an opaque white rectangle over the (now transparent) window.
+   * <p>Only the GTK-drawn background is affected. WebKit's own opaque base fill needs clearing
+   * separately through {@link WebKit6#webkitWebViewSetBackgroundColor}, or the page keeps painting
+   * a white rectangle over the now transparent window.
    *
-   * <p>Requires a compositor that supports an alpha channel for client windows: this works
-   * out-of-the-box on Wayland and on X11 with a compositing manager (e.g. picom) running. Without
-   * one, the "transparent" areas fall back to opaque black.
+   * <p>Needs a compositor that gives client windows an alpha channel. Wayland always does, X11 does
+   * with a compositing manager such as picom running, and without one the transparent areas come
+   * out opaque black.
    *
    * @param window a {@code GtkWindow*}, not yet required to be realized
    */
@@ -692,7 +680,7 @@ final class Gtk4 {
       final var display = (MemorySegment) GDK_DISPLAY_GET_DEFAULT.invokeExact();
       GTK_STYLE_CONTEXT_ADD_PROVIDER_FOR_DISPLAY.invokeExact(
           display, provider, GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
-      // add_provider_for_display takes its own reference; drop ours now.
+      // The display took its own reference, so drop this one.
       GLib.gObjectUnref(provider);
     } catch (final Throwable t) {
       throw new RuntimeException(t);

@@ -15,10 +15,9 @@ import io.avaje.webview.macos.CocoaWebView;
 import io.avaje.webview.windows.Win32WebView;
 
 /**
- * Abstract base for platform-specific {@link Webview} implementations.
- *
- * <p>Holds all shared logic: JS bridge injection, binding management, user-script tracking,
- * console-redirect, and thread-safe dispatch routing. Subclasses implement the native layer.
+ * Base for the platform-specific {@link Webview} implementations, which are left with the native
+ * layer only. The JS bridge, bindings, user-script tracking, console redirect and dispatch routing
+ * all live here.
  */
 public abstract sealed class WebviewBase implements Webview
     permits GtkWebView, CocoaWebView, Win32WebView {
@@ -102,16 +101,16 @@ public abstract sealed class WebviewBase implements Webview
     this.moveParentWithChild = moveParentWithChild;
   }
 
-  // JS bridge state, all mutations to userScripts/bindScriptIdx must happen on the main thread
+  // JS bridge state. userScripts and bindScriptIdx are only ever touched on the main thread.
   private final List<String> userScripts = new ArrayList<>();
   private int bindScriptIdx = -1;
   private final Map<String, BindCallback> bindings = new ConcurrentHashMap<>();
 
   /**
-   * Injects the JS bridge init script and sets up console redirection. Must be called after the
-   * user-content manager is configured.
+   * Injects the JS bridge init script and sets up console redirection. Call once the user-content
+   * manager is configured.
    *
-   * @param postFn JS expression for posting messages to Java, e.g. {@code "function(msg){return
+   * @param postFn JS expression that posts messages to Java, e.g. {@code "function(msg){return
    *     window.webkit.messageHandlers.__webview__.postMessage(msg);}"}.
    */
   protected final void setupJsBridge(String postFn) {
@@ -139,8 +138,8 @@ public abstract sealed class WebviewBase implements Webview
   }
 
   /**
-   * Called by subclass when a {@code script-message-received} event arrives from WebKit. Parses the
-   * JSON message and dispatches to the matching {@link BindCallback}.
+   * Called by the subclass when a message arrives from the page. Picks the {@link BindCallback} the
+   * JSON names and runs it.
    */
   protected final void onMessage(String json) {
     final var id = jsonGet(json, "id");
@@ -285,9 +284,9 @@ public abstract sealed class WebviewBase implements Webview
   }
 
   /**
-   * Resolves a resource {@link URI} to a real filesystem {@link Path}, copying it to a temp file
-   * when the resource lives inside a jar since native icon loading (Win32 {@code LoadImageW}, Cocoa
-   * {@code NSImage}) require a file on disk.
+   * Resolves a resource {@link URI} to a real filesystem {@link Path}. Resources inside a jar are
+   * copied to a temp file, since Win32 {@code LoadImageW} and Cocoa {@code NSImage} both want a
+   * file on disk.
    */
   protected static Path resolveIconPath(URI uri) throws IOException {
     if ("file".equals(uri.getScheme())) {
@@ -331,18 +330,18 @@ public abstract sealed class WebviewBase implements Webview
   /** Schedule {@code r} to run on the UI thread. */
   protected abstract void dispatchImpl(Runnable r);
 
-  /** Add a WebKit user script executed at document-start, top frame only. */
+  /** Add a user script run at document-start, top frame only. */
   protected abstract void nativeAddUserScript(String js);
 
   /** Remove all previously added user scripts. */
   protected abstract void nativeRemoveAllUserScripts();
 
   /**
-   * Return result to JS caller
+   * Settle the JS promise waiting on a binding call.
    *
-   * @param id requestId
-   * @param status status
-   * @param result result
+   * @param id the request id the call was made with
+   * @param status 0 for success, anything else for failure
+   * @param result JSON result, or the error message when status is non-zero
    */
   void returnResult(String id, int status, String result) {
     final var escaped = result == null || result.isEmpty() ? "undefined" : jsonEscape(result);
@@ -356,7 +355,6 @@ public abstract sealed class WebviewBase implements Webview
     rebuildAllUserScripts();
   }
 
-  // User-script tracking
   private void addUserScriptInternal(String js) {
     userScripts.add(js);
     nativeAddUserScript(js);
@@ -378,7 +376,7 @@ public abstract sealed class WebviewBase implements Webview
     for (final String s : userScripts) nativeAddUserScript(s);
   }
 
-  /** Bind logging redirect to System.Logger */
+  /** Route the page's console output to System.Logger. */
   private void redirectConsole() {
     bind(
         "__$io_avaje_webview$log__",
@@ -400,11 +398,11 @@ public abstract sealed class WebviewBase implements Webview
           }
           return "\"ok\"";
         });
-    // Inject as init script so the console override runs on every page (not just the current one)
+    // An init script, so the override survives navigation instead of applying to one page.
     addUserScriptInternal(CONSOLE_REDIRECT_JS);
   }
 
-  /** Adapt a WebviewBinding to a Bind Callback */
+  /** Adapt a WebviewBinding to a BindCallback, turning a thrown exception into a rejection. */
   private BindCallback adapt(WebviewBinding wb) {
     return (id, req) -> {
       try {
@@ -445,72 +443,26 @@ public abstract sealed class WebviewBase implements Webview
   }
 
   /**
-   * Builds the minified JavaScript bridge that is injected as a user script at document-start on
-   * every page load.
+   * Builds the JS bridge, injected as a user script at document-start on every page load. It runs
+   * in strict mode inside a self-executing function and leaves one global behind, {@code
+   * window.__webview__}.
    *
-   * <p>The script runs in a self-executing function ({@code (function(){...})()}) in strict mode so
-   * it does not leak any variables into the global scope. It installs exactly one global: {@code
-   * window.__webview__} — an instance of the private {@code Webview_} class.
+   * <p>Every bound {@code window.xxx()} ends up in {@code call()}, which mints a random id, parks
+   * {@code {resolve, reject}} in {@code _promises} under it, posts {@code {id, method, params}} to
+   * the native side and hands the caller a Promise. Java runs the {@link WebviewBinding} and comes
+   * back through {@link #returnResult}, which evals {@code onReply(id, status, result)} to settle
+   * that Promise: resolved on status 0, rejected otherwise. Malformed JSON from Java rejects
+   * rather than passing through unnoticed.
    *
-   * <p><b>ID generation ({@code generateId})</b><br>
-   * Each Java binding call needs a unique correlation ID so that when Java calls back with {@code
-   * onReply(id, status, result)}, the bridge can locate and settle the right Promise. {@code
-   * window.crypto.getRandomValues} produces 16 cryptographically random bytes formatted as a
-   * 32-character lowercase hex string. {@code window.msCrypto} is the IE11 fallback (kept for
-   * completeness; unreachable on modern WebView2/WebKit).
+   * <p>{@code onBind} and {@code onUnbind} add and remove those {@code window} properties for
+   * {@link #bind} / {@link #unbind} calls made after the page has loaded. Bindings registered
+   * before the first load arrive instead through {@link #buildBindScript}, a second document-start
+   * script injected after this one.
    *
-   * <p><b>Promise map ({@code _promises})</b><br>
-   * A plain object that maps {@code id → {resolve, reject}}. Entries are written by {@code call()}
-   * immediately before the message is posted, and deleted implicitly when {@code onReply()} settles
-   * the Promise and the GC reclaims the entry. No manual cleanup is needed because a Promise can
-   * only be settled once.
-   *
-   * <p><b>{@code Webview_.prototype.post}</b><br>
-   * Thin wrapper around the platform-specific {@code postFn} parameter, which is a JS function
-   * expression that serializes a message and hands it to the native layer. On Linux/macOS it calls
-   * {@code window.webkit.messageHandlers.__webview__.postMessage(msg)}; on Windows it calls the
-   * WebView2 equivalent. Injected at build time so the bridge has no platform branching at runtime.
-   *
-   * <p><b>{@code Webview_.prototype.call}</b><br>
-   * The core RPC method. Called indirectly by every bound {@code window.xxx()} function:
-   *
-   * <ol>
-   *   <li>Generates a unique {@code _id}.
-   *   <li>Collects all arguments after the method name into {@code _params} ({@code
-   *       Array.prototype.slice} so it works with the {@code arguments} object).
-   *   <li>Creates a Promise and stores {@code {resolve, reject}} in {@code _promises[_id]}.
-   *   <li>Posts {@code {id, method, params}} as JSON to the native side.
-   *   <li>Returns the Promise — the caller {@code await}s it.
-   * </ol>
-   *
-   * Java receives the JSON, invokes the bound {@link WebviewBinding}, and calls back via {@link
-   * #returnResult}, which evals {@code window.__webview__.onReply(id, status, result)}.
-   *
-   * <p><b>{@code Webview_.prototype.onReply}</b><br>
-   * Called by Java (via {@code eval}) when a binding completes. Looks up the pending Promise by
-   * {@code id}, JSON-parses the result string (Java always sends valid JSON), and either resolves
-   * or rejects. {@code status === 0} = success; anything else = the result is an error message. If
-   * Java returns malformed JSON the Promise rejects with a descriptive error rather than silently
-   * swallowing it.
-   *
-   * <p><b>{@code Webview_.prototype.onBind} / {@code onUnbind}</b><br>
-   * Called by Java when {@link #bind} / {@link #unbind} are invoked at runtime (after the page has
-   * loaded). {@code onBind} installs a new property on {@code window} whose value is a closure that
-   * prepends the method name to its arguments and delegates to {@code call()}. The {@code
-   * bind(this)} at the end ensures {@code this} inside the closure refers to the {@code Webview_}
-   * instance (not the global object). {@code onUnbind} removes the property; both guard against
-   * double-bind/double-unbind with an explicit check.
-   *
-   * <p><b>Injection timing</b><br>
-   * This script runs at document-start (before any page scripts) so that {@code window.__webview__}
-   * exists by the time the page's own {@code <script>} tags execute. Bindings registered before the
-   * first page load are installed via a second user script ({@link #buildBindScript}) that also
-   * runs at document-start, after this one.
-   *
-   * @param postFn a JS function expression (not a statement) that posts a single string message to
-   *     the native side, e.g. {@code "function(message){return
+   * @param postFn a JS function expression (not a statement) posting one string message to the
+   *     native side, e.g. {@code "function(message){return
    *     window.webkit.messageHandlers.__webview__.postMessage(message);}"}
-   * @return the complete, minified bridge script ready for injection as a user script
+   * @return the bridge script, ready to inject
    */
   private static String buildInitScript(String postFn) {
     return String.format(

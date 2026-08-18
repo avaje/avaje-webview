@@ -25,10 +25,10 @@ import module java.base;
 import module org.jspecify;
 
 /**
- * Provides a high-level interface for creating and managing a native Webview window.
+ * A native webview window.
  *
- * <p>A {@code Webview} instance allows for rendering HTML/URL content, executing JavaScript, and
- * binding Java callbacks to the JavaScript environment.
+ * <p>Renders HTML or a URL, runs JavaScript in the page, and binds Java callbacks into the page's
+ * JavaScript environment.
  */
 public interface Webview extends Closeable, Runnable {
 
@@ -44,9 +44,8 @@ public interface Webview extends Closeable, Runnable {
   /**
    * Returns the native window handle/pointer.
    *
-   * <p><strong>Caution:</strong> This provides direct access to the underlying native memory. Use
-   * this only if you are integrating with other native libraries and understand the threading
-   * implications.
+   * <p>Direct access to native memory. Only worth reaching for when integrating with another
+   * native library, and only with the platform's threading rules in mind.
    *
    * @return the {@link MemorySegment} pointing to the native window
    */
@@ -62,7 +61,7 @@ public interface Webview extends Closeable, Runnable {
   /**
    * Navigates the webview to the specified URL.
    *
-   * @param url the URL to load (e.g., "https://google.com"), or {@code null}
+   * @param url the URL to load, such as "https://google.com", or {@code null}
    */
   void navigate(@Nullable String url);
 
@@ -106,8 +105,7 @@ public interface Webview extends Closeable, Runnable {
   void setFixedSize(int width, int height);
 
   /**
-   * Registers a script to be executed automatically whenever a new page is loaded. Defaults to no
-   * nested access (script will not run in iframes).
+   * Registers a script to run automatically on every page load. Iframes are excluded by default.
    *
    * @param script the JavaScript source code to run
    * @implNote The script is executed immediately after the {@code window.load} event.
@@ -116,10 +114,10 @@ public interface Webview extends Closeable, Runnable {
   void setInitScript(@NonNull String script);
 
   /**
-   * Registers a script to be executed automatically whenever a new page is loaded.
+   * Registers a script to run automatically on every page load.
    *
    * @param script the JavaScript source code to run
-   * @param allowNestedAccess if {@code true}, the script will also be injected into nested iframes
+   * @param allowNestedAccess {@code true} to inject the script into nested iframes as well
    * @implNote The script is executed immediately after the {@code window.load} event.
    */
   void setInitScript(@NonNull String script, boolean allowNestedAccess);
@@ -134,12 +132,11 @@ public interface Webview extends Closeable, Runnable {
   /**
    * Binds a Java callback to a global JavaScript function.
    *
-   * <p>When the function is called in JavaScript, it returns a {@code Promise} that resolves when
-   * the Java handler completes. This prevents the browser UI thread from locking up during Java
-   * execution.
+   * <p>Calling the function from JavaScript returns a {@code Promise} that settles once the Java
+   * handler finishes, so the browser UI thread keeps running while Java works.
    *
-   * @param name the name of the function in the JavaScript {@code window} object (e.g.,
-   *     "submitData")
+   * @param name the name of the function on the JavaScript {@code window} object, such as
+   *     "submitData"
    * @param handler the callback logic to execute when the function is invoked
    * @implNote Binds persist across page navigations. Callbacks are registered after {@code
    *     window.load}.
@@ -156,8 +153,7 @@ public interface Webview extends Closeable, Runnable {
   /**
    * Schedules a task to be executed on the webview's internal event thread.
    *
-   * <p>Use this for thread-safe interaction with the webview state from external background
-   * threads.
+   * <p>The safe way to touch webview state from a background thread.
    *
    * @param handler the task to run on the event thread
    */
@@ -166,8 +162,8 @@ public interface Webview extends Closeable, Runnable {
   /**
    * Starts the webview event loop.
    *
-   * <p>This call is blocking and will not return until the window is closed or {@link #close()} is
-   * called, unless the webview is configured in asynchronous mode.
+   * <p>Blocks until the window closes or {@link #close()} is called, unless the webview is
+   * configured in asynchronous mode.
    *
    * @see #close()
    */
@@ -226,16 +222,16 @@ public interface Webview extends Closeable, Runnable {
   void startWindowDrag();
 
   /**
-   * Sets the icon for the webview window
+   * Sets the icon for the webview window.
    *
-   * @param path to the icon file
+   * @param path path to the icon file
    */
   void setIcon(Path path);
 
   /**
-   * Sets the icon for the webview window, use this for classpath resources
+   * Sets the icon for the webview window, for icons held as classpath resources.
    *
-   * @param URI to the icon file
+   * @param uri location of the icon file
    */
   void setIcon(URI uri);
 
@@ -251,9 +247,9 @@ public interface Webview extends Closeable, Runnable {
     Builder title(String title);
 
     /**
-     * Enables or disables browser developer tools (Right-click > Inspect).
+     * Enables or disables browser developer tools, reached with right-click then Inspect.
      *
-     * @param enableDeveloperTools {@code true} to enable tools (if supported by the platform)
+     * @param enableDeveloperTools {@code true} to enable them where the platform supports it
      * @return this builder
      */
     Builder enableDeveloperTools(boolean enableDeveloperTools);
@@ -301,7 +297,7 @@ public interface Webview extends Closeable, Runnable {
     /**
      * Sets the initial URL for the webview to load.
      *
-     * @param url the URL (e.g., "https://localhost:8080")
+     * @param url the URL, such as "https://localhost:8080"
      * @return this builder
      */
     Builder navigate(String url);
@@ -310,8 +306,8 @@ public interface Webview extends Closeable, Runnable {
      * Creates the window without native OS decorations (title bar, borders, and minimize/maximize/
      * close buttons). Defaults to {@code false}. The window remains resizable via its edges.
      *
-     * <p>Combine with {@link Webview#startWindowDrag()} to implement a custom draggable title bar,
-     * since a borderless window has no native title bar for the user to grab.
+     * <p>With no native title bar to grab, pair this with {@link Webview#startWindowDrag()} to
+     * build a draggable title bar of your own.
      *
      * @param borderless {@code true} to remove native window decorations
      * @return this builder
@@ -322,8 +318,8 @@ public interface Webview extends Closeable, Runnable {
      * Creates the window without native OS decorations, with optional retention of the native
      * window outline (drop shadow and thin border).
      *
-     * <p>When {@code outline} is {@code true}, only the title bar is removed; the surrounding
-     * border and drop shadow remain visible. Platform behaviour:
+     * <p>With {@code outline} set, only the title bar goes and the surrounding border and drop
+     * shadow stay. Platform behaviour:
      *
      * <ul>
      *   <li><b>Windows</b> removes only the title bar area; the left, right, and bottom borders
@@ -343,8 +339,8 @@ public interface Webview extends Closeable, Runnable {
      * Marks this window as owned by {@code parent}, making it behave like a modal child/dialog
      * window.
      *
-     * <p>The parent window is disabled (blocked from receiving mouse/keyboard input) as soon as
-     * this window is built, and automatically re-enabled when this window closes.
+     * <p>The parent stops receiving mouse and keyboard input as soon as this window is built, and
+     * gets it back when this window closes.
      *
      * @param parent the {@code Webview} that should be blocked while this window is open
      * @return this builder
@@ -354,8 +350,8 @@ public interface Webview extends Closeable, Runnable {
     /**
      * Marks this window as owned by {@code parent} and optionally locks their positions together.
      *
-     * <p>When {@code moveParentWithChild} is {@code true}, dragging the child window also moves the
-     * parent by the same delta, keeping them visually locked.
+     * <p>With {@code moveParentWithChild} set, dragging the child moves the parent by the same
+     * amount so the two stay visually locked.
      *
      * @param parent the {@code Webview} that should be blocked while this window is open
      * @param moveParentWithChild {@code true} to synchronise parent position with child
@@ -412,9 +408,9 @@ public interface Webview extends Closeable, Runnable {
     /**
      * Controls whether the user can resize the window. Defaults to {@code true}.
      *
-     * <p>When set to {@code false}, the window is created at the specified {@link #width(int)} and
-     * {@link #height(int)} and the user cannot resize it. This is equivalent to calling {@link
-     * Webview#setFixedSize(int, int)} immediately after build.
+     * <p>At {@code false} the window opens at the given {@link #width(int)} and {@link
+     * #height(int)} and stays there, the same as calling {@link Webview#setFixedSize(int, int)}
+     * right after build.
      *
      * @param resizable {@code false} to prevent user resizing
      * @return this builder
@@ -431,9 +427,9 @@ public interface Webview extends Closeable, Runnable {
     Builder transparent(boolean transparent);
 
     /**
-     * Builds a Webview using the configuration
+     * Builds the Webview.
      *
-     * @return a configured Webview instance
+     * @return the configured Webview
      */
     Webview build();
   }

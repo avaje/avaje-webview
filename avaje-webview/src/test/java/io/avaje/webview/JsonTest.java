@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 class JsonTest {
 
   // -------------------------------------------------------------------------
-  // jsonGet — object key extraction
+  // jsonGet: object key extraction
   // -------------------------------------------------------------------------
 
   @Test
@@ -78,7 +78,7 @@ class JsonTest {
   }
 
   // -------------------------------------------------------------------------
-  // WebviewUtil.jsonEscape — raw escaping (no surrounding quotes)
+  // WebviewUtil.jsonEscape: raw escaping, no surrounding quotes
   // -------------------------------------------------------------------------
 
   @Test
@@ -113,7 +113,7 @@ class JsonTest {
 
   @Test
   void jsonEscapeRaw_nonAscii() {
-    // chars > 127 become unicode escapes — unlike C++ which leaves UTF-8 bytes as-is
+    // chars > 127 become unicode escapes, where C++ leaves UTF-8 bytes as they are
     // use concatenation to avoid Java unicode-escape processing in string literals
     assertEquals("\\" + "u2328", WebviewUtil.jsonEscape("⌨"));
     final var expected =
@@ -131,12 +131,12 @@ class JsonTest {
 
   @Test
   void jsonEscapeRaw_xssGuard() {
-    // alert("gotcha") → alert(\"gotcha\")  — eval-safe
+    // alert("gotcha") becomes alert(\"gotcha\"), safe to eval
     assertEquals("alert(\\\"gotcha\\\")", WebviewUtil.jsonEscape("alert(\"gotcha\")"));
   }
 
   // -------------------------------------------------------------------------
-  // WebviewBase.jsonEscape — with surrounding double-quotes
+  // WebviewBase.jsonEscape: with surrounding double-quotes
   // -------------------------------------------------------------------------
 
   @Test

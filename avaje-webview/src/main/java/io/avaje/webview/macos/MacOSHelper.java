@@ -83,7 +83,7 @@ final class MacOSHelper {
   }
 
   /**
-   * {@code -[NSWindow addChildWindow:ordered:]} - attaches {@code childWindow} to {@code
+   * {@code -[NSWindow addChildWindow:ordered:]} attaches {@code childWindow} to {@code
    * parentWindow} so the window manager keeps it stacked above the parent and moves it together.
    * {@code ordered = NSWindowAbove (1)}.
    */
@@ -105,7 +105,7 @@ final class MacOSHelper {
   }
 
   /**
-   * {@code -[NSWindow removeChildWindow:]} - detaches a window added via {@link #addChildWindow}.
+   * {@code -[NSWindow removeChildWindow:]} detaches a window added via {@link #addChildWindow}.
    */
   static void removeChildWindow(MemorySegment parentWindow, MemorySegment childWindow) {
     try (var a = Arena.ofConfined()) {
@@ -114,7 +114,7 @@ final class MacOSHelper {
   }
 
   /**
-   * {@code -[NSWindow setAlphaValue:]} - sets window opacity (0.0-1.0). Used to briefly dip and
+   * {@code -[NSWindow setAlphaValue:]} sets window opacity between 0.0 and 1.0. Used to dip and
    * restore a child window's opacity to "flash" it when the user clicks its disabled parent.
    */
   static void setAlphaValue(MemorySegment window, double alpha) {
@@ -131,7 +131,7 @@ final class MacOSHelper {
   }
 
   /**
-   * {@code -[NSWindow center]} - centers {@code window} on the screen it mostly occupies. Without
+   * {@code -[NSWindow center]} centers {@code window} on the screen it mostly occupies. Without
    * this, {@code initWithContentRect:} leaves the window at its raw origin, which is the
    * bottom-left corner of the main screen in Cocoa's coordinate system.
    */
@@ -168,8 +168,8 @@ final class MacOSHelper {
   }
 
   /**
-   * Installs a fill autoresizing mask on {@code view} (already created with an oversized frame -
-   * see {@link ObjC#MSG_SEND_INIT_WITH_FRAME}) so it keeps covering the parent as it resizes.
+   * Installs a fill autoresizing mask on {@code view}, which already carries an oversized frame
+   * from {@link ObjC#MSG_SEND_INIT_WITH_FRAME}, so it keeps covering the parent through a resize.
    * {@code NSViewWidthSizable (1<<1) | NSViewHeightSizable (1<<4) = 18}.
    */
   static void installFillAutoresizeMask(MemorySegment view) {

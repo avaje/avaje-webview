@@ -23,12 +23,13 @@ import io.avaje.webview.Webview;
 import io.avaje.webview.WebviewBase;
 
 /**
- * Windows WebView2 implementation
+ * Windows WebView2 implementation.
  *
- * <p>It creates Three Win32 windows (main, widget, message-only), one combined COM handler object
- * for env+ctrl callbacks (matching reference's single webview2_com_handler), and all init work
- * deferred to run inside the message pump via msgWndProc so that nested pumping for
- * AddScriptToExecuteOnDocumentCreated completions works.
+ * <p>Three Win32 windows are created (main, widget and message-only), and a single COM object
+ * serves as both the environment and the controller completion handler, the way the upstream
+ * webview2_com_handler does. Init work runs from msgWndProc rather than from the COM callbacks
+ * themselves, so the nested pump that waits on AddScriptToExecuteOnDocumentCreated has a clean
+ * stack to run on.
  */
 public final class Win32WebView extends WebviewBase {
 
@@ -122,9 +123,8 @@ public final class Win32WebView extends WebviewBase {
   private volatile ComWebView2 webView2;
 
   /**
-   * Set to {@code true} by the init chain ({@code doInitTasks} or an error path) to signal the init
-   * pump loop in {@link #embedWebView2} to exit. Volatile so the pump thread sees the write from
-   * the COM callback thread.
+   * Tells the init pump in {@link #embedWebView2} to stop. Set by {@code doInitTasks} or by any
+   * error path along the way, and volatile because the write comes from the COM callback thread.
    */
   private volatile boolean webviewReady;
 
@@ -132,7 +132,7 @@ public final class Win32WebView extends WebviewBase {
   private boolean debugMode;
 
   private final List<String> scriptIds = new ArrayList<>();
-  // FIFO queue pairing each nativeAddUserScript call to its completion.
+  // Pairs each nativeAddUserScript call with its completion, in submission order.
   private final ConcurrentLinkedQueue<Runnable> scriptDoneCallbacks = new ConcurrentLinkedQueue<>();
 
   private volatile int minW, minH, maxW, maxH;
@@ -141,29 +141,27 @@ public final class Win32WebView extends WebviewBase {
   private int currentDpi = Win32.DEFAULT_DPI;
 
   /**
-   * Cross-thread dispatch queue. Tasks added by any thread are drained on the UI thread inside
-   * {@code msgWndProc} when a {@link Win32#WM_APP} message is received (except during nested pump
-   * depth &gt; 0).
+   * Cross-thread dispatch queue. Anything added here is drained on the UI thread by {@code
+   * msgWndProc} on the next {@link Win32#WM_APP}, unless a nested pump is running.
    */
   private final ConcurrentLinkedQueue<Runnable> pending = new ConcurrentLinkedQueue<>();
 
   /**
-   * Tracks re-entrant pump nesting depth. When {@link #nativeAddUserScript} starts a nested pump to
-   * wait for {@code AddScriptToExecuteOnDocumentCreated} completion, this depth goes to 1. While
-   * depth > 0, {@code msgWndProc} must not drain {@link #pending} - only COM completion callbacks
-   * (delivered via IPC, not WM_APP) should be processed.
+   * Re-entrant pump nesting depth, raised to 1 while {@link #nativeAddUserScript} waits for an
+   * {@code AddScriptToExecuteOnDocumentCreated} completion. Above zero, {@code msgWndProc} leaves
+   * {@link #pending} alone, since such a pump only waits on COM completions, and those
+   * arrive over IPC rather than as WM_APP.
    */
   private int nestedPumpDepth = 0;
 
-  // Combined env+ctrl handler - one COM object for both, state-dispatched.
+  // One COM object for both the env and ctrl callbacks, dispatched on ctrlPhase.
   private MemorySegment combinedHandler;
 
   /**
-   * Dispatch flag for the combined env+ctrl COM handler. {@code false} during the
-   * environment-completed phase, {@code true} once {@code CreateCoreWebView2Controller} is called
-   * and the next callback will be the controller-completed phase.
+   * Which phase the combined COM handler is in: {@code false} while the environment completion is
+   * outstanding, {@code true} from the {@code CreateCoreWebView2Controller} call onwards.
    */
-  private volatile boolean ctrlPhase; // false=env callback, true=ctrl callback
+  private volatile boolean ctrlPhase;
 
   // WndProc upcall stubs
   private MemorySegment mainWndProcStub, msgWndProcStub, widgetWndProcStub;
@@ -431,9 +429,9 @@ public final class Win32WebView extends WebviewBase {
   }
 
   /**
-   * Creates upcall stubs for the three WndProc callbacks and stores them in {@link #arenaStubs}.
-   * Must be called before {@link #createWindows} because the stubs are passed as the {@code
-   * lpfnWndProc} field of each {@code WNDCLASSEXW}.
+   * Creates the upcall stubs for the three WndProc callbacks in {@link #arenaStubs}. Has to run
+   * before {@link #createWindows}, which puts them in the {@code lpfnWndProc} field of each {@code
+   * WNDCLASSEXW}.
    */
   private void buildWndProcStubs() {
     final var linker = Linker.nativeLinker();
@@ -482,13 +480,13 @@ public final class Win32WebView extends WebviewBase {
    * WndProc for the main (top-level) window. Handles:
    *
    * <ul>
-   *   <li>{@link Win32#WM_DESTROY} - decrements open-window count; posts {@code WM_QUIT} when the
+   *   <li>{@link Win32#WM_DESTROY}: decrements open-window count; posts {@code WM_QUIT} when the
    *       last window is destroyed.
-   *   <li>{@link Win32#WM_CLOSE} - delegates to {@link #close()}.
-   *   <li>{@link Win32#WM_SIZE} - resizes the widget child window to match the new client area.
-   *   <li>{@link Win32#WM_ACTIVATE} - moves WebView2 focus to the controller on activation.
-   *   <li>{@link Win32#WM_GETMINMAXINFO} - enforces min/max size constraints.
-   *   <li>{@link Win32#WM_SETTINGCHANGE} - re-applies dark mode when the system color scheme
+   *   <li>{@link Win32#WM_CLOSE}: delegates to {@link #close()}.
+   *   <li>{@link Win32#WM_SIZE}: resizes the widget child window to match the new client area.
+   *   <li>{@link Win32#WM_ACTIVATE}: moves WebView2 focus to the controller on activation.
+   *   <li>{@link Win32#WM_GETMINMAXINFO}: enforces min/max size constraints.
+   *   <li>{@link Win32#WM_SETTINGCHANGE}: re-applies dark mode when the system color scheme
    *       changes ({@code ImmersiveColorSet} area).
    * </ul>
    */
@@ -555,25 +553,25 @@ public final class Win32WebView extends WebviewBase {
       case Win32.WM_NCCALCSIZE -> {
         if (borderless && wParam == 1L) {
           if (outline) {
-            // Outline mode: remove only the title bar, keep the side and bottom borders.
+            // Outline mode drops the title bar but keeps the side and bottom borders.
             final var ncp = MemorySegment.ofAddress(lParam).reinterpret(48);
             final var windowTop = ncp.get(JAVA_INT, 4); // rgrc[0].top = window top
             try {
               final var _ = (long) Win32.DefWindowProcW.invokeExact(hWnd, msg, wParam, lParam);
             } catch (final Throwable ignored) {
             }
-            // Restore top so the client area extends to the window top (no title bar gap),
-            // while left/right/bottom remain as computed (keeps the visible border pixels).
+            // Put top back so the client area reaches the top of the window with no title bar
+            // gap, leaving the computed left/right/bottom to keep the visible border pixels.
             ncp.set(JAVA_INT, 4, windowTop);
           }
-          // Standard borderless: absorb the entire NC area into client.
-          // This hides the title bar and borders while preserving WS_OVERLAPPEDWINDOW
-          // behaviours (taskbar button, minimize/maximize/restore, snapping, DPI handling).
+          // Plain borderless swallows the whole non-client area, which loses the title bar and
+          // borders but keeps the WS_OVERLAPPEDWINDOW behaviour: taskbar button, minimize,
+          // maximize, restore, snapping and DPI handling.
           return 0L;
         }
       }
       case Win32.WM_DPICHANGED -> {
-        // Windows pre-computes the correctly scaled rect and passes it in lParam.
+        // lParam already holds the rect scaled for the new DPI.
         final var suggested = MemorySegment.ofAddress(lParam).reinterpret(16);
         final var left = suggested.get(JAVA_INT, 0);
         final var top = suggested.get(JAVA_INT, 4);
@@ -608,16 +606,15 @@ public final class Win32WebView extends WebviewBase {
    * WndProc for the message-only window ({@code HWND_MESSAGE} parent). Handles {@link Win32#WM_APP}
    * by draining the {@link #pending} queue on the UI thread.
    *
-   * <p>When {@link #nestedPumpDepth} is greater than zero (inside {@link #nativeAddUserScript}'s
-   * nested pump), pending tasks are intentionally skipped - the nested pump only needs COM
-   * completion callbacks delivered via WebView2's IPC, not general dispatch tasks.
+   * <p>Inside {@link #nativeAddUserScript}'s nested pump ({@link #nestedPumpDepth} above zero)
+   * pending tasks are deliberately left alone; that pump is only waiting on COM completions, which
+   * come over WebView2's IPC.
    */
   @SuppressWarnings("unused")
   public long msgWndProc(MemorySegment hWnd, int msg, long wParam, long lParam) {
     if (msg == Win32.WM_APP) {
-      // Don't drain pending while inside a nested pump: those pumps only need COM
-      // completion callbacks, not general task dispatch. Tasks remain in pending and
-      // are processed when the outer pump sees a WM_APP with nestedPumpDepth == 0.
+      // Tasks stay queued through a nested pump and get picked up once the outer pump sees a
+      // WM_APP at depth 0.
       if (nestedPumpDepth == 0) {
         Runnable r;
         while ((r = pending.poll()) != null) r.run();
@@ -652,14 +649,14 @@ public final class Win32WebView extends WebviewBase {
    * Creates the three Win32 windows required by the WebView2 embedding model:
    *
    * <ol>
-   *   <li>Main window - top-level, visible, owns the title bar and chrome.
-   *   <li>Widget window - {@code WS_CHILD} of main; hosts the WebView2 controller.
-   *   <li>Message-only window - {@code HWND_MESSAGE} parent; receives {@link Win32#WM_APP} for
+   *   <li>Main window: top-level, visible, owns the title bar and chrome.
+   *   <li>Widget window: {@code WS_CHILD} of main; hosts the WebView2 controller.
+   *   <li>Message-only window: {@code HWND_MESSAGE} parent; receives {@link Win32#WM_APP} for
    *       cross-thread dispatch.
    * </ol>
    *
-   * Each window gets its own registered class with a unique name (keyed on {@link
-   * System#identityHashCode} to allow multiple simultaneous windows).
+   * Each window registers its own class, named with {@link System#identityHashCode} so several
+   * windows can exist at once.
    */
   private void createWindows() {
     try (var a = Arena.ofConfined()) {
@@ -736,9 +733,9 @@ public final class Win32WebView extends WebviewBase {
   }
 
   /**
-   * Registers a Win32 window class with the given WndProc stub. Fills a raw 80-byte {@code
-   * WNDCLASSEXW} buffer directly rather than using a named layout, because this struct is
-   * write-once at class registration time.
+   * Registers a Win32 window class with the given WndProc stub. The 80-byte {@code WNDCLASSEXW}
+   * is filled by offset rather than through a named layout, since it is written once and never
+   * read back.
    */
   private static void registerClass(
       Arena a, MemorySegment hInstance, String cls, MemorySegment proc) {
@@ -802,10 +799,9 @@ public final class Win32WebView extends WebviewBase {
       throw new RuntimeException(t);
     }
 
-    // Pump until webviewReady - this exits AFTER the deferred init task in msgWndProc
-    // completes (settings + scripts + show). The pump is still running when addScriptOnDoc
-    // is called (via setupJsBridge -> nativeAddUserScript from within msgWndProc), so nested
-    // pumping for completion delivery works correctly.
+    // Runs until the deferred init task in msgWndProc has done settings, scripts and show. That
+    // task calls nativeAddUserScript, which needs a running pump underneath it to receive the
+    // AddScriptToExecuteOnDocumentCreated completions.
     pumpLoop(() -> webviewReady);
     if (webView2 == null) {
       throw new RuntimeException("WebView2 initialization failed");
@@ -832,9 +828,8 @@ public final class Win32WebView extends WebviewBase {
   }
 
   /**
-   * Dispatches to env-completed or ctrl-completed phase based on {@link #ctrlPhase}. Called by
-   * WebView2 for both CreateCoreWebView2EnvironmentCompletedHandler::Invoke and
-   * CreateCoreWebView2ControllerCompletedHandler::Invoke
+   * Called by WebView2 for both CreateCoreWebView2EnvironmentCompletedHandler::Invoke and
+   * CreateCoreWebView2ControllerCompletedHandler::Invoke, split apart on {@link #ctrlPhase}.
    */
   @SuppressWarnings("unused")
   public int onCombinedInvoke(MemorySegment self, int hr, MemorySegment ptr) {
@@ -849,9 +844,8 @@ public final class Win32WebView extends WebviewBase {
       webviewReady = true;
       return hr;
     }
-    // Pass combinedHandler as the ctrl handler - same object, mirrors reference's "this".
-    // When WebView2 calls QI on it for ICoreWebView2CreateCoreWebView2ControllerCompletedHandler,
-    // our QI returns self, which is this same handler.
+    // The same object serves as the ctrl handler: QI hands back self for whatever interface
+    // WebView2 asks about, including ICoreWebView2CreateCoreWebView2ControllerCompletedHandler.
     ctrlPhase = true;
     final var createCtrl = Win32.vtableFn(env, 3);
     try {
@@ -876,9 +870,8 @@ public final class Win32WebView extends WebviewBase {
       return hr;
     }
 
-    // AddRef the controller before this callback returns. Without this, WebView2 releases its
-    // reference on return, freeing the COM object and causing every
-    // subsequent call to fail with 0x8007139f.
+    // WebView2 drops its reference when this callback returns, which frees the controller and
+    // leaves every later call failing with 0x8007139f.
     nativeAddRef(ctrlPtr);
 
     controller = new ComController(ctrlPtr);
@@ -889,14 +882,13 @@ public final class Win32WebView extends WebviewBase {
     }
     webView2 = new ComWebView2(wv2Ptr);
 
-    // Register event handlers while still inside the controller callback (this works;
-    // these are local COM ops that don't require the IPC channel).
+    // Safe to do from inside the controller callback, these are local COM calls with no IPC.
     addWebMessageHandler();
     addPermissionHandler();
     addProcessFailedHandler();
 
-    // Defer the IPC-requiring work (settings, scripts, resize, show) to a pending task
-    // that will run inside msgWndProc in a clean stackframe outside any WebView2 callback.
+    // Settings, scripts, resize and show all need IPC, so they wait for msgWndProc to run them
+    // on a stack that isn't inside a WebView2 callback.
     pending.add(this::doInitTasks);
     try {
       final var _ = (int) Win32.PostMessageW.invokeExact(hwndMsg, Win32.WM_APP, 0L, 0L);
@@ -906,17 +898,14 @@ public final class Win32WebView extends WebviewBase {
     return 0;
   }
 
-  /**
-   * Runs after the controller callback returns. It's called from msgWndProc (inside
-   * DispatchMessageW, part of the init pump).
-   */
+  /** Runs from msgWndProc, under the init pump, once the controller callback has returned. */
   private void doInitTasks() {
     applySettings(debugMode);
     Win32.applyDarkMode(hwnd, isDarkTheme());
     if (transparent) {
       applyTransparency();
     }
-    setupJsBridge(POST_FN); // nativeAddUserScript uses nested pump; works from msgWndProc context
+    setupJsBridge(POST_FN); // nativeAddUserScript nests a pump, which is fine from msgWndProc
     resizeWidget(hwnd);
     try {
       final var _ = controller.putIsVisible(true);
@@ -926,8 +915,7 @@ public final class Win32WebView extends WebviewBase {
       throw new RuntimeException(t);
     }
     addFirstNavigationHandler();
-    // Signal the embedWebView2 pumpLoop to exit.
-    webviewReady = true;
+    webviewReady = true; // lets the embedWebView2 pump exit
   }
 
   private void addFirstNavigationHandler() {
@@ -990,7 +978,7 @@ public final class Win32WebView extends WebviewBase {
 
   @SuppressWarnings("unused")
   public int onWebMessage(MemorySegment self, MemorySegment sender, MemorySegment args) {
-    // ICoreWebView2WebMessageReceivedEventArgs::TryGetWebMessageAsString - vtable[5]
+    // vtable[5] is ICoreWebView2WebMessageReceivedEventArgs::TryGetWebMessageAsString
     try (var a = Arena.ofConfined()) {
       final var pStr = a.allocate(ADDRESS);
       final var tryGet =
@@ -1100,13 +1088,13 @@ public final class Win32WebView extends WebviewBase {
   public int onScriptAdded(MemorySegment self, int hr, MemorySegment idStr) {
     if (hr == 0 && idStr.address() != 0) {
       try {
-        // idStr is an [in] LPCWSTR owned by WebView2 for the duration of this callback.
+        // idStr is an [in] LPCWSTR WebView2 owns, valid only for this callback.
         final var id = idStr.reinterpret(1024).getString(0, StandardCharsets.UTF_16LE);
         scriptIds.add(id);
       } catch (final Exception ignored) {
       }
     }
-    // Unblock the nativeAddUserScript that submitted this script (FIFO order).
+    // Unblocks the nativeAddUserScript that submitted this script, in submission order.
     final var cb = scriptDoneCallbacks.poll();
     if (cb != null) {
       cb.run();
@@ -1213,12 +1201,11 @@ public final class Win32WebView extends WebviewBase {
   }
 
   /**
-   * Constructs a minimal COM object in {@link #arenaStubs} with a 4-slot vtable: {@code
-   * QueryInterface} (slot 0), {@code AddRef} (slot 1), {@code Release} (slot 2), and the provided
-   * {@code Invoke} stub (slot 3).
+   * Builds a minimal COM object in {@link #arenaStubs} over a 4-slot vtable: {@code
+   * QueryInterface}, {@code AddRef}, {@code Release}, then the given {@code Invoke} stub.
    *
-   * <p>This layout satisfies both {@code IUnknown} and the single-method handler interfaces ({@code
-   * ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler}, etc.) that WebView2 calls into.
+   * <p>That covers {@code IUnknown} plus any of the single-method handler interfaces WebView2 calls
+   * into, such as {@code ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler}.
    */
   private MemorySegment buildComObject(MemorySegment invokeStub) {
     final var vtable = arenaStubs.allocate(ADDRESS, 4);
@@ -1296,9 +1283,9 @@ public final class Win32WebView extends WebviewBase {
   }
 
   /**
-   * {@code IUnknown::QueryInterface} implementation. Returns the object itself for any interface
-   * query. WebView2 only calls QI with interfaces it expects this handler to implement. Lifetime is
-   * managed by {@link #arenaStubs} rather than COM reference counting.
+   * {@code IUnknown::QueryInterface}, returning the object itself whatever is asked for. WebView2
+   * only ever queries interfaces this handler is meant to implement. Lifetime comes from {@link
+   * #arenaStubs}, not from COM reference counting.
    */
   @SuppressWarnings("unused")
   private static int comQI(MemorySegment self, MemorySegment iid, MemorySegment ppv) {
@@ -1308,24 +1295,19 @@ public final class Win32WebView extends WebviewBase {
     return 0; // S_OK
   }
 
-  /**
-   * {@code IUnknown::AddRef} reference count not tracked; lifetime managed by {@link #arenaStubs}.
-   */
+  /** {@code IUnknown::AddRef}. No count kept, {@link #arenaStubs} owns the lifetime. */
   @SuppressWarnings("unused")
   private static long comAddRef(MemorySegment self) {
     return 1;
   }
 
-  /**
-   * {@code IUnknown::Release} reference count not tracked; lifetime managed by {@link #arenaStubs}.
-   */
+  /** {@code IUnknown::Release}. No count kept, {@link #arenaStubs} owns the lifetime. */
   @SuppressWarnings("unused")
   private static long comRelease(MemorySegment self) {
     return 1;
   }
 
-  /// Calls IUnknown::AddRef (vtable[1]) on a native COM object to increment
-  /// its reference count, keeping the object alive beyond the current callback.
+  /// Calls IUnknown::AddRef on a native COM object to keep it alive past the current callback.
   private static void nativeAddRef(MemorySegment comObj) {
     try {
       final var addRef =

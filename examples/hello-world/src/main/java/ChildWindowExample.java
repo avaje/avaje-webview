@@ -81,7 +81,7 @@ void main() {
   main.bind(
       "openChild",
       _ -> {
-        // Build and run the child on its own platform thread - each Webview.run() blocks
+        // Build and run the child on its own platform thread, since each Webview.run() blocks
         // its calling thread until that window closes, so the child needs its own thread
         // while the main window keeps pumping on this one.
         Thread.ofPlatform()

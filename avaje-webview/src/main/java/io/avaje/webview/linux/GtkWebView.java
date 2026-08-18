@@ -20,13 +20,13 @@ import io.avaje.webview.WebviewBase;
 /**
  * Linux implementation using GTK4 + WebKitGTK 6.0 via FFM.
  *
- * <p>GTK is single-threaded: every GTK/WebKit call must happen on the thread that called gtk_init
- * (tracked as gtkThread). Cross-thread calls queue a Runnable and schedule a GLib idle source via
- * g_idle_add_full, which fires drainDispatchQueue on the GTK thread during the next main-loop
+ * <p>GTK is single threaded, so every GTK/WebKit call belongs on the thread that called gtk_init
+ * (kept in gtkThread). Calls from elsewhere queue a Runnable and add a GLib idle source with
+ * g_idle_add_full; drainDispatchQueue then runs it on the GTK thread at the next main-loop
  * iteration.
  *
- * <p>If a second window is created from a non-GTK thread, it dispatches its init onto the GTK
- * thread and blocks on a CountDownLatch until done.
+ * <p>A second window created off the GTK thread sends its init the same way and waits on a
+ * CountDownLatch.
  */
 public final class GtkWebView extends WebviewBase {
 
@@ -35,15 +35,14 @@ public final class GtkWebView extends WebviewBase {
   private static final String POST_FN =
       "function(message){return window.webkit.messageHandlers.__webview__.postMessage(message);}";
 
-  // GTK is single-threaded; gtkThread is the thread that owns the GTK main loop.
+  // Owns the GTK main loop, and the only thread allowed to touch GTK.
   private static volatile Thread gtkThread;
   private static volatile boolean gtkInitDone = false;
   private static final AtomicInteger openWindows = new AtomicInteger(0);
-  // Arenas queued for closing by the GTK thread after each event-loop iteration. Windows on
-  // non-GTK threads can't close their own arena: windowClosedLatch fires inside drainDispatchQueue
-  // (the upcall stub), so the GTK thread is still executing inside that arena when the latch
-  // unblocks. The GTK thread drains this queue after gMainContextIteration returns, at which point
-  // every dispatch callback has completed and the stubs are no longer executing.
+  // Arenas the GTK thread closes after an event-loop iteration. A window on another thread can't
+  // close its own arena: windowClosedLatch is counted down from inside drainDispatchQueue, so the
+  // GTK thread is still running in that arena when the latch unblocks. Once gMainContextIteration
+  // returns, every dispatch callback is done and the stubs are idle.
   private static final ConcurrentLinkedQueue<Arena> pendingArenaClose =
       new ConcurrentLinkedQueue<>();
 
@@ -59,9 +58,8 @@ public final class GtkWebView extends WebviewBase {
   /**
    * Arena that owns the three Panama upcall stubs (dispatchStub, destroyStub, msgStub).
    *
-   * <p>{@code Arena.ofShared()} is used so the arena can be explicitly closed from the GTK thread
-   * after the event loop exits, at which point no more callbacks can arrive. Closing it frees the
-   * native stub trampolines immediately rather than waiting for GC.
+   * <p>Shared rather than confined so the GTK thread can close it once the event loop has exited
+   * and no further callbacks can arrive, freeing the stub trampolines without waiting on GC.
    */
   private final Arena callbackArena = Arena.ofShared();
 
@@ -97,7 +95,7 @@ public final class GtkWebView extends WebviewBase {
       buildUpcallStubs();
       initWindowAndWebView(debug);
     } else {
-      // dispatch our init onto existing GTK loop running.
+      // A GTK loop is already running elsewhere, so send init to it.
       applyDmabufWorkaround();
       buildUpcallStubs();
       final var initLatch = new CountDownLatch(1);
@@ -119,20 +117,18 @@ public final class GtkWebView extends WebviewBase {
   @Override
   public void run() {
     if (Thread.currentThread() == gtkThread) {
-      // Drive the GTK main loop manually so we can exit when all windows are gone.
-      // NULL context = the thread-default main context (GTK's global default context on the GTK
-      // thread). mayBlock=1 parks the OS thread in poll/select until at least one event source is
-      // ready. We loop manually rather than calling gtk_main() so
-      // we can exit as soon as openWindows reaches 0 without relying on gtk_main_quit().
+      // Hand-rolled main loop rather than gtk_main(), so the loop ends as soon as the last
+      // window closes without needing gtk_main_quit(). NULL context is the thread-default one,
+      // and mayBlock=1 parks in poll() until an event source is ready.
       while (openWindows.get() > 0) {
         GLib.gMainContextIteration(MemorySegment.NULL, 1);
-        // After gMainContextIteration returns, every dispatch callback has completed. Arenas
-        // queued by doGtkClose (which runs inside drainDispatchQueue) are now safe to close.
+        // Every dispatch callback has finished by now, so arenas queued by doGtkClose (which
+        // runs inside drainDispatchQueue) are safe to close.
         Arena a;
         while ((a = pendingArenaClose.poll()) != null) a.close();
       }
     } else {
-      // Non-GTK thread: just wait for the window to close.
+      // Off the GTK thread there is no loop to drive, so wait for the close.
       try {
         windowClosedLatch.await();
       } catch (final InterruptedException e) {
@@ -147,7 +143,7 @@ public final class GtkWebView extends WebviewBase {
       return;
     }
     closed = true;
-    // All GTK/GObject calls must happen on the GTK thread. Dispatch there regardless of caller.
+    // GTK and GObject calls belong on the GTK thread whoever the caller is.
     if (Thread.currentThread() == gtkThread) {
       doGtkClose();
     } else {
@@ -159,22 +155,19 @@ public final class GtkWebView extends WebviewBase {
   private void doGtkClose() {
     if (!windowDestroyed && window != null && window.address() != 0L) {
       Gtk4.gtkWidgetSetVisible(window, false);
-      // gtk_window_destroy emits "destroy" synchronously, so onWindowDestroy runs before
-      // this returns. windowClosedLatch is counted down and openWindows decremented there.
+      // "destroy" is emitted synchronously, so onWindowDestroy has already counted down
+      // windowClosedLatch and decremented openWindows by the time this returns.
       Gtk4.gtkWindowDestroy(window);
     }
     if (webView != null && webView.address() != 0L) {
-      // This g_object_unref balances the g_object_ref_sink from initWindowAndWebView.
-      // gtk_window_set_child() does NOT take ownership of the child widget. It holds its own
-      // ref through the GtkWidget parent-child hierarchy. After gtk_window_destroy, the parent
-      // releases the child's GtkWidget ref, but our explicit ref (from the sink) would keep the
-      // WebKitWebView alive indefinitely unless we release it here.
+      // Balances the g_object_ref_sink in initWindowAndWebView. gtk_window_set_child() doesn't
+      // take ownership, it holds its own ref through the widget hierarchy, which gtk_window_destroy
+      // releases. The ref from the sink is ours, and without this the WebKitWebView leaks.
       GLib.gObjectUnref(webView);
       webView = MemorySegment.NULL;
     }
-    // Queue the arena for the GTK thread to close after the current dispatch cycle completes.
-    // We cannot close it here: this method runs inside drainDispatchQueue (an upcall stub in the
-    // arena), so closing now would free memory the stub is still executing from.
+    // Closing the arena here would free memory the currently executing stub lives in, since this
+    // runs inside drainDispatchQueue. Leave it to the GTK thread after the dispatch cycle ends.
     pendingArenaClose.add(callbackArena);
     if (parentWindow.address() != 0L) {
       Gtk4.gtkWidgetSetSensitive(parentWindow, true);
@@ -211,7 +204,7 @@ public final class GtkWebView extends WebviewBase {
     if (closed) {
       return;
     }
-    // Must be resizable before changing default size, or the window ignores the request.
+    // A non-resizable window ignores the default size, so flip it back first.
     Gtk4.gtkWindowSetResizable(window, true);
     Gtk4.gtkWindowSetDefaultSize(window, width, height);
   }
@@ -226,13 +219,13 @@ public final class GtkWebView extends WebviewBase {
 
   @Override
   protected void setMaxSizeImpl(int width, int height) {
-    // GTK4 removed geometry hints
-    // No equivalent exists in GTK4 without writing a custom size-allocate handler.
+    // GTK4 dropped geometry hints, and there is no replacement short of a custom
+    // size-allocate handler.
   }
 
   @Override
   protected void disableMaximizeImpl() {
-    // GTK4 has no API to disable only the maximize button without subclassing or CSS hacks
+    // No GTK4 API disables only the maximize button, short of subclassing or CSS hacks.
   }
 
   @Override
@@ -259,10 +252,9 @@ public final class GtkWebView extends WebviewBase {
     if (closed || webView == null || webView.address() == 0L) {
       return;
     }
-    // webkit_web_view_evaluate_javascript asserts WEBKIT_IS_WEB_VIEW(web_view) and additionally
-    // requires a page to be loaded. Calling it before any content is loaded triggers a
-    // g_return_val_if_fail abort in the WebKit process. get_uri() returns NULL/address==0 when
-    // no page is loaded, so we use it as a cheap guard before every eval.
+    // webkit_web_view_evaluate_javascript needs a loaded page, and aborts the WebKit process
+    // through g_return_val_if_fail without one. get_uri() is NULL until then, so it makes a cheap
+    // guard.
     final var uri = WebKit6.webkitWebViewGetUri(webView);
     if (uri.address() == 0L) {
       return;
@@ -277,7 +269,7 @@ public final class GtkWebView extends WebviewBase {
     if (Thread.currentThread() == gtkThread) {
       r.run();
     } else {
-      // Send to GTK thread via GLib.
+      // Hand it to the GTK thread through GLib.
       pendingDispatches.add(r);
       GLib.gIdleAddFull(dispatchStub, MemorySegment.NULL, MemorySegment.NULL);
     }
@@ -295,9 +287,7 @@ public final class GtkWebView extends WebviewBase {
               WebKit6.WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
               WebKit6.WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START);
       WebKit6.webkitUcmAddScript(ucManager, script);
-      // webkit_user_content_manager_add_script() retains its own reference to the script.
-      // We unref our copy immediately so our handle doesn't artificially extend the script's
-      // lifetime past its useful point. The UCM holds the live reference.
+      // The UCM took its own reference, so drop ours and let it hold the script alive.
       WebKit6.webkitUserScriptUnref(script);
     }
   }
@@ -340,14 +330,13 @@ public final class GtkWebView extends WebviewBase {
 
   @Override
   public void setIcon(Path path) {
-    // GTK4 dropped file-based window icons; app icons are set via the .desktop file.
-    // gtk_window_set_icon_name() works with icon themes, not arbitrary paths.
+    // GTK4 dropped file-based window icons. gtk_window_set_icon_name() takes a theme name, not
+    // a path, and the app icon comes from the .desktop file.
   }
 
   /**
    * GSourceFunc callback that drains the pending dispatch queue on the GTK main thread. Returns
-   * G_SOURCE_REMOVE (0) so GLib removes the idle source after one invocation. We add a fresh idle
-   * source per dispatch(), so there's no need to repeat.
+   * G_SOURCE_REMOVE (0) since every dispatch() adds its own idle source.
    */
   @SuppressWarnings("unused")
   public int drainDispatchQueue(MemorySegment ignoredData) {
@@ -386,21 +375,18 @@ public final class GtkWebView extends WebviewBase {
   }
 
   /**
-   * NVIDIA GPUs under X11 (not Wayland) can crash WebKitGTK's DMABuf renderer. Set
-   * WEBKIT_DISABLE_DMABUF_RENDERER=1 via setenv() before GTK starts if we detect the combination,
-   * unless the user already set it themselves.
+   * NVIDIA GPUs on X11 can crash WebKitGTK's DMABuf renderer, so set
+   * WEBKIT_DISABLE_DMABUF_RENDERER=1 before GTK starts unless it is already set.
    *
-   * <p>We call POSIX {@code setenv()} rather than {@code System.setProperty()} or manipulating
-   * {@code ProcessBuilder.environment()} because WebKitGTK reads this variable at the C level via
-   * {@code getenv()} before any Java process environment is consulted.
+   * <p>Has to go through POSIX {@code setenv()}: WebKitGTK reads it with {@code getenv()} at the C
+   * level, where a Java-side property or process environment change never shows up.
    */
   private static void applyDmabufWorkaround() {
-    // Wayland is fine
-    // no NVIDIA driver
+    // Wayland is unaffected, and so is any machine without the NVIDIA driver loaded.
     if (System.getenv("WAYLAND_DISPLAY") != null
         || !new File("/sys/module/nvidia").isDirectory()
         || System.getenv("WEBKIT_DISABLE_DMABUF_RENDERER") != null) {
-      return; // already set
+      return;
     }
     try {
       final var libc = SymbolLookup.libraryLookup("libc.so.6", Arena.global());
@@ -438,7 +424,7 @@ public final class GtkWebView extends WebviewBase {
     final var linker = Linker.nativeLinker();
     final var lookup = MethodHandles.lookup();
     try {
-      // GSourceFunc: gboolean(*)(gpointer data) used by g_idle_add_full
+      // GSourceFunc for g_idle_add_full: gboolean(*)(gpointer)
       final var drainMh =
           lookup
               .findVirtual(
@@ -506,9 +492,8 @@ public final class GtkWebView extends WebviewBase {
     }
 
     webView = WebKit6.webkitWebViewNew();
-    // webkit_web_view_new() returns a GObject with a floating reference (refcount=1, floating flag
-    // set). g_object_ref_sink atomically claims ownership by clearing the floating flag, giving us
-    // a stable +1 reference that we control.
+    // webkit_web_view_new() hands back a floating reference. Sinking it clears the floating flag
+    // and leaves a normal +1 ref owned by us.
     GLib.gObjectRefSink(webView);
     if (transparent) {
       WebKit6.webkitWebViewSetBackgroundColor(webView, 0f, 0f, 0f, 0f);
@@ -516,14 +501,13 @@ public final class GtkWebView extends WebviewBase {
 
     ucManager = WebKit6.webkitWebViewGetUserContentManager(webView);
     try (var a = Arena.ofConfined()) {
-      // Registering the handler by name before any page load ensures window.webkit.messageHandlers
-      // .__webview__ exists from the very first page navigation. The third arg (world=NULL) means
-      // the default script world; non-null worlds isolate scripts from page content.
+      // Registered before any load so window.webkit.messageHandlers.__webview__ is there from
+      // the first navigation. world=NULL is the default script world, shared with page content.
       WebKit6.webkitUcmRegisterHandler(ucManager, a.allocateFrom(HANDLER_NAME));
     }
-    // GLib signal detail syntax: "signal-name::detail". The ::__webview__ detail causes GLib to
-    // fire this connection only when the handler name matches. WebKitGTK uses detail-based
-    // multiplexing to route messages from different named handlers through a single signal type.
+    // The "::detail" suffix limits this connection to a matching handler name, which is how
+    // WebKitGTK
+    // routes several named handlers through one signal.
     GLib.gSignalConnect(
         ucManager, "script-message-received::" + HANDLER_NAME, msgStub, MemorySegment.NULL);
 
