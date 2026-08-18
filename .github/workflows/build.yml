@@ -26,7 +26,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y xvfb libgtk-4-1 libwebkitgtk-6.0-4 libjavascriptcoregtk-6.0-1
+          sudo apt-get install -y xvfb libgtk-4-1 libwebkitgtk-6.0-4 libjavascriptcoregtk-6.0-1 libgl1-mesa-dri
 
       - name: Maven cache
         uses: actions/cache@v6
@@ -47,4 +47,12 @@ jobs:
         env:
           WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: 1
           WEBKIT_DISABLE_DMABUF_RENDERER: 1
+          WEBKIT_DISABLE_COMPOSITING_MODE: 1
+          # Xvfb has no DRI3, so GTK4's GL renderer aborts on the runner image.
+          # Force the cairo renderer and software GL, and skip the a11y bus.
+          GSK_RENDERER: cairo
+          GDK_BACKEND: x11
+          LIBGL_ALWAYS_SOFTWARE: 1
+          GTK_A11Y: none
+          NO_AT_BRIDGE: 1
         run: xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" mvn clean verify
