@@ -403,6 +403,12 @@ public final class Win32WebView extends WebviewBase {
   }
 
   @Override
+  public Webview unmaximizeWindow() {
+    dispatchImpl(() -> Win32.showWindow(hwnd, Win32.SW_RESTORE));
+    return this;
+  }
+
+  @Override
   public Webview fullscreen() {
     dispatchImpl(() -> Win32.fullscreen(hwnd));
     return this;

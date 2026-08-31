@@ -52,6 +52,7 @@ final class Win32 {
   static final int CW_USEDEFAULT = 0x80000000;
   static final int SW_HIDE = 0;
   static final int SW_SHOW = 5;
+  static final int SW_RESTORE = 9;
   static final int SW_MAXIMIZE = 3;
   static final int SW_MINIMIZE = 6;
   static final int WM_DESTROY = 0x0002;

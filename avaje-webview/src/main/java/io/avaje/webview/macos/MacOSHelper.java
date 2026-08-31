@@ -63,6 +63,16 @@ final class MacOSHelper {
     }
   }
 
+  static void unmaximize(MemorySegment nsWindow) {
+    try (var a = Arena.ofConfined()) {
+      final var isZoomed =
+          ((MemorySegment) send0(nsWindow, sel(a, "isZoomed"))).address() != 0;
+      if (isZoomed) {
+        sendVoid1(nsWindow, sel(a, "zoom:"), MemorySegment.NULL);
+      }
+    }
+  }
+
   static void minimize(MemorySegment nsWindow) {
     try (var a = Arena.ofConfined()) {
       sendVoid1(nsWindow, sel(a, "miniaturize:"), MemorySegment.NULL);

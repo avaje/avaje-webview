@@ -26,6 +26,11 @@ final class LinuxHelper {
     Gtk4.gtkWindowMaximize(webview.nativeWindowPointer());
   }
 
+  /** Requests the window manager to restore the window from a maximized state. */
+  static void unmaximizeWindow(Webview webview) {
+    Gtk4.gtkWindowUnmaximize(webview.nativeWindowPointer());
+  }
+
   /** Begins a native window-move grab, as if the user had grabbed the title bar. */
   static void startWindowDrag(Webview webview) {
     Gtk4.gtkWindowBeginMoveDrag(webview.nativeWindowPointer());

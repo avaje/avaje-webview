@@ -192,6 +192,13 @@ public interface Webview extends Closeable, Runnable {
   Webview maximizeWindow();
 
   /**
+   * Restores a maximized webview window back to its prior size and position.
+   *
+   * @return this Webview instance for chaining
+   */
+  Webview unmaximizeWindow();
+
+  /**
    * Switches the webview window to fullscreen mode.
    *
    * @return this Webview instance for chaining
