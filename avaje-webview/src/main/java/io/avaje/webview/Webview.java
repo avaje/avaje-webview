@@ -199,6 +199,13 @@ public interface Webview extends Closeable, Runnable {
   Webview unmaximizeWindow();
 
   /**
+   * Reports whether the webview window is currently maximized.
+   *
+   * @return {@code true} if the window is maximized
+   */
+  boolean isMaximized();
+
+  /**
    * Switches the webview window to fullscreen mode.
    *
    * @return this Webview instance for chaining

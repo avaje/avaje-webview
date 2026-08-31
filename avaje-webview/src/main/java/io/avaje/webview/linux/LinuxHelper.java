@@ -31,6 +31,11 @@ final class LinuxHelper {
     Gtk4.gtkWindowUnmaximize(webview.nativeWindowPointer());
   }
 
+  /** Returns {@code true} if the window is currently maximized. */
+  static boolean isMaximized(Webview webview) {
+    return Gtk4.gtkWindowIsMaximized(webview.nativeWindowPointer());
+  }
+
   /** Begins a native window-move grab, as if the user had grabbed the title bar. */
   static void startWindowDrag(Webview webview) {
     Gtk4.gtkWindowBeginMoveDrag(webview.nativeWindowPointer());

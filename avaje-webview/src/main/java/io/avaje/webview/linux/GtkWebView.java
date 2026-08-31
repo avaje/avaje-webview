@@ -318,6 +318,11 @@ public final class GtkWebView extends WebviewBase {
   }
 
   @Override
+  public boolean isMaximized() {
+    return LinuxHelper.isMaximized(this);
+  }
+
+  @Override
   public Webview fullscreen() {
     dispatchImpl(() -> LinuxHelper.fullscreen(this));
     return this;

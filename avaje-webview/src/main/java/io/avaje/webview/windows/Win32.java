@@ -327,6 +327,14 @@ final class Win32 {
       downcall(USER32, "GetWindowLongW", FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT));
 
   /**
+   * {@code IsZoomed(hWnd) -> BOOL}
+   *
+   * <p>Reports whether a window is currently maximized.
+   */
+  static final MethodHandle IsZoomed =
+      downcall(USER32, "IsZoomed", FunctionDescriptor.of(JAVA_INT, ADDRESS));
+
+  /**
    * {@code SetWindowLongW(hWnd, nIndex, dwNewLong) -> LONG}
    *
    * <p>Writes a 32-bit window attribute.
@@ -540,6 +548,15 @@ final class Win32 {
   static void showWindow(MemorySegment hwnd, int cmd) {
     try {
       final var _ = (int) ShowWindow.invokeExact(hwnd, cmd);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /** Returns {@code true} if {@code hwnd} is currently maximized. */
+  static boolean isZoomed(MemorySegment hwnd) {
+    try {
+      return (int) IsZoomed.invokeExact(hwnd) != 0;
     } catch (final Throwable t) {
       throw new RuntimeException(t);
     }

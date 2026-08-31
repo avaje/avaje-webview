@@ -409,6 +409,11 @@ public final class Win32WebView extends WebviewBase {
   }
 
   @Override
+  public boolean isMaximized() {
+    return Win32.isZoomed(hwnd);
+  }
+
+  @Override
   public Webview fullscreen() {
     dispatchImpl(() -> Win32.fullscreen(hwnd));
     return this;
