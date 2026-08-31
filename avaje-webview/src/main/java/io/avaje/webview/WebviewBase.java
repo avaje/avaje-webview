@@ -261,6 +261,12 @@ public abstract sealed class WebviewBase implements Webview
   public abstract Webview maximizeWindow();
 
   @Override
+  public abstract Webview unmaximizeWindow();
+
+  @Override
+  public abstract boolean isMaximized();
+
+  @Override
   public abstract Webview fullscreen();
 
   @Override

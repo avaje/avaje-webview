@@ -144,6 +144,22 @@ final class Gtk4 {
       downcall("gtk_window_maximize", FunctionDescriptor.ofVoid(ADDRESS));
 
   /**
+   * {@code gtk_window_unmaximize(GtkWindow* window) -> void}
+   *
+   * <p>Asks the window manager to restore the window from a maximized state.
+   */
+  private static final MethodHandle GTK_WINDOW_UNMAXIMIZE =
+      downcall("gtk_window_unmaximize", FunctionDescriptor.ofVoid(ADDRESS));
+
+  /**
+   * {@code gtk_window_is_maximized(GtkWindow* window) -> gboolean}
+   *
+   * <p>Reports whether the window is currently maximized.
+   */
+  private static final MethodHandle GTK_WINDOW_IS_MAXIMIZED =
+      downcall("gtk_window_is_maximized", FunctionDescriptor.of(JAVA_INT, ADDRESS));
+
+  /**
    * {@code gtk_window_fullscreen(GtkWindow* window) -> void}
    *
    * <p>Asks the window manager to switch the window to fullscreen mode.
@@ -500,6 +516,32 @@ final class Gtk4 {
   static void gtkWindowMaximize(MemorySegment window) {
     try {
       GTK_WINDOW_MAXIMIZE.invokeExact(window);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * Asks the window manager to restore the window from a maximized state.
+   *
+   * @param window a {@code GtkWindow*}
+   */
+  static void gtkWindowUnmaximize(MemorySegment window) {
+    try {
+      GTK_WINDOW_UNMAXIMIZE.invokeExact(window);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * Returns {@code true} if the window is currently maximized.
+   *
+   * @param window a {@code GtkWindow*}
+   */
+  static boolean gtkWindowIsMaximized(MemorySegment window) {
+    try {
+      return (int) GTK_WINDOW_IS_MAXIMIZED.invokeExact(window) != 0;
     } catch (final Throwable t) {
       throw new RuntimeException(t);
     }

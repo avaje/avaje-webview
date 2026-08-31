@@ -496,6 +496,17 @@ public final class CocoaWebView extends WebviewBase {
   }
 
   @Override
+  public Webview unmaximizeWindow() {
+    dispatchImpl(() -> MacOSHelper.unmaximize(nsWindow));
+    return this;
+  }
+
+  @Override
+  public boolean isMaximized() {
+    return MacOSHelper.isMaximized(nsWindow);
+  }
+
+  @Override
   public Webview fullscreen() {
     dispatchImpl(() -> MacOSHelper.fullscreen(nsWindow));
     return this;
