@@ -79,6 +79,63 @@ public abstract sealed class WebviewBase implements Webview
       })();
       """;
 
+  /** Reserved message method that carries an {@link #evalResult} result back to Java. */
+  private static final String EVAL_RESULT = "__avaje_wv_eval__";
+
+  /**
+   * Runs one {@link #evalResult} expression. {@code %1$s} is the quoted request id, {@code %2$s} the
+   * expression, placed on its own lines so a trailing line comment can't swallow the closing paren.
+   * Marks {@code lastEval} first so {@link #EVALUATE_PARSE_CHECK_JS} can tell it ran.
+   */
+  private static final String EVALUATE_JS =
+      """
+      (function() {
+        var webview = window.__webview__;
+        var id = %1$s;
+        webview.lastEval = id;
+        function reply(status, value) {
+          var message;
+          try {
+            message = JSON.stringify({
+              id: id,
+              method: "__avaje_wv_eval__",
+              params: [status, value === undefined ? null : value]
+            });
+          } catch (e) {
+            message = JSON.stringify({ id: id, method: "__avaje_wv_eval__", params: [1, String(e)] });
+          }
+          webview.post(message);
+        }
+        (async () => (
+      %2$s
+        ))().then(
+          function(value) {
+            reply(0, value);
+          },
+          function(error) {
+            reply(1, error instanceof Error ? error.name + ": " + error.message : String(error));
+          });
+      })();
+      """;
+
+  /**
+   * Evaluated straight after {@link #EVALUATE_JS}. A syntax error stops that script before it marks
+   * {@code lastEval}, and nothing else would ever settle the future, so report the failure here.
+   */
+  private static final String EVALUATE_PARSE_CHECK_JS =
+      """
+      (function() {
+        var webview = window.__webview__;
+        if (webview && webview.lastEval !== %1$s) {
+          webview.post(JSON.stringify({
+            id: %1$s,
+            method: "__avaje_wv_eval__",
+            params: [1, "SyntaxError: expression could not be parsed"]
+          }));
+        }
+      })();
+      """;
+
   private final boolean redirectConsole;
   protected final boolean borderless;
   protected final boolean outline;
@@ -105,6 +162,23 @@ public abstract sealed class WebviewBase implements Webview
   private final List<String> userScripts = new ArrayList<>();
   private int bindScriptIdx = -1;
   private final Map<String, BindCallback> bindings = new ConcurrentHashMap<>();
+  private final Map<String, CompletableFuture<String>> evaluations = new ConcurrentHashMap<>();
+
+  /**
+   * Whether the window should be on screen. Each platform reads it when the first page finishes
+   * loading, so {@link #hideWindow()} called before then keeps the window from appearing at all.
+   */
+  protected volatile boolean visibleRequested = true;
+
+  private final List<BooleanSupplier> closeRequestedListeners = new CopyOnWriteArrayList<>();
+  private final List<Consumer<WindowSize>> resizeListeners = new CopyOnWriteArrayList<>();
+  private final List<Consumer<Boolean>> focusListeners = new CopyOnWriteArrayList<>();
+  private final List<Consumer<String>> pageLoadedListeners = new CopyOnWriteArrayList<>();
+
+  // Last values handed to listeners. Toolkits repeat events, and listeners only want changes.
+  private WindowSize lastSize;
+  private Boolean lastFocused;
+  private final AtomicLong evaluationIds = new AtomicLong();
 
   /**
    * Injects the JS bridge init script and sets up console redirection. Call once the user-content
@@ -145,6 +219,10 @@ public abstract sealed class WebviewBase implements Webview
     final var id = jsonGet(json, "id");
     final var method = jsonGet(json, "method");
     final var params = jsonGet(json, "params");
+    if (EVAL_RESULT.equals(method)) {
+      completeEvaluation(id, params);
+      return;
+    }
     final var cb = bindings.get(method);
     if (cb != null) {
       dispatchImpl(() -> cb.onCall(id, params));
@@ -215,6 +293,44 @@ public abstract sealed class WebviewBase implements Webview
   }
 
   @Override
+  public CompletableFuture<String> evalResult(@NonNull String expression) {
+    final var id = "eval-" + evaluationIds.incrementAndGet();
+    final var future = new UiThreadFuture<String>(this::onUIThread);
+    evaluations.put(id, future);
+    final var quotedId = jsonEscape(id);
+    dispatchImpl(
+        () -> {
+          evalImpl(EVALUATE_JS.formatted(quotedId, expression));
+          evalImpl(EVALUATE_PARSE_CHECK_JS.formatted(quotedId));
+        });
+    return future;
+  }
+
+  /**
+   * Settles the future for an {@link #evalResult} call.
+   *
+   * @param params the raw JSON array {@code [status, value]}, where the value is the result on
+   *     status 0 and an error message string otherwise
+   */
+  private void completeEvaluation(String id, String params) {
+    final var future = evaluations.remove(id);
+    if (future == null) {
+      return;
+    }
+    final var comma = params.indexOf(',');
+    if (comma < 0) {
+      future.completeExceptionally(new JavaScriptException("Malformed evalResult reply: " + params));
+      return;
+    }
+    final var value = params.substring(comma + 1, params.length() - 1);
+    if (params.charAt(1) == '0') {
+      future.complete(value);
+    } else {
+      future.completeExceptionally(new JavaScriptException(WebviewUtil.jsonUnescape(value)));
+    }
+  }
+
+  @Override
   public void bind(@NonNull String name, @NonNull WebviewBinding handler) {
     bindings.put(name, adapt(handler));
     dispatchImpl(
@@ -271,6 +387,163 @@ public abstract sealed class WebviewBase implements Webview
 
   @Override
   public abstract Webview minimizeWindow();
+
+  @Override
+  public Webview showWindow() {
+    visibleRequested = true;
+    dispatchImpl(this::showWindowImpl);
+    return this;
+  }
+
+  @Override
+  public Webview hideWindow() {
+    visibleRequested = false;
+    dispatchImpl(this::hideWindowImpl);
+    return this;
+  }
+
+  @Override
+  public Webview restoreWindow() {
+    dispatchImpl(this::restoreWindowImpl);
+    return this;
+  }
+
+  @Override
+  public boolean isMinimized() {
+    return callOnUIThread(this::isMinimizedImpl);
+  }
+
+  @Override
+  public Webview exitFullscreen() {
+    dispatchImpl(this::exitFullscreenImpl);
+    return this;
+  }
+
+  @Override
+  public boolean isFullscreen() {
+    return callOnUIThread(this::isFullscreenImpl);
+  }
+
+  @Override
+  public Webview focusWindow() {
+    dispatchImpl(this::focusWindowImpl);
+    return this;
+  }
+
+  @Override
+  public WindowSize getSize() {
+    return callOnUIThread(this::getSizeImpl);
+  }
+
+  @Override
+  public void onCloseRequested(@NonNull BooleanSupplier allowClose) {
+    closeRequestedListeners.add(allowClose);
+  }
+
+  @Override
+  public void onResize(@NonNull Consumer<WindowSize> listener) {
+    resizeListeners.add(listener);
+  }
+
+  @Override
+  public void onFocusChanged(@NonNull Consumer<Boolean> listener) {
+    focusListeners.add(listener);
+  }
+
+  @Override
+  public void onPageLoaded(@NonNull Consumer<String> listener) {
+    pageLoadedListeners.add(listener);
+  }
+
+  /**
+   * Asks every {@link #onCloseRequested} check whether a user-initiated close may go ahead. Called
+   * from native callbacks, so a throwing check is logged and counts as allowing the close rather
+   * than escaping into native code.
+   *
+   * @return {@code false} if any check vetoed the close
+   */
+  protected final boolean fireCloseRequested() {
+    for (final var check : closeRequestedListeners) {
+      try {
+        if (!check.getAsBoolean()) {
+          return false;
+        }
+      } catch (final Throwable t) {
+        log.log(ERROR, "onCloseRequested check failed", t);
+      }
+    }
+    return true;
+  }
+
+  /** Reports the content size to {@link #onResize} listeners when it has changed. */
+  protected final void fireResized(int width, int height) {
+    final var size = new WindowSize(width, height);
+    if (size.equals(lastSize)) {
+      return;
+    }
+    lastSize = size;
+    deliver(resizeListeners, size);
+  }
+
+  /** Reports focus to {@link #onFocusChanged} listeners when it has changed. */
+  protected final void fireFocusChanged(boolean focused) {
+    if (lastFocused != null && lastFocused == focused) {
+      return;
+    }
+    lastFocused = focused;
+    deliver(focusListeners, focused);
+  }
+
+  /** Reports a finished page load to {@link #onPageLoaded} listeners. */
+  protected final void firePageLoaded(String url) {
+    deliver(pageLoadedListeners, url);
+  }
+
+  /** Hands {@code value} to each listener, logging failures so none reach native code. */
+  private static <T> void deliver(List<Consumer<T>> listeners, T value) {
+    for (final var listener : listeners) {
+      try {
+        listener.accept(value);
+      } catch (final Throwable t) {
+        log.log(ERROR, "Window event listener failed", t);
+      }
+    }
+  }
+
+  /**
+   * Runs {@code task} on the UI thread and returns its result, for getters reading native state the
+   * toolkit only allows on that thread. Runs inline when already there.
+   *
+   * @throws IllegalStateException when the UI thread doesn't respond, for example because the
+   *     window has closed or {@link #run()} hasn't started yet
+   */
+  protected final <T> T callOnUIThread(Supplier<T> task) {
+    if (onUIThread()) {
+      return task.get();
+    }
+    final var result = new CompletableFuture<T>();
+    dispatchImpl(
+        () -> {
+          try {
+            result.complete(task.get());
+          } catch (final Throwable t) {
+            result.completeExceptionally(t);
+          }
+        });
+    try {
+      return result.get(5, TimeUnit.SECONDS);
+    } catch (final TimeoutException e) {
+      throw new IllegalStateException(
+          "The webview UI thread did not respond; is the window closed or run() not started?", e);
+    } catch (final InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new IllegalStateException(e);
+    } catch (final ExecutionException e) {
+      throw e.getCause() instanceof final RuntimeException re
+          ? re
+          : new IllegalStateException(e.getCause());
+    }
+  }
 
   @Override
   public void startWindowDrag() {
@@ -331,7 +604,25 @@ public abstract sealed class WebviewBase implements Webview
 
   protected abstract void startWindowDragImpl();
 
+  protected abstract void showWindowImpl();
+
+  protected abstract void hideWindowImpl();
+
+  protected abstract void restoreWindowImpl();
+
+  protected abstract boolean isMinimizedImpl();
+
+  protected abstract void exitFullscreenImpl();
+
+  protected abstract boolean isFullscreenImpl();
+
+  protected abstract void focusWindowImpl();
+
+  protected abstract WindowSize getSizeImpl();
+
   protected abstract void evalImpl(String js);
+
+  protected abstract boolean onUIThread();
 
   /** Schedule {@code r} to run on the UI thread. */
   protected abstract void dispatchImpl(Runnable r);

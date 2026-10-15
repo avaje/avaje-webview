@@ -125,9 +125,42 @@ public interface Webview extends Closeable, Runnable {
   /**
    * Evaluates the provided JavaScript string immediately in the current context.
    *
+   * <p>Nothing comes back from the script. Use {@link #evalResult} when you need a value.
+   *
    * @param script the JavaScript source code to execute
    */
   void eval(@NonNull String script);
+
+  /**
+   * Evaluates a JavaScript expression in the current page and returns its value.
+   *
+   * <p>You can use {@code await} in the expression, and if it returns a {@code Promise} the
+   * future waits for it. The value comes back as JSON from {@code JSON.stringify}, and {@code
+   * undefined} comes back as {@code "null"}.
+   *
+   * <pre>{@code
+   * webview.evalResult("document.title")
+   *     .thenAccept(title -> System.out.println(title)); // "My App" with its JSON quotes
+   * webview.evalResult("await fetch('/status').then(r => r.json())")
+   *     .thenAccept(json -> System.out.println(json));
+   * }</pre>
+   *
+   * <p>The future completes on the UI thread, so it's fine to block on it from a background
+   * thread. Blocking on the UI thread itself would freeze the window forever, so there {@code
+   * get()} and {@code join()} throw {@link IllegalStateException} while the result is pending.
+   * That includes code inside a {@link WebviewBinding}, inside a {@code then*} callback, and
+   * before {@link #run()}. Use {@code thenAccept} and friends there instead.
+   *
+   * <p>The future fails with a {@link JavaScriptException} if the expression has a syntax error,
+   * throws, rejects, or returns something {@code JSON.stringify} can't handle. If the page
+   * navigates away before the expression finishes, the future never completes, so add {@code
+   * orTimeout} when that might happen.
+   *
+   * @param expression a single JavaScript expression, such as {@code "document.title"}. To run
+   *     several statements, wrap them in an IIFE.
+   * @return a future holding the result as JSON
+   */
+  CompletableFuture<String> evalResult(@NonNull String expression);
 
   /**
    * Binds a Java callback to a global JavaScript function.
@@ -248,6 +281,109 @@ public interface Webview extends Closeable, Runnable {
    * @param uri location of the icon file
    */
   void setIcon(URI uri);
+
+  /**
+   * Shows the window. If the first page hasn't loaded yet, the window waits for it so the user
+   * never sees a blank window.
+   *
+   * @return this Webview instance for chaining
+   * @see Builder#visible(boolean)
+   */
+  Webview showWindow();
+
+  /**
+   * Hides the window without closing it. The page keeps running, and {@link #showWindow()} brings
+   * the window back.
+   *
+   * @return this Webview instance for chaining
+   */
+  Webview hideWindow();
+
+  /**
+   * Restores the window after it was minimized.
+   *
+   * @return this Webview instance for chaining
+   */
+  Webview restoreWindow();
+
+  /**
+   * Returns whether the window is minimized.
+   *
+   * @return {@code true} if the window is minimized
+   * @implNote On Linux this may always return {@code false}, because many Wayland compositors
+   *     don't tell applications when they are minimized.
+   */
+  boolean isMinimized();
+
+  /**
+   * Leaves fullscreen and puts the window back how it was before.
+   *
+   * @return this Webview instance for chaining
+   */
+  Webview exitFullscreen();
+
+  /**
+   * Returns whether the window is fullscreen.
+   *
+   * @return {@code true} if the window is fullscreen
+   */
+  boolean isFullscreen();
+
+  /**
+   * Brings the window to the front and gives it keyboard focus, restoring it first if minimized.
+   *
+   * @return this Webview instance for chaining
+   * @implNote Operating systems don't let applications steal focus freely. If another
+   *     application is in use, the window may just flash in the taskbar or bounce in the dock.
+   */
+  Webview focusWindow();
+
+  /**
+   * Returns the size of the window's content area, the same size {@link #setSize(int, int)}
+   * sets.
+   *
+   * @return the content size
+   */
+  WindowSize getSize();
+
+  /**
+   * Adds a check that runs when the user tries to close the window, whether with the close
+   * button, a keyboard shortcut, or the taskbar or dock. Return {@code false} to keep the window
+   * open.
+   *
+   * <p>This is how you'd ask about unsaved changes: return {@code false}, ask in the page, then
+   * call {@link #close()} if the user agrees. Calling {@code close()} yourself never runs this
+   * check. The check runs on the UI thread, so it needs to return quickly and can't wait on
+   * {@link #evalResult(String)}.
+   *
+   * @param allowClose returns {@code true} to let the window close
+   */
+  void onCloseRequested(@NonNull BooleanSupplier allowClose);
+
+  /**
+   * Adds a listener that's called when the content size changes, whether the user resized the
+   * window, it was maximized, or you called {@link #setSize(int, int)}. Runs on the UI thread.
+   *
+   * @param listener receives the new content size
+   */
+  void onResize(@NonNull Consumer<WindowSize> listener);
+
+  /**
+   * Adds a listener that's called when the window gains or loses keyboard focus. Runs on the UI
+   * thread.
+   *
+   * @param listener receives {@code true} on focus and {@code false} on blur
+   */
+  void onFocusChanged(@NonNull Consumer<Boolean> listener);
+
+  /**
+   * Adds a listener that's called every time a page finishes loading, whether from {@link
+   * #navigate(String)}, {@link #setHTML(String)}, or the user following a link. Runs on the UI
+   * thread.
+   *
+   * @param listener receives the URL of the loaded page
+   */
+  void onPageLoaded(@NonNull Consumer<String> listener);
 
   /** Interface for configuring and instantiating {@link Webview} instances. */
   public interface Builder {
@@ -439,6 +575,16 @@ public interface Webview extends Closeable, Runnable {
      * @return this builder
      */
     Builder transparent(boolean transparent);
+
+    /**
+     * Whether the window appears as soon as its first page loads. Defaults to {@code true}. Pass
+     * {@code false} to keep it hidden until you call {@link Webview#showWindow()}, for example so
+     * you can restore a saved size first.
+     *
+     * @param visible {@code false} to start hidden
+     * @return this builder
+     */
+    Builder visible(boolean visible);
 
     /**
      * Builds the Webview.

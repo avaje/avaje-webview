@@ -58,6 +58,8 @@ final class Win32 {
   static final int WM_DESTROY = 0x0002;
   static final int WM_CLOSE = 0x0010;
   static final int WM_SIZE = 0x0005;
+  /** {@code WM_SIZE} {@code wParam} when the window was minimized; the client size is then 0x0. */
+  static final int SIZE_MINIMIZED = 1;
   static final int WM_QUIT = 0x0012;
   static final int WM_ACTIVATE = 0x0006;
   static final int WM_GETMINMAXINFO = 0x0024;
@@ -335,6 +337,14 @@ final class Win32 {
       downcall(USER32, "IsZoomed", FunctionDescriptor.of(JAVA_INT, ADDRESS));
 
   /**
+   * {@code IsIconic(hWnd) -> BOOL}
+   *
+   * <p>Reports whether a window is currently minimized.
+   */
+  static final MethodHandle IsIconic =
+      downcall(USER32, "IsIconic", FunctionDescriptor.of(JAVA_INT, ADDRESS));
+
+  /**
    * {@code SetWindowLongW(hWnd, nIndex, dwNewLong) -> LONG}
    *
    * <p>Writes a 32-bit window attribute.
@@ -557,6 +567,15 @@ final class Win32 {
   static boolean isZoomed(MemorySegment hwnd) {
     try {
       return (int) IsZoomed.invokeExact(hwnd) != 0;
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /** Returns {@code true} if {@code hwnd} is currently minimized. */
+  static boolean isIconic(MemorySegment hwnd) {
+    try {
+      return (int) IsIconic.invokeExact(hwnd) != 0;
     } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
