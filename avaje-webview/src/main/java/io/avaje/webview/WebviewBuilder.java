@@ -25,6 +25,7 @@ final class WebviewBuilder implements Builder {
   private boolean maximizable = true;
   private boolean moveParentWithChild;
   private boolean transparent;
+  private boolean showOnFirstLoad = true;
   private int minWidth, minHeight, maxWidth, maxHeight = -1;
 
   WebviewBuilder() {}
@@ -147,8 +148,18 @@ final class WebviewBuilder implements Builder {
   }
 
   @Override
+  public WebviewBuilder showOnFirstLoad(boolean showOnFirstLoad) {
+    this.showOnFirstLoad = showOnFirstLoad;
+    return this;
+  }
+
+  @Override
   public Webview build() {
     final WebviewBase view = createForPlatform();
+    if (!showOnFirstLoad) {
+      // Recorded before the first load is queued, so that load never reveals the window.
+      view.hideWindow();
+    }
     if (title != null) {
       view.setTitle(title);
     }

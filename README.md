@@ -174,6 +174,27 @@ webview.setIcon(getClass().getResource("/icon.ico").toURI());
 > **Note:** GTK4 dropped support for arbitrary file-based window icons. On Linux, the app icon
 > is set via the `.desktop` file and icon theme. `setIcon` is a no-op on Linux.
 
+### Window Events
+
+```java
+webview.onResize(size -> System.out.println("now " + size.width() + "x" + size.height()));
+webview.onFocusChanged(focused -> System.out.println(focused ? "focused" : "unfocused"));
+webview.onPageLoaded(url -> System.out.println("loaded " + url));
+```
+
+`onCloseRequested` lets you stop the user from closing the window, for example to ask about unsaved changes first. Calling `close()` yourself always
+works, so you can close for real once they confirm:
+
+```java
+webview.onCloseRequested(() -> {
+  if (!hasUnsavedChanges()) {
+    return true;
+  }
+  webview.eval("askToClose()"); // the page asks, then calls a binding that runs webview.close()
+  return false;
+});
+```
+
 ## Java-JavaScript Bridge
 
 ### Executing JavaScript from Java
@@ -188,6 +209,25 @@ webview.eval("document.getElementById('title').textContent = 'Updated!';");
 
 webview.run();
 ```
+
+### Reading values back from JavaScript
+
+`eval` doesn't give you anything back. When you need a value from the page, use `evalResult`,
+which returns the result as JSON:
+
+```java
+webview.evalResult("document.getElementById('name').value")
+    .thenAccept(json -> System.out.println(json)); // "\"Ada\""
+
+// await works too, and returned Promises are waited on
+webview.evalResult("await fetch('/status').then(r => r.json())")
+    .thenAccept(json -> System.out.println(json));
+```
+
+The future completes on the UI thread. From a background thread you can block on it with
+`get()` or `join()`. On the UI thread, such as inside a binding, blocking would freeze the
+window forever, so those calls throw `IllegalStateException`. Use `thenAccept` and
+friends there.
 
 ### Calling Java from JavaScript
 

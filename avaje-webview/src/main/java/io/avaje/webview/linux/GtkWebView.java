@@ -16,6 +16,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import io.avaje.webview.Webview;
 import io.avaje.webview.WebviewBase;
+import io.avaje.webview.WindowSize;
 
 /**
  * Linux implementation using GTK4 + WebKitGTK 6.0 via FFM.
@@ -50,13 +51,40 @@ public final class GtkWebView extends WebviewBase {
   private volatile MemorySegment webView; // WebKitWebView*
   private volatile MemorySegment ucManager; // WebKitUserContentManager*
 
-  private boolean windowShown = false;
+  // Set once the first page load has put the WebKitWebView into the window.
+  private boolean contentAttached = false;
   private volatile boolean closed = false;
   private volatile boolean windowDestroyed = false;
   private final CountDownLatch windowClosedLatch = new CountDownLatch(1);
 
   /**
-   * Arena that owns the three Panama upcall stubs (dispatchStub, destroyStub, msgStub).
+   * Dispatch queue shared by every window. Each window used to own its drain stub, but a
+   * background thread can call dispatch() after its window closed, scheduling an idle source on a
+   * stub whose arena was already freed. One stub in the global arena never goes away.
+   */
+  private static final ConcurrentLinkedQueue<Runnable> pendingDispatches =
+      new ConcurrentLinkedQueue<>();
+
+  /** GSourceFunc for g_idle_add_full that runs {@link #drainDispatchQueue} on the GTK thread. */
+  private static final MemorySegment dispatchStub;
+
+  static {
+    try {
+      final var drainMh =
+          MethodHandles.lookup()
+              .findStatic(
+                  GtkWebView.class,
+                  "drainDispatchQueue",
+                  MethodType.methodType(int.class, MemorySegment.class));
+      dispatchStub =
+          Linker.nativeLinker().upcallStub(drainMh, GLib.GSOURCE_FUNC_DESC, Arena.global());
+    } catch (NoSuchMethodException | IllegalAccessException e) {
+      throw new ExceptionInInitializerError(e);
+    }
+  }
+
+  /**
+   * Arena that owns this window's Panama upcall stubs (destroyStub, msgStub, loadChangedStub).
    *
    * <p>Shared rather than confined so the GTK thread can close it once the event loop has exited
    * and no further callbacks can arrive, freeing the stub trampolines without waiting on GC.
@@ -64,12 +92,14 @@ public final class GtkWebView extends WebviewBase {
   private final Arena callbackArena = Arena.ofShared();
 
   // C function pointers (upcall stubs) wired to GLib/GTK signals
-  private MemorySegment dispatchStub; // GSourceFunc drains pendingDispatches on GTK thread
   private MemorySegment destroyStub; // "destroy" signal on GtkWindow
   private MemorySegment msgStub; // "script-message-received" signal on WebKitUserContentManager
   private MemorySegment loadChangedStub; // "load-changed" signal on WebKitWebView
+  private MemorySegment closeRequestStub; // "close-request" signal on GtkWindow
+  private MemorySegment activeStub; // "notify::is-active" signal on GtkWindow
+  private MemorySegment realizeStub; // "realize" signal on GtkWindow
+  private MemorySegment layoutStub; // "layout" signal on the window's GdkSurface
 
-  private final ConcurrentLinkedQueue<Runnable> pendingDispatches = new ConcurrentLinkedQueue<>();
   private final int initialWidth;
   private final int initialHeight;
 
@@ -154,12 +184,23 @@ public final class GtkWebView extends WebviewBase {
 
   private void doGtkClose() {
     if (!windowDestroyed && window != null && window.address() != 0L) {
+      final var surface = Gtk4.gtkNativeGetSurface(window);
+      if (surface.address() != 0L) {
+        GLib.gSignalHandlersDisconnectByFunc(surface, layoutStub);
+      }
+      GLib.gSignalHandlersDisconnectByFunc(window, closeRequestStub);
+      GLib.gSignalHandlersDisconnectByFunc(window, activeStub);
+      GLib.gSignalHandlersDisconnectByFunc(window, realizeStub);
       Gtk4.gtkWidgetSetVisible(window, false);
       // "destroy" is emitted synchronously, so onWindowDestroy has already counted down
       // windowClosedLatch and decremented openWindows by the time this returns.
       Gtk4.gtkWindowDestroy(window);
     }
     if (webView != null && webView.address() != 0L) {
+      // The web process can still deliver a script message or load event after this, and the
+      // stubs those signals point at are freed once callbackArena closes. Unhook them first.
+      GLib.gSignalHandlersDisconnectByFunc(ucManager, msgStub);
+      GLib.gSignalHandlersDisconnectByFunc(webView, loadChangedStub);
       // Balances the g_object_ref_sink in initWindowAndWebView. gtk_window_set_child() doesn't
       // take ownership, it holds its own ref through the widget hierarchy, which gtk_window_destroy
       // releases. The ref from the sink is ours, and without this the WebKitWebView leaks.
@@ -265,6 +306,11 @@ public final class GtkWebView extends WebviewBase {
   }
 
   @Override
+  protected boolean onUIThread() {
+    return Thread.currentThread() == gtkThread;
+  }
+
+  @Override
   protected void dispatchImpl(Runnable r) {
     if (Thread.currentThread() == gtkThread) {
       r.run();
@@ -340,6 +386,74 @@ public final class GtkWebView extends WebviewBase {
   }
 
   @Override
+  protected void showWindowImpl() {
+    if (!closed && contentAttached) {
+      Gtk4.gtkWindowPresent(window);
+    }
+  }
+
+  @Override
+  protected void hideWindowImpl() {
+    if (!closed && contentAttached) {
+      Gtk4.gtkWidgetSetVisible(window, false);
+    }
+  }
+
+  @Override
+  protected void restoreWindowImpl() {
+    // gtk_window_present also un-minimizes, but would show a hidden window as well.
+    if (!closed && contentAttached && visibleRequested) {
+      Gtk4.gtkWindowPresent(window);
+    }
+  }
+
+  @Override
+  protected boolean isMinimizedImpl() {
+    if (closed) {
+      return false;
+    }
+    final var surface = Gtk4.gtkNativeGetSurface(window);
+    return surface.address() != 0L
+        && (Gtk4.gdkToplevelGetState(surface) & Gtk4.GDK_TOPLEVEL_STATE_MINIMIZED) != 0;
+  }
+
+  @Override
+  protected void exitFullscreenImpl() {
+    if (!closed) {
+      Gtk4.gtkWindowUnfullscreen(window);
+    }
+  }
+
+  @Override
+  protected boolean isFullscreenImpl() {
+    return !closed && Gtk4.gtkWindowIsFullscreen(window);
+  }
+
+  @Override
+  protected void focusWindowImpl() {
+    if (!closed && contentAttached && visibleRequested) {
+      Gtk4.gtkWindowPresent(window);
+    }
+  }
+
+  @Override
+  protected WindowSize getSizeImpl() {
+    if (!closed && contentAttached) {
+      final var width = Gtk4.gtkWidgetGetWidth(window);
+      if (width > 0) {
+        return new WindowSize(width, Gtk4.gtkWidgetGetHeight(window));
+      }
+    }
+    if (!closed) {
+      final var size = Gtk4.gtkWindowGetDefaultSize(window);
+      if (size[0] > 0 && size[1] > 0) {
+        return new WindowSize(size[0], size[1]);
+      }
+    }
+    return new WindowSize(initialWidth, initialHeight);
+  }
+
+  @Override
   public void setIcon(Path path) {
     // GTK4 dropped file-based window icons. gtk_window_set_icon_name() takes a theme name, not
     // a path, and the app icon comes from the .desktop file.
@@ -350,7 +464,7 @@ public final class GtkWebView extends WebviewBase {
    * G_SOURCE_REMOVE (0) since every dispatch() adds its own idle source.
    */
   @SuppressWarnings("unused")
-  public int drainDispatchQueue(MemorySegment ignoredData) {
+  public static int drainDispatchQueue(MemorySegment ignoredData) {
     Runnable r;
     while ((r = pendingDispatches.poll()) != null) r.run();
     return 0; // G_SOURCE_REMOVE
@@ -363,6 +477,59 @@ public final class GtkWebView extends WebviewBase {
     windowDestroyed = true;
     openWindows.decrementAndGet();
     windowClosedLatch.countDown();
+  }
+
+  /**
+   * "close-request" signal, raised by the window manager's close button or a shortcut such as
+   * Alt+F4. Always stops GTK's default handler and closes through {@link #close()} instead, so a
+   * user close gets the same cleanup as a programmatic one.
+   *
+   * @return {@code 1} (TRUE) so GTK doesn't destroy the window itself
+   */
+  @SuppressWarnings("unused")
+  public int onCloseRequest(MemorySegment widget, MemorySegment ignoredData) {
+    if (fireCloseRequested()) {
+      close();
+    }
+    return 1;
+  }
+
+  /** "notify::is-active" signal: the window gained or lost keyboard focus. */
+  @SuppressWarnings("unused")
+  public void onActiveChanged(MemorySegment object, MemorySegment pspec, MemorySegment data) {
+    if (!closed) {
+      fireFocusChanged(Gtk4.gtkWindowIsActive(window));
+    }
+  }
+
+  /**
+   * "realize" signal: the window now has a {@code GdkSurface}, whose "layout" signal reports every
+   * size change (user resize, maximize, tiling) that GTK4 no longer exposes on the window itself.
+   */
+  @SuppressWarnings("unused")
+  public void onWindowRealize(MemorySegment widget, MemorySegment ignoredData) {
+    final var surface = Gtk4.gtkNativeGetSurface(window);
+    if (surface.address() != 0L) {
+      GLib.gSignalHandlersDisconnectByFunc(surface, layoutStub);
+      GLib.gSignalConnect(surface, "layout", layoutStub, MemorySegment.NULL);
+    }
+  }
+
+  /**
+   * "layout" signal on the window's surface. The surface size includes the shadow, so the window's
+   * allocation is read instead, from an idle callback that runs once GTK has allocated the widgets
+   * for the new size.
+   */
+  @SuppressWarnings("unused")
+  public void onSurfaceLayout(MemorySegment surface, int width, int height, MemorySegment data) {
+    pendingDispatches.add(
+        () -> {
+          if (!closed && contentAttached) {
+            final var size = getSizeImpl();
+            fireResized(size.width(), size.height());
+          }
+        });
+    GLib.gIdleAddFull(dispatchStub, MemorySegment.NULL, MemorySegment.NULL);
   }
 
   /**
@@ -381,7 +548,9 @@ public final class GtkWebView extends WebviewBase {
   @SuppressWarnings("unused")
   public void onLoadChanged(MemorySegment wv, int loadEvent, MemorySegment data) {
     if (loadEvent == WebKit6.WEBKIT_LOAD_FINISHED) {
-      showWindow(initialWidth, initialHeight);
+      attachContent(initialWidth, initialHeight);
+      final var uri = WebKit6.webkitWebViewGetUri(wv);
+      firePageLoaded(uri.address() == 0L ? "" : uri.reinterpret(Long.MAX_VALUE).getString(0));
     }
   }
 
@@ -435,16 +604,6 @@ public final class GtkWebView extends WebviewBase {
     final var linker = Linker.nativeLinker();
     final var lookup = MethodHandles.lookup();
     try {
-      // GSourceFunc for g_idle_add_full: gboolean(*)(gpointer)
-      final var drainMh =
-          lookup
-              .findVirtual(
-                  GtkWebView.class,
-                  "drainDispatchQueue",
-                  MethodType.methodType(int.class, MemorySegment.class))
-              .bindTo(this);
-      dispatchStub = linker.upcallStub(drainMh, GLib.GSOURCE_FUNC_DESC, callbackArena);
-
       // "destroy" signal: void(*)(GtkWidget*, gpointer)
       final var destroyMh =
           lookup
@@ -476,6 +635,49 @@ public final class GtkWebView extends WebviewBase {
                       void.class, MemorySegment.class, int.class, MemorySegment.class))
               .bindTo(this);
       loadChangedStub = linker.upcallStub(loadMh, WebKit6.LOAD_CHANGED_DESC, callbackArena);
+
+      // "close-request": gboolean(*)(GtkWindow*, gpointer)
+      final var closeMh =
+          lookup
+              .findVirtual(
+                  GtkWebView.class,
+                  "onCloseRequest",
+                  MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class))
+              .bindTo(this);
+      closeRequestStub =
+          linker.upcallStub(closeMh, Gtk4.CLOSE_REQUEST_SIGNAL_DESC, callbackArena);
+
+      // "notify::is-active": void(*)(GObject*, GParamSpec*, gpointer)
+      final var activeMh =
+          lookup
+              .findVirtual(
+                  GtkWebView.class,
+                  "onActiveChanged",
+                  MethodType.methodType(
+                      void.class, MemorySegment.class, MemorySegment.class, MemorySegment.class))
+              .bindTo(this);
+      activeStub = linker.upcallStub(activeMh, Gtk4.NOTIFY_SIGNAL_DESC, callbackArena);
+
+      // "realize": void(*)(GtkWidget*, gpointer)
+      final var realizeMh =
+          lookup
+              .findVirtual(
+                  GtkWebView.class,
+                  "onWindowRealize",
+                  MethodType.methodType(void.class, MemorySegment.class, MemorySegment.class))
+              .bindTo(this);
+      realizeStub = linker.upcallStub(realizeMh, Gtk4.DESTROY_SIGNAL_DESC, callbackArena);
+
+      // "layout" on GdkSurface: void(*)(GdkSurface*, gint, gint, gpointer)
+      final var layoutMh =
+          lookup
+              .findVirtual(
+                  GtkWebView.class,
+                  "onSurfaceLayout",
+                  MethodType.methodType(
+                      void.class, MemorySegment.class, int.class, int.class, MemorySegment.class))
+              .bindTo(this);
+      layoutStub = linker.upcallStub(layoutMh, Gtk4.LAYOUT_SIGNAL_DESC, callbackArena);
     } catch (NoSuchMethodException | IllegalAccessException e) {
       throw new RuntimeException("Failed to build upcall stubs", e);
     }
@@ -494,6 +696,9 @@ public final class GtkWebView extends WebviewBase {
       Gtk4.gtkMakeWindowTransparent(window);
     }
     GLib.gSignalConnect(window, "destroy", destroyStub, MemorySegment.NULL);
+    GLib.gSignalConnect(window, "close-request", closeRequestStub, MemorySegment.NULL);
+    GLib.gSignalConnect(window, "notify::is-active", activeStub, MemorySegment.NULL);
+    GLib.gSignalConnect(window, "realize", realizeStub, MemorySegment.NULL);
     if (parentWindow.address() != 0L) {
       Gtk4.gtkWindowSetTransientFor(window, parentWindow);
       if (moveParentWithChild) {
@@ -533,15 +738,21 @@ public final class GtkWebView extends WebviewBase {
     setupJsBridge(POST_FN);
   }
 
-  private void showWindow(int width, int height) {
-    if (windowShown) {
+  /**
+   * Puts the web view into the window once the first page has loaded or failed, and shows the
+   * window unless {@link #hideWindow()} asked otherwise.
+   */
+  private void attachContent(int width, int height) {
+    if (contentAttached) {
       return;
     }
     Gtk4.gtkWindowSetDefaultSize(window, width, height);
     Gtk4.gtkWindowSetChild(window, webView);
     Gtk4.gtkWidgetSetVisible(webView, true);
     Gtk4.gtkWidgetGrabFocus(webView);
-    Gtk4.gtkWidgetSetVisible(window, true);
-    windowShown = true;
+    if (visibleRequested) {
+      Gtk4.gtkWidgetSetVisible(window, true);
+    }
+    contentAttached = true;
   }
 }

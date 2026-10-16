@@ -69,6 +69,41 @@ final class WebviewUtil {
     return output.toString();
   }
 
+  /**
+   * Decodes a JSON value into plain text. A string literal loses its quotes and escapes; anything
+   * else comes back as written.
+   */
+  static String jsonUnescape(@NonNull String json) {
+    if (json.length() < 2 || json.charAt(0) != '"' || json.charAt(json.length() - 1) != '"') {
+      return json;
+    }
+    final var output = new StringBuilder();
+    final var end = json.length() - 1;
+    for (var i = 1; i < end; i++) {
+      final var ch = json.charAt(i);
+      if (ch != '\\' || i + 1 >= end) {
+        output.append(ch);
+        continue;
+      }
+      final var next = json.charAt(++i);
+      switch (next) {
+        case 'n' -> output.append('\n');
+        case 't' -> output.append('\t');
+        case 'r' -> output.append('\r');
+        case 'b' -> output.append('\b');
+        case 'f' -> output.append('\f');
+        case 'u' -> {
+          if (i + 4 < end) {
+            output.append((char) Integer.parseInt(json.substring(i + 1, i + 5), 16));
+            i += 4;
+          }
+        }
+        default -> output.append(next);
+      }
+    }
+    return output.toString();
+  }
+
   static String forceSafeChars(@NonNull String input) {
     final var chars = input.toCharArray();
 

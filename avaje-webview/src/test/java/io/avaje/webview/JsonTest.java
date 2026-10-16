@@ -158,4 +158,23 @@ class JsonTest {
   void jsonEscapeQuoted_backslash() {
     assertEquals("\"\\\\\"", WebviewBase.jsonEscape("\\"));
   }
+
+  // -------------------------------------------------------------------------
+  // jsonUnescape
+  // -------------------------------------------------------------------------
+
+  @Test
+  void jsonUnescape_plainString() {
+    assertEquals("boom", WebviewUtil.jsonUnescape("\"boom\""));
+  }
+
+  @Test
+  void jsonUnescape_escapes() {
+    assertEquals("a\"b\\c\nd\u00e9", WebviewUtil.jsonUnescape("\"a\\\"b\\\\c\\nd\\u00e9\""));
+  }
+
+  @Test
+  void jsonUnescape_nonStringUnchanged() {
+    assertEquals("{\"a\":1}", WebviewUtil.jsonUnescape("{\"a\":1}"));
+  }
 }

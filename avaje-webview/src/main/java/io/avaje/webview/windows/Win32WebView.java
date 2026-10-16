@@ -21,6 +21,7 @@ import java.util.function.BooleanSupplier;
 
 import io.avaje.webview.Webview;
 import io.avaje.webview.WebviewBase;
+import io.avaje.webview.WindowSize;
 
 /**
  * Windows WebView2 implementation.
@@ -115,6 +116,9 @@ public final class Win32WebView extends WebviewBase {
 
   private volatile boolean windowDestroyed;
 
+  /** The thread that built this window. Win32 delivers its messages only to that thread. */
+  private final Thread uiThread = Thread.currentThread();
+
   private final Arena arenaStubs = Arena.ofShared();
 
   private volatile MemorySegment hwnd, hwndMsg, hwndWidget;
@@ -137,7 +141,10 @@ public final class Win32WebView extends WebviewBase {
 
   private volatile int minW, minH, maxW, maxH;
   private int parentOffsetX, parentOffsetY;
-  private long navToken;
+  private volatile boolean firstNavigationDone;
+  private volatile boolean fullscreenActive;
+  private int savedStyle;
+  private final int[] savedRect = new int[4];
   private int currentDpi = Win32.DEFAULT_DPI;
 
   /**
@@ -356,6 +363,11 @@ public final class Win32WebView extends WebviewBase {
   }
 
   @Override
+  protected boolean onUIThread() {
+    return Thread.currentThread() == uiThread;
+  }
+
+  @Override
   protected void dispatchImpl(Runnable r) {
     pending.add(r);
     if (hwndMsg != null && hwndMsg.address() != 0) {
@@ -415,8 +427,96 @@ public final class Win32WebView extends WebviewBase {
 
   @Override
   public Webview fullscreen() {
-    dispatchImpl(() -> Win32.fullscreen(hwnd));
+    dispatchImpl(
+        () -> {
+          if (!fullscreenActive) {
+            // Remember the style and bounds so exitFullscreen() can put them back.
+            try (var a = Arena.ofConfined()) {
+              savedStyle = (int) Win32.GetWindowLong.invokeExact(hwnd, Win32.GWL_STYLE);
+              final var rect = a.allocate(Win32.RECT_LAYOUT);
+              final var _ = (int) Win32.GetWindowRect.invokeExact(hwnd, rect);
+              for (var i = 0; i < 4; i++) {
+                savedRect[i] = rect.get(JAVA_INT, i * 4L);
+              }
+            } catch (final Throwable t) {
+              throw new RuntimeException(t);
+            }
+          }
+          Win32.fullscreen(hwnd);
+          fullscreenActive = true;
+        });
     return this;
+  }
+
+  @Override
+  protected void exitFullscreenImpl() {
+    if (!fullscreenActive) {
+      return;
+    }
+    fullscreenActive = false;
+    try {
+      final var _ = (int) Win32.SetWindowLong.invokeExact(hwnd, Win32.GWL_STYLE, savedStyle);
+      final var _ =
+          (int)
+              Win32.SetWindowPos.invokeExact(
+                  hwnd,
+                  MemorySegment.NULL,
+                  savedRect[0],
+                  savedRect[1],
+                  savedRect[2] - savedRect[0],
+                  savedRect[3] - savedRect[1],
+                  Win32.SWP_NOZORDER | Win32.SWP_FRAMECHANGED);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  @Override
+  protected boolean isFullscreenImpl() {
+    return fullscreenActive;
+  }
+
+  @Override
+  protected void showWindowImpl() {
+    if (firstNavigationDone) {
+      revealWindow();
+    }
+  }
+
+  @Override
+  protected void hideWindowImpl() {
+    if (firstNavigationDone) {
+      Win32.showWindow(hwnd, Win32.SW_HIDE);
+    }
+  }
+
+  @Override
+  protected void restoreWindowImpl() {
+    if (Win32.isIconic(hwnd)) {
+      Win32.showWindow(hwnd, Win32.SW_RESTORE);
+    }
+  }
+
+  @Override
+  protected boolean isMinimizedImpl() {
+    return Win32.isIconic(hwnd);
+  }
+
+  @Override
+  protected void focusWindowImpl() {
+    restoreWindowImpl();
+    Win32.setForegroundWindow(hwnd);
+    focusWebView2();
+  }
+
+  @Override
+  protected WindowSize getSizeImpl() {
+    try (var a = Arena.ofConfined()) {
+      final var rect = Win32.getClientRect(hwnd, a);
+      return new WindowSize(
+          toLogical(rect.get(JAVA_INT, 8) - rect.get(JAVA_INT, 0)),
+          toLogical(rect.get(JAVA_INT, 12) - rect.get(JAVA_INT, 4)));
+    }
   }
 
   @Override
@@ -508,18 +608,27 @@ public final class Win32WebView extends WebviewBase {
         windowDestroyed = true;
         return 0;
       }
-      case Win32.WM_CLOSE -> {
-        close();
+      case Win32.WM_CLOSE -> { // User close
+        if (fireCloseRequested()) {
+          close();
+        }
         return 0;
       }
       case Win32.WM_SIZE -> {
         resizeWidget(hWnd);
+        if (hwnd != null && wParam != Win32.SIZE_MINIMIZED) {
+          final var width = (int) (lParam & 0xFFFF);
+          final var height = (int) ((lParam >> 16) & 0xFFFF);
+          fireResized(toLogical(width), toLogical(height));
+        }
         return 0;
       }
       case Win32.WM_ACTIVATE -> {
-        if ((int) (wParam & 0xFFFF) != Win32.WA_INACTIVE) {
+        final var active = (int) (wParam & 0xFFFF) != Win32.WA_INACTIVE;
+        if (active) {
           focusWebView2();
         }
+        fireFocusChanged(active);
         return 0;
       }
       case Win32.WM_GETMINMAXINFO -> {
@@ -925,21 +1034,21 @@ public final class Win32WebView extends WebviewBase {
     } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
-    addFirstNavigationHandler();
+    addNavigationCompletedHandler();
     webviewReady = true; // lets the embedWebView2 pump exit
   }
 
-  private void addFirstNavigationHandler() {
+  private void addNavigationCompletedHandler() {
     try {
       final var mh =
           MethodHandles.lookup()
               .findVirtual(
                   Win32WebView.class,
-                  "onFirstNavigation",
+                  "onNavigationCompleted",
                   MethodType.methodType(
                       int.class, MemorySegment.class, MemorySegment.class, MemorySegment.class))
               .bindTo(this);
-      navToken =
+      final var _ =
           webView2.addNavigationCompleted(
               buildComObject(
                   Linker.nativeLinker()
@@ -953,17 +1062,39 @@ public final class Win32WebView extends WebviewBase {
   }
 
   @SuppressWarnings("unused")
-  public int onFirstNavigation(MemorySegment self, MemorySegment sender, MemorySegment args) {
-    webView2.removeNavigationCompleted(navToken);
-    navToken = 0;
+  public int onNavigationCompleted(MemorySegment self, MemorySegment sender, MemorySegment args) {
+    if (!firstNavigationDone) {
+      firstNavigationDone = true;
+      if (visibleRequested) {
+        revealWindow();
+      }
+    }
+    firePageLoaded(webView2.getSource());
+    return 0;
+  }
+
+  private void revealWindow() {
     try {
       final var _ = (int) Win32.ShowWindow.invokeExact(hwnd, Win32.SW_SHOW);
       final var _ = (int) Win32.UpdateWindow.invokeExact(hwnd);
       final var _ = (MemorySegment) Win32.SetFocus.invokeExact(hwnd);
-    } catch (final Throwable ignored) {
+    } catch (final Throwable _) {
     }
     focusWebView2();
-    return 0;
+  }
+
+  /** Converts physical pixels at the window's current DPI into logical (96 DPI) pixels. */
+  private int toLogical(int physical) {
+    return physical * Win32.DEFAULT_DPI / windowDpi();
+  }
+
+  private int windowDpi() {
+    try {
+      final var dpi = (int) Win32.GetDpiForWindow.invokeExact(hwnd);
+      return dpi > 0 ? dpi : Win32.DEFAULT_DPI;
+    } catch (final Throwable t) {
+      return Win32.DEFAULT_DPI;
+    }
   }
 
   /// WebMessage handler (JS -> Java)
