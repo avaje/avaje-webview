@@ -392,6 +392,10 @@ final class Gtk4 {
   private static final MethodHandle GTK_WINDOW_IS_FULLSCREEN =
       downcall("gtk_window_is_fullscreen", FunctionDescriptor.of(JAVA_INT, ADDRESS));
 
+  /** {@code gtk_widget_get_visible(GtkWidget* widget) -> gboolean} */
+  private static final MethodHandle GTK_WIDGET_GET_VISIBLE =
+      downcall("gtk_widget_get_visible", FunctionDescriptor.of(JAVA_INT, ADDRESS));
+
   /**
    * {@code gtk_window_is_active(GtkWindow* window) -> gboolean}
    *
@@ -839,6 +843,15 @@ final class Gtk4 {
   static boolean gtkWindowIsFullscreen(MemorySegment window) {
     try {
       return (int) GTK_WINDOW_IS_FULLSCREEN.invokeExact(window) != 0;
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /** Returns {@code true} if {@code widget} has been shown. */
+  static boolean gtkWidgetGetVisible(MemorySegment widget) {
+    try {
+      return (int) GTK_WIDGET_GET_VISIBLE.invokeExact(widget) != 0;
     } catch (final Throwable t) {
       throw new RuntimeException(t);
     }

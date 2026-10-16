@@ -216,11 +216,11 @@ webview.run();
 which returns the result as JSON:
 
 ```java
-CompletableFuture<String> result = webview.evalResult("document.getElementById('name').value")
+webview.evalResult("document.getElementById('name').value")
     .thenAccept(json -> System.out.println(json)); // "\"Ada\""
 
 // await works too, and returned Promises are waited on
-CompletableFuture<String> result = webview.evalResult("await fetch('/status').then(r => r.json())")
+webview.evalResult("await fetch('/status').then(r => r.json())")
     .thenAccept(json -> System.out.println(json));
 ```
 

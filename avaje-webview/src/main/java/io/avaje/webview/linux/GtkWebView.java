@@ -739,8 +739,8 @@ public final class GtkWebView extends WebviewBase {
   }
 
   /**
-   * Puts the web view into the window once the first page has loaded, and shows the window unless
-   * {@link #hideWindow()} asked otherwise. Waiting for the load avoids a blank white flash.
+   * Puts the web view into the window once the first page has loaded or failed, and shows the
+   * window unless {@link #hideWindow()} asked otherwise.
    */
   private void attachContent(int width, int height) {
     if (contentAttached) {

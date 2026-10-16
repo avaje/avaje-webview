@@ -70,14 +70,10 @@ void main() {
       .title("Window Events Example")
       .width(720)
       .height(560)
-      .visible(false) // shown below once the page has loaded
       .html(HTML)
       .build();
 
-  webview.onPageLoaded(url -> {
-    log(webview, "page loaded: " + url);
-    webview.showWindow();
-  });
+  webview.onPageLoaded(url -> log(webview, "page loaded: " + url));
   webview.onResize(size -> log(webview, "resized to " + size.width() + "x" + size.height()));
   webview.onFocusChanged(focused -> log(webview, focused ? "focused" : "lost focus"));
 

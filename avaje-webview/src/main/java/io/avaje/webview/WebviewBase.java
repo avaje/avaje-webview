@@ -164,10 +164,7 @@ public abstract sealed class WebviewBase implements Webview
   private final Map<String, BindCallback> bindings = new ConcurrentHashMap<>();
   private final Map<String, CompletableFuture<String>> evaluations = new ConcurrentHashMap<>();
 
-  /**
-   * Whether the window should be on screen. Each platform reads it when the first page finishes
-   * loading, so {@link #hideWindow()} called before then keeps the window from appearing at all.
-   */
+  /** Whether the window should be on screen. */
   protected volatile boolean visibleRequested = true;
 
   private final List<BooleanSupplier> closeRequestedListeners = new CopyOnWriteArrayList<>();
@@ -175,7 +172,7 @@ public abstract sealed class WebviewBase implements Webview
   private final List<Consumer<Boolean>> focusListeners = new CopyOnWriteArrayList<>();
   private final List<Consumer<String>> pageLoadedListeners = new CopyOnWriteArrayList<>();
 
-  // Last values handed to listeners. Toolkits repeat events, and listeners only want changes.
+  // Last values handed to listeners.
   private WindowSize lastSize;
   private Boolean lastFocused;
   private final AtomicLong evaluationIds = new AtomicLong();
@@ -306,12 +303,7 @@ public abstract sealed class WebviewBase implements Webview
     return future;
   }
 
-  /**
-   * Settles the future for an {@link #evalResult} call.
-   *
-   * @param params the raw JSON array {@code [status, value]}, where the value is the result on
-   *     status 0 and an error message string otherwise
-   */
+  /** Settles the future for an {@link #evalResult} call. */
   private void completeEvaluation(String id, String params) {
     final var future = evaluations.remove(id);
     if (future == null) {
@@ -456,9 +448,8 @@ public abstract sealed class WebviewBase implements Webview
   }
 
   /**
-   * Asks every {@link #onCloseRequested} check whether a user-initiated close may go ahead. Called
-   * from native callbacks, so a throwing check is logged and counts as allowing the close rather
-   * than escaping into native code.
+   * Asks every {@link #onCloseRequested} check whether a user-initiated close may go ahead. A
+   * throwing check is logged and counts as allowing the close.
    *
    * @return {@code false} if any check vetoed the close
    */
@@ -511,8 +502,7 @@ public abstract sealed class WebviewBase implements Webview
   }
 
   /**
-   * Runs {@code task} on the UI thread and returns its result, for getters reading native state the
-   * toolkit only allows on that thread. Runs inline when already there.
+   * Runs {@code task} on the UI thread and returns its result.
    *
    * @throws IllegalStateException when the UI thread doesn't respond, for example because the
    *     window has closed or {@link #run()} hasn't started yet

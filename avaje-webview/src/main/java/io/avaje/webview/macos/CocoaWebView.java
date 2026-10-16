@@ -616,22 +616,40 @@ public final class CocoaWebView extends WebviewBase {
 
   /**
    * Called by the synthetic WKNavigationDelegate whenever a navigation finishes. The first one
-   * shows the window, unless {@link #hideWindow()} asked otherwise; waiting for it avoids a blank
-   * flash.
+   * shows the window, unless {@link #hideWindow()} asked otherwise
    */
   @SuppressWarnings("unused")
   public void onNavigationFinished(
       MemorySegment self, MemorySegment cmd, MemorySegment wv, MemorySegment nav) {
     try {
-      if (!firstNavigationDone) {
-        firstNavigationDone = true;
-        if (visibleRequested) {
-          MacOSHelper.bringToFront(nsWindow);
-        }
-      }
+      revealAfterFirstNavigation();
       firePageLoaded(MacOSHelper.currentUrl(wv));
     } catch (final Throwable t) {
       log.log(ERROR, "Navigation finished handler failed", t);
+    }
+  }
+
+  @SuppressWarnings("unused")
+  public void onNavigationFailed(
+      MemorySegment self,
+      MemorySegment cmd,
+      MemorySegment wv,
+      MemorySegment nav,
+      MemorySegment error) {
+    try {
+      revealAfterFirstNavigation();
+    } catch (final Throwable t) {
+      log.log(ERROR, "Navigation failed handler failed", t);
+    }
+  }
+
+  private void revealAfterFirstNavigation() {
+    if (firstNavigationDone) {
+      return;
+    }
+    firstNavigationDone = true;
+    if (visibleRequested) {
+      MacOSHelper.bringToFront(nsWindow);
     }
   }
 
@@ -1231,8 +1249,8 @@ public final class CocoaWebView extends WebviewBase {
   }
 
   /**
-   * Synthesizes a {@code WKNavigationDelegate} that shows the window after the first navigation
-   * finishes and reports every finished navigation to {@link #onPageLoaded} listeners.
+   * Synthesizes a {@code WKNavigationDelegate} that shows the window once the first navigation
+   * finishes or fails, and reports every finished navigation to {@link #onPageLoaded} listeners.
    */
   private MemorySegment createNavigationDelegate(Arena a) {
     try {
@@ -1268,6 +1286,41 @@ public final class CocoaWebView extends WebviewBase {
           (byte)
               CLASS_ADD_METHOD.invokeExact(
                   cls, sel(a, "webView:didFinishNavigation:"), stub, a.allocateFrom("v@:@@"));
+
+      final var failMh =
+          MethodHandles.lookup()
+              .findVirtual(
+                  CocoaWebView.class,
+                  "onNavigationFailed",
+                  MethodType.methodType(
+                      void.class,
+                      MemorySegment.class,
+                      MemorySegment.class,
+                      MemorySegment.class,
+                      MemorySegment.class,
+                      MemorySegment.class))
+              .bindTo(this);
+      final var failStub =
+          Linker.nativeLinker()
+              .upcallStub(
+                  failMh,
+                  FunctionDescriptor.ofVoid(
+                      ValueLayout.ADDRESS, // self
+                      ValueLayout.ADDRESS, // cmd
+                      ValueLayout.ADDRESS, // WKWebView*
+                      ValueLayout.ADDRESS, // WKNavigation*
+                      ValueLayout.ADDRESS), // NSError*
+                  callbackArena);
+      for (final var failSelector :
+          new String[] {
+            "webView:didFailProvisionalNavigation:withError:",
+            "webView:didFailNavigation:withError:"
+          }) {
+        final var _ =
+            (byte)
+                CLASS_ADD_METHOD.invokeExact(
+                    cls, sel(a, failSelector), failStub, a.allocateFrom("v@:@@@"));
+      }
 
       REGISTER_CLASS_PAIR.invokeExact(cls);
       return (MemorySegment) CLASS_CREATE_INSTANCE.invokeExact(cls, 0L);

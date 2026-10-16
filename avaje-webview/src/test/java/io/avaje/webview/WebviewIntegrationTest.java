@@ -829,7 +829,7 @@ class WebviewIntegrationTest {
   void hiddenWindowStillLoadsAndRunsBindings() {
     final var called = new AtomicBoolean(false);
     final var failure = new AtomicReference<Throwable>();
-    try (var w = Webview.builder().visible(false).build()) {
+    try (var w = Webview.builder().showOnFirstLoad(false).build()) {
       w.bind(
           "ping",
           _ -> {
@@ -854,7 +854,7 @@ class WebviewIntegrationTest {
   @Test
   void showAndHideAfterLoad() {
     final var loaded = new AtomicInteger();
-    try (var w = Webview.builder().visible(false).build()) {
+    try (var w = Webview.builder().showOnFirstLoad(false).build()) {
       w.onPageLoaded(
           _ -> {
             loaded.incrementAndGet();

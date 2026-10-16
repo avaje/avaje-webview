@@ -107,6 +107,16 @@
           "void*",
           "void*",
           "void*",
+          "void*"
+        ]
+      },
+      {
+        "returnType": "void",
+        "parameterTypes": [
+          "void*",
+          "void*",
+          "void*",
+          "void*",
           "void*",
           "void*"
         ]
