@@ -217,6 +217,168 @@ final class MacOSHelper {
     }
   }
 
+  /** {@code NSModalResponseOK}, what {@code -[NSOpenPanel runModal]} returns on Open. */
+  private static final long NS_MODAL_RESPONSE_OK = 1L;
+
+  /** {@code NSAlertFirstButtonReturn}, the first button added to an {@code NSAlert}. */
+  private static final long NS_ALERT_FIRST_BUTTON = 1000L;
+
+  /**
+   * Runs an {@code NSOpenPanel} for an {@code <input type=file>} click, configured from the page's
+   * {@code WKOpenPanelParameters}.
+   *
+   * @return the chosen {@code NSArray<NSURL*>*}, or {@code NULL} on cancel
+   */
+  static MemorySegment runOpenPanel(MemorySegment parameters) {
+    try (var a = Arena.ofConfined()) {
+      final var panel = send0(ObjC.getClass(a, "NSOpenPanel"), sel(a, "openPanel"));
+      final var allowsDirectories = sel(a, "allowsDirectories");
+      final var directories =
+          ObjC.respondsTo(a, parameters, allowsDirectories)
+              && ObjC.sendBool0(parameters, allowsDirectories);
+      ObjC.sendVoidBool(panel, sel(a, "setCanChooseFiles:"), !directories);
+      ObjC.sendVoidBool(panel, sel(a, "setCanChooseDirectories:"), directories);
+      ObjC.sendVoidBool(
+          panel,
+          sel(a, "setAllowsMultipleSelection:"),
+          ObjC.sendBool0(parameters, sel(a, "allowsMultipleSelection")));
+      if (ObjC.sendLong0(panel, sel(a, "runModal")) != NS_MODAL_RESPONSE_OK) {
+        return MemorySegment.NULL;
+      }
+      return send0(panel, sel(a, "URLs"));
+    }
+  }
+
+  /** Shows a JavaScript {@code alert()} as a modal {@code NSAlert} with one OK button. */
+  static void runAlert(MemorySegment message) {
+    try (var a = Arena.ofConfined()) {
+      ObjC.sendLong0(newAlert(a, message, false), sel(a, "runModal"));
+    }
+  }
+
+  /**
+   * Shows a JavaScript {@code confirm()} as a modal {@code NSAlert}.
+   *
+   * @return {@code true} when the user pressed OK
+   */
+  static boolean runConfirm(MemorySegment message) {
+    try (var a = Arena.ofConfined()) {
+      return ObjC.sendLong0(newAlert(a, message, true), sel(a, "runModal"))
+          == NS_ALERT_FIRST_BUTTON;
+    }
+  }
+
+  /**
+   * Shows a JavaScript {@code prompt()} as a modal {@code NSAlert} with a text field.
+   *
+   * @return the entered {@code NSString*}, or {@code NULL} on cancel
+   */
+  static MemorySegment runPrompt(MemorySegment message, MemorySegment defaultText) {
+    try (var a = Arena.ofConfined()) {
+      final var alert = newAlert(a, message, true);
+      final var field =
+          (MemorySegment)
+              ObjC.MSG_SEND_INIT_WITH_FRAME.invokeExact(
+                  send0(ObjC.getClass(a, "NSTextField"), sel(a, "alloc")),
+                  sel(a, "initWithFrame:"),
+                  0d,
+                  0d,
+                  260d,
+                  24d);
+      sendVoid0(field, sel(a, "autorelease"));
+      if (defaultText.address() != 0) {
+        sendVoid1(field, sel(a, "setStringValue:"), defaultText);
+      }
+      sendVoid1(alert, sel(a, "setAccessoryView:"), field);
+      sendVoid1(send0(alert, sel(a, "window")), sel(a, "setInitialFirstResponder:"), field);
+      if (ObjC.sendLong0(alert, sel(a, "runModal")) != NS_ALERT_FIRST_BUTTON) {
+        return MemorySegment.NULL;
+      }
+      return send0(field, sel(a, "stringValue"));
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /** Builds an autoreleased {@code NSAlert} showing {@code message} with OK, plus Cancel. */
+  private static MemorySegment newAlert(Arena a, MemorySegment message, boolean cancel) {
+    final var alert = send0(send0(ObjC.getClass(a, "NSAlert"), sel(a, "alloc")), sel(a, "init"));
+    sendVoid0(alert, sel(a, "autorelease"));
+    sendVoid1(alert, sel(a, "setMessageText:"), message);
+    send1(alert, sel(a, "addButtonWithTitle:"), nsString(a, "OK"));
+    if (cancel) {
+      send1(alert, sel(a, "addButtonWithTitle:"), nsString(a, "Cancel"));
+    }
+    return alert;
+  }
+
+  /** {@code NSWindowStyleMaskFullScreen}, set while the window is in native fullscreen. */
+  private static final long NS_FULL_SCREEN_MASK = 1L << 14;
+
+  /** Reads {@code [view frame]} as {@code {x, y, width, height}} in points. */
+  static double[] frame(MemorySegment viewOrWindow) {
+    try (var a = Arena.ofConfined()) {
+      final var f =
+          (MemorySegment)
+              ObjC.MSG_SEND_GET_FRAME.invokeExact(
+                  (SegmentAllocator) a, viewOrWindow, sel(a, "frame"));
+      return new double[] {
+        f.get(JAVA_DOUBLE, 0), f.get(JAVA_DOUBLE, 8), f.get(JAVA_DOUBLE, 16), f.get(JAVA_DOUBLE, 24)
+      };
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /** The size of {@code nsWindow}'s content view in points, excluding the title bar. */
+  static double[] contentSize(MemorySegment nsWindow) {
+    try (var a = Arena.ofConfined()) {
+      final var f = frame(send0(nsWindow, sel(a, "contentView")));
+      return new double[] {f[2], f[3]};
+    }
+  }
+
+  static boolean isMinimized(MemorySegment nsWindow) {
+    try (var a = Arena.ofConfined()) {
+      return ObjC.sendBool0(nsWindow, sel(a, "isMiniaturized"));
+    }
+  }
+
+  static void deminiaturize(MemorySegment nsWindow) {
+    try (var a = Arena.ofConfined()) {
+      sendVoid1(nsWindow, sel(a, "deminiaturize:"), MemorySegment.NULL);
+    }
+  }
+
+  static boolean isFullscreen(MemorySegment nsWindow) {
+    try (var a = Arena.ofConfined()) {
+      return (ObjC.sendLong0(nsWindow, sel(a, "styleMask")) & NS_FULL_SCREEN_MASK) != 0;
+    }
+  }
+
+  /** Orders {@code nsWindow} to the front, makes it key, and activates the application. */
+  static void bringToFront(MemorySegment nsWindow) {
+    try (var a = Arena.ofConfined()) {
+      sendVoid1(nsWindow, sel(a, "makeKeyAndOrderFront:"), MemorySegment.NULL);
+      final var app = send0(ObjC.getClass(a, "NSApplication"), sel(a, "sharedApplication"));
+      ObjC.sendVoidBool(app, sel(a, "activateIgnoringOtherApps:"), true);
+    }
+  }
+
+  static void orderOut(MemorySegment nsWindow) {
+    try (var a = Arena.ofConfined()) {
+      sendVoid1(nsWindow, sel(a, "orderOut:"), MemorySegment.NULL);
+    }
+  }
+
+  /** The URL of {@code wkWebView}'s current page, or an empty string. */
+  static String currentUrl(MemorySegment wkWebView) {
+    try (var a = Arena.ofConfined()) {
+      final var url = send0(wkWebView, sel(a, "URL"));
+      return url.address() == 0 ? "" : fromNSString(a, send0(url, sel(a, "absoluteString")));
+    }
+  }
+
   static void setIcon(Path iconPath) {
     try (var a = Arena.ofConfined()) {
       final var app = send0(ObjC.getClass(a, "NSApplication"), sel(a, "sharedApplication"));

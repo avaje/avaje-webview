@@ -15,6 +15,7 @@ final class ComWebView2 {
 
   private final MemorySegment ptr;
   private final MethodHandle getSettings;
+  private final MethodHandle getSource;
   private final MethodHandle navigate;
   private final MethodHandle navigateToString;
   private final MethodHandle addWebMessageRcvd;
@@ -37,6 +38,7 @@ final class ComWebView2 {
   ComWebView2(MemorySegment ptr) {
     this.ptr = ptr;
     getSettings = Win32.resolve(ptr, 3, FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS));
+    getSource = Win32.resolve(ptr, 4, FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS));
     navigate = Win32.resolve(ptr, 5, FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS));
     navigateToString = Win32.resolve(ptr, 6, FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS));
     addPermissionReq =
@@ -65,6 +67,28 @@ final class ComWebView2 {
       final var _ = (int) getSettings.invokeExact(ptr, pSettings);
       final var s = pSettings.get(ADDRESS, 0);
       return s.address() != 0 ? new ComWebView2Settings(s) : null;
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * Calls {@code ICoreWebView2::get_Source}, the URL of the current top-level document.
+   *
+   * @return the URL, or an empty string if WebView2 reports none
+   */
+  String getSource() {
+    try (var a = Arena.ofConfined()) {
+      final var pUri = a.allocate(ADDRESS);
+      final var hr = (int) getSource.invokeExact(ptr, pUri);
+      final var uri = pUri.get(ADDRESS, 0);
+      if (hr != 0 || uri.address() == 0) {
+        return "";
+      }
+      // WebView2 allocates the string with CoTaskMemAlloc and hands ownership to the caller.
+      final var result = uri.reinterpret(Long.MAX_VALUE).getString(0, StandardCharsets.UTF_16LE);
+      Win32.coTaskMemFree(uri);
+      return result;
     } catch (final Throwable t) {
       throw new RuntimeException(t);
     }

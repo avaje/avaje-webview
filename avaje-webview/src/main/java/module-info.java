@@ -11,14 +11,14 @@
  * </ul>
  * <h3>Getting Started:</h3>
  * The primary entry point is {@link io.avaje.webview.Webview}. Use the builder to configure your window:
- * <pre>{@code
+ * {@snippet :
  * Webview webview = Webview.builder()
- * .title("My Desktop App")
- * .url("https://example.com")
- * .build();
+ *     .title("My Desktop App")
+ *     .url("https://example.com")
+ *     .build();
  *
  * webview.run();
- * }</pre>
+ * }
  */
 
 module io.avaje.webview {

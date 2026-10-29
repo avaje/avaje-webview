@@ -1,5 +1,7 @@
 package io.avaje.webview.macos;
 
+import static java.lang.System.Logger.Level.ERROR;
+
 import static io.avaje.webview.macos.ObjC.ALLOC_CLASS_PAIR;
 import static io.avaje.webview.macos.ObjC.CLASS_ADD_METHOD;
 import static io.avaje.webview.macos.ObjC.CLASS_CREATE_INSTANCE;
@@ -25,6 +27,7 @@ import static io.avaje.webview.macos.ObjC.sendVoid1;
 import java.lang.foreign.Arena;
 import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.Linker;
+import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.SymbolLookup;
@@ -33,6 +36,7 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -41,6 +45,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import io.avaje.webview.Webview;
 import io.avaje.webview.WebviewBase;
+import io.avaje.webview.WindowSize;
 
 /**
  * macOS Cocoa + WKWebView, driven through the Objective-C runtime with Panama.
@@ -55,6 +60,8 @@ import io.avaje.webview.WebviewBase;
  * it.
  */
 public final class CocoaWebView extends WebviewBase {
+
+  private static final System.Logger log = System.getLogger("io.avaje.webview");
 
   // JS bridge: window.webkit.messageHandlers.__webview__.postMessage(json)
   private static final String HANDLER_NAME = "__webview__";
@@ -164,6 +171,7 @@ public final class CocoaWebView extends WebviewBase {
   private double childLastX, childLastY;
   private boolean syncMoving;
   private volatile boolean disableZoom;
+  private volatile boolean firstNavigationDone;
 
   /**
    * Arena that owns the Panama upcall stubs (drainStub, script handler stub, window delegate stub).
@@ -419,6 +427,11 @@ public final class CocoaWebView extends WebviewBase {
   }
 
   @Override
+  protected boolean onUIThread() {
+    return Thread.currentThread() == nsAppThread.get();
+  }
+
+  @Override
   protected void dispatchImpl(Runnable r) {
     // Queue first, then kick the main thread. The drain stub polls when it fires.
     pendingDispatches.add(r);
@@ -524,6 +537,61 @@ public final class CocoaWebView extends WebviewBase {
   }
 
   @Override
+  protected void showWindowImpl() {
+    if (!closed && firstNavigationDone) {
+      MacOSHelper.bringToFront(nsWindow);
+    }
+  }
+
+  @Override
+  protected void hideWindowImpl() {
+    if (!closed && firstNavigationDone) {
+      MacOSHelper.orderOut(nsWindow);
+    }
+  }
+
+  @Override
+  protected void restoreWindowImpl() {
+    if (!closed && MacOSHelper.isMinimized(nsWindow)) {
+      MacOSHelper.deminiaturize(nsWindow);
+    }
+  }
+
+  @Override
+  protected boolean isMinimizedImpl() {
+    return !closed && MacOSHelper.isMinimized(nsWindow);
+  }
+
+  @Override
+  protected void exitFullscreenImpl() {
+    if (!closed && MacOSHelper.isFullscreen(nsWindow)) {
+      MacOSHelper.fullscreen(nsWindow); // toggleFullScreen:
+    }
+  }
+
+  @Override
+  protected boolean isFullscreenImpl() {
+    return !closed && MacOSHelper.isFullscreen(nsWindow);
+  }
+
+  @Override
+  protected void focusWindowImpl() {
+    if (closed) {
+      return;
+    }
+    restoreWindowImpl();
+    if (visibleRequested && firstNavigationDone) {
+      MacOSHelper.bringToFront(nsWindow);
+    }
+  }
+
+  @Override
+  protected WindowSize getSizeImpl() {
+    final var size = MacOSHelper.contentSize(nsWindow);
+    return new WindowSize((int) Math.round(size[0]), (int) Math.round(size[1]));
+  }
+
+  @Override
   public void setIcon(Path path) {
     dispatchImpl(() -> MacOSHelper.setIcon(path));
   }
@@ -547,25 +615,157 @@ public final class CocoaWebView extends WebviewBase {
   }
 
   /**
-   * Called by the synthetic WKNavigationDelegate once the first navigation finishes. Shows the
-   * window and clears the delegate so later navigations don't show it again.
+   * Called by the synthetic WKNavigationDelegate whenever a navigation finishes. The first one
+   * shows the window, unless {@link #hideWindow()} asked otherwise
    */
   @SuppressWarnings("unused")
   public void onNavigationFinished(
       MemorySegment self, MemorySegment cmd, MemorySegment wv, MemorySegment nav) {
-    try (var a = Arena.ofConfined()) {
-      sendVoid1(wv, sel(a, "setNavigationDelegate:"), MemorySegment.NULL);
-      sendVoid1(nsWindow, sel(a, "makeKeyAndOrderFront:"), MemorySegment.NULL);
-      final var app = send0(ObjC.getClass(a, "NSApplication"), sel(a, "sharedApplication"));
-      Linker.nativeLinker()
-          .downcallHandle(
-              ObjC.MSG_SEND_ADDR,
-              FunctionDescriptor.ofVoid(
-                  ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT))
-          .invokeExact(app, sel(a, "activateIgnoringOtherApps:"), 1);
+    try {
+      revealAfterFirstNavigation();
+      firePageLoaded(MacOSHelper.currentUrl(wv));
     } catch (final Throwable t) {
-      throw new RuntimeException(t);
+      log.log(ERROR, "Navigation finished handler failed", t);
     }
+  }
+
+  @SuppressWarnings("unused")
+  public void onNavigationFailed(
+      MemorySegment self,
+      MemorySegment cmd,
+      MemorySegment wv,
+      MemorySegment nav,
+      MemorySegment error) {
+    try {
+      revealAfterFirstNavigation();
+    } catch (final Throwable t) {
+      log.log(ERROR, "Navigation failed handler failed", t);
+    }
+  }
+
+  private void revealAfterFirstNavigation() {
+    if (firstNavigationDone) {
+      return;
+    }
+    firstNavigationDone = true;
+    if (visibleRequested) {
+      MacOSHelper.bringToFront(nsWindow);
+    }
+  }
+
+  /**
+   * {@code windowShouldClose:}, asked when the user clicks the close button or presses Cmd+W.
+   * {@link #close()} sends {@code close} rather than {@code performClose:}, so it never comes here
+   * and can't be vetoed.
+   *
+   * @return {@code YES} (1) to let the window close
+   */
+  @SuppressWarnings("unused")
+  public byte onWindowShouldClose(MemorySegment self, MemorySegment cmd, MemorySegment window) {
+    return fireCloseRequested() ? (byte) 1 : (byte) 0;
+  }
+
+  /** {@code windowDidResize:}, after any change to the window size. */
+  @SuppressWarnings("unused")
+  public void onWindowDidResize(MemorySegment self, MemorySegment cmd, MemorySegment notification) {
+    try {
+      final var size = getSizeImpl();
+      fireResized(size.width(), size.height());
+    } catch (final Throwable t) {
+      log.log(ERROR, "Resize handler failed", t);
+    }
+  }
+
+  /** {@code windowDidBecomeKey:}, the window gained keyboard focus. */
+  @SuppressWarnings("unused")
+  public void onWindowDidBecomeKey(
+      MemorySegment self, MemorySegment cmd, MemorySegment notification) {
+    fireFocusChanged(true);
+  }
+
+  /** {@code windowDidResignKey:}, the window lost keyboard focus. */
+  @SuppressWarnings("unused")
+  public void onWindowDidResignKey(
+      MemorySegment self, MemorySegment cmd, MemorySegment notification) {
+    fireFocusChanged(false);
+  }
+
+  /**
+   * {@code webView:runOpenPanelWithParameters:initiatedByFrame:completionHandler:}, an {@code <input
+   * type=file>} click. WebKit raises if the handler is never called, so it runs even on failure.
+   */
+  @SuppressWarnings("unused")
+  public void onRunOpenPanel(
+      MemorySegment self,
+      MemorySegment cmd,
+      MemorySegment wv,
+      MemorySegment parameters,
+      MemorySegment frame,
+      MemorySegment completionHandler) {
+    var urls = MemorySegment.NULL;
+    try {
+      urls = MacOSHelper.runOpenPanel(parameters);
+    } catch (final Throwable t) {
+      log.log(ERROR, "File chooser failed", t);
+    }
+    ObjC.invokeBlock(completionHandler, urls);
+  }
+
+  /** {@code webView:runJavaScriptAlertPanelWithMessage:initiatedByFrame:completionHandler:}. */
+  @SuppressWarnings("unused")
+  public void onRunAlertPanel(
+      MemorySegment self,
+      MemorySegment cmd,
+      MemorySegment wv,
+      MemorySegment message,
+      MemorySegment frame,
+      MemorySegment completionHandler) {
+    try {
+      MacOSHelper.runAlert(message);
+    } catch (final Throwable t) {
+      log.log(ERROR, "alert() panel failed", t);
+    }
+    ObjC.invokeBlock(completionHandler);
+  }
+
+  /** {@code webView:runJavaScriptConfirmPanelWithMessage:initiatedByFrame:completionHandler:}. */
+  @SuppressWarnings("unused")
+  public void onRunConfirmPanel(
+      MemorySegment self,
+      MemorySegment cmd,
+      MemorySegment wv,
+      MemorySegment message,
+      MemorySegment frame,
+      MemorySegment completionHandler) {
+    var confirmed = false;
+    try {
+      confirmed = MacOSHelper.runConfirm(message);
+    } catch (final Throwable t) {
+      log.log(ERROR, "confirm() panel failed", t);
+    }
+    ObjC.invokeBlock(completionHandler, confirmed);
+  }
+
+  /**
+   * {@code
+   * webView:runJavaScriptTextInputPanelWithPrompt:defaultText:initiatedByFrame:completionHandler:}.
+   */
+  @SuppressWarnings("unused")
+  public void onRunPromptPanel(
+      MemorySegment self,
+      MemorySegment cmd,
+      MemorySegment wv,
+      MemorySegment prompt,
+      MemorySegment defaultText,
+      MemorySegment frame,
+      MemorySegment completionHandler) {
+    var text = MemorySegment.NULL;
+    try {
+      text = MacOSHelper.runPrompt(prompt, defaultText);
+    } catch (final Throwable t) {
+      log.log(ERROR, "prompt() panel failed", t);
+    }
+    ObjC.invokeBlock(completionHandler, text);
   }
 
   /**
@@ -899,6 +1099,8 @@ public final class CocoaWebView extends WebviewBase {
       sendVoid1(nsWindow, sel(a, "setContentView:"), wkWebView);
       // The navigation delegate shows the window once the first page has loaded.
       sendVoid1(wkWebView, sel(a, "setNavigationDelegate:"), createNavigationDelegate(a));
+      // Without a UI delegate WKWebView drops file inputs and alert/confirm/prompt silently.
+      sendVoid1(wkWebView, sel(a, "setUIDelegate:"), createUIDelegate(a));
 
       if (parentWindow.address() != 0) {
         if (!moveParentWithChild) {
@@ -985,26 +1187,34 @@ public final class CocoaWebView extends WebviewBase {
                   a.allocateFrom("c@:@{NSRect={NSPoint=dd}{NSSize=dd}}"));
 
       if (moveParentWithChild && parentWindow.address() != 0) {
-        final var moveMh =
-            MethodHandles.lookup()
-                .findVirtual(
-                    CocoaWebView.class,
-                    "onWindowDidMove",
-                    MethodType.methodType(
-                        void.class, MemorySegment.class, MemorySegment.class, MemorySegment.class))
-                .bindTo(this);
-        final var moveStub =
-            Linker.nativeLinker()
-                .upcallStub(
-                    moveMh,
-                    FunctionDescriptor.ofVoid(
-                        ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
-                    callbackArena);
-        final var _ =
-            (byte)
-                CLASS_ADD_METHOD.invokeExact(
-                    cls, sel(a, "windowDidMove:"), moveStub, a.allocateFrom("v@:@"));
+        addNotificationMethod(a, cls, "windowDidMove:", "onWindowDidMove");
       }
+      addNotificationMethod(a, cls, "windowDidResize:", "onWindowDidResize");
+      addNotificationMethod(a, cls, "windowDidBecomeKey:", "onWindowDidBecomeKey");
+      addNotificationMethod(a, cls, "windowDidResignKey:", "onWindowDidResignKey");
+
+      final var shouldCloseMh =
+          MethodHandles.lookup()
+              .findVirtual(
+                  CocoaWebView.class,
+                  "onWindowShouldClose",
+                  MethodType.methodType(
+                      byte.class, MemorySegment.class, MemorySegment.class, MemorySegment.class))
+              .bindTo(this);
+      final var shouldCloseStub =
+          Linker.nativeLinker()
+              .upcallStub(
+                  shouldCloseMh,
+                  FunctionDescriptor.of(
+                      ValueLayout.JAVA_BYTE,
+                      ValueLayout.ADDRESS,
+                      ValueLayout.ADDRESS,
+                      ValueLayout.ADDRESS),
+                  callbackArena);
+      final var _ =
+          (byte)
+              CLASS_ADD_METHOD.invokeExact(
+                  cls, sel(a, "windowShouldClose:"), shouldCloseStub, a.allocateFrom("c@:@"));
 
       REGISTER_CLASS_PAIR.invokeExact(cls);
       return (MemorySegment) CLASS_CREATE_INSTANCE.invokeExact(cls, 0L);
@@ -1014,8 +1224,33 @@ public final class CocoaWebView extends WebviewBase {
   }
 
   /**
-   * Synthesizes a {@code WKNavigationDelegate} that shows the window after the first navigation
-   * finishes, then clears itself so it only fires once.
+   * Adds an {@code NSWindowDelegate} notification method, {@code -(void)name:(NSNotification*)n},
+   * that calls {@code javaMethod} on this instance.
+   */
+  private void addNotificationMethod(Arena a, MemorySegment cls, String selector, String javaMethod)
+      throws Throwable {
+    final var mh =
+        MethodHandles.lookup()
+            .findVirtual(
+                CocoaWebView.class,
+                javaMethod,
+                MethodType.methodType(
+                    void.class, MemorySegment.class, MemorySegment.class, MemorySegment.class))
+            .bindTo(this);
+    final var stub =
+        Linker.nativeLinker()
+            .upcallStub(
+                mh,
+                FunctionDescriptor.ofVoid(
+                    ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
+                callbackArena);
+    final var _ =
+        (byte) CLASS_ADD_METHOD.invokeExact(cls, sel(a, selector), stub, a.allocateFrom("v@:@"));
+  }
+
+  /**
+   * Synthesizes a {@code WKNavigationDelegate} that shows the window once the first navigation
+   * finishes or fails, and reports every finished navigation to {@link #onPageLoaded} listeners.
    */
   private MemorySegment createNavigationDelegate(Arena a) {
     try {
@@ -1052,11 +1287,112 @@ public final class CocoaWebView extends WebviewBase {
               CLASS_ADD_METHOD.invokeExact(
                   cls, sel(a, "webView:didFinishNavigation:"), stub, a.allocateFrom("v@:@@"));
 
+      final var failMh =
+          MethodHandles.lookup()
+              .findVirtual(
+                  CocoaWebView.class,
+                  "onNavigationFailed",
+                  MethodType.methodType(
+                      void.class,
+                      MemorySegment.class,
+                      MemorySegment.class,
+                      MemorySegment.class,
+                      MemorySegment.class,
+                      MemorySegment.class))
+              .bindTo(this);
+      final var failStub =
+          Linker.nativeLinker()
+              .upcallStub(
+                  failMh,
+                  FunctionDescriptor.ofVoid(
+                      ValueLayout.ADDRESS, // self
+                      ValueLayout.ADDRESS, // cmd
+                      ValueLayout.ADDRESS, // WKWebView*
+                      ValueLayout.ADDRESS, // WKNavigation*
+                      ValueLayout.ADDRESS), // NSError*
+                  callbackArena);
+      for (final var failSelector :
+          new String[] {
+            "webView:didFailProvisionalNavigation:withError:",
+            "webView:didFailNavigation:withError:"
+          }) {
+        final var _ =
+            (byte)
+                CLASS_ADD_METHOD.invokeExact(
+                    cls, sel(a, failSelector), failStub, a.allocateFrom("v@:@@@"));
+      }
+
       REGISTER_CLASS_PAIR.invokeExact(cls);
       return (MemorySegment) CLASS_CREATE_INSTANCE.invokeExact(cls, 0L);
     } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
+  }
+
+  /**
+   * Synthesizes a {@code WKUIDelegate} that backs file inputs with {@code NSOpenPanel} and the
+   * JavaScript {@code alert}/{@code confirm}/{@code prompt} dialogs with {@code NSAlert}.
+   */
+  private MemorySegment createUIDelegate(Arena a) {
+    try {
+      final var superCls = ObjC.getClass(a, "NSObject");
+      final var clsName = "JavaWebviewUIDelegate_" + System.identityHashCode(this);
+      final var cls =
+          (MemorySegment) ALLOC_CLASS_PAIR.invokeExact(superCls, a.allocateFrom(clsName), 0L);
+
+      addUIMethod(
+          a,
+          cls,
+          "webView:runOpenPanelWithParameters:initiatedByFrame:completionHandler:",
+          "onRunOpenPanel",
+          4);
+      addUIMethod(
+          a,
+          cls,
+          "webView:runJavaScriptAlertPanelWithMessage:initiatedByFrame:completionHandler:",
+          "onRunAlertPanel",
+          4);
+      addUIMethod(
+          a,
+          cls,
+          "webView:runJavaScriptConfirmPanelWithMessage:initiatedByFrame:completionHandler:",
+          "onRunConfirmPanel",
+          4);
+      addUIMethod(
+          a,
+          cls,
+          "webView:runJavaScriptTextInputPanelWithPrompt:defaultText:initiatedByFrame:"
+              + "completionHandler:",
+          "onRunPromptPanel",
+          5);
+
+      REGISTER_CLASS_PAIR.invokeExact(cls);
+      return (MemorySegment) CLASS_CREATE_INSTANCE.invokeExact(cls, 0L);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * Adds a {@code WKUIDelegate} method to {@code cls}: {@code argCount} object arguments after
+   * {@code self} and {@code _cmd}, the last of them the completion handler block ({@code @?}).
+   */
+  private void addUIMethod(
+      Arena a, MemorySegment cls, String selector, String javaMethod, int argCount)
+      throws Throwable {
+    final var params = new Class<?>[argCount + 2];
+    final var layouts = new MemoryLayout[argCount + 2];
+    Arrays.fill(params, MemorySegment.class);
+    Arrays.fill(layouts, ValueLayout.ADDRESS);
+    final var mh =
+        MethodHandles.lookup()
+            .findVirtual(CocoaWebView.class, javaMethod, MethodType.methodType(void.class, params))
+            .bindTo(this);
+    final var stub =
+        Linker.nativeLinker().upcallStub(mh, FunctionDescriptor.ofVoid(layouts), callbackArena);
+    final var types = "v@:" + "@".repeat(argCount - 1) + "@?";
+    final var _ =
+        (byte) CLASS_ADD_METHOD.invokeExact(cls, sel(a, selector), stub, a.allocateFrom(types));
   }
 
   /**

@@ -273,6 +273,42 @@ final class ObjC {
           FunctionDescriptor.of(
               ADDRESS, ADDRESS, ADDRESS, JAVA_DOUBLE, JAVA_DOUBLE, JAVA_DOUBLE, JAVA_DOUBLE));
 
+  /** {@code objc_msgSend} returning {@code BOOL}, for zero-argument getters. */
+  private static final MethodHandle MSG_SEND_BOOL_0 =
+      LINKER.downcallHandle(MSG_SEND_ADDR, FunctionDescriptor.of(JAVA_BYTE, ADDRESS, ADDRESS));
+
+  /** {@code objc_msgSend} returning {@code BOOL} with one object argument. */
+  private static final MethodHandle MSG_SEND_BOOL_1 =
+      LINKER.downcallHandle(
+          MSG_SEND_ADDR, FunctionDescriptor.of(JAVA_BYTE, ADDRESS, ADDRESS, ADDRESS));
+
+  /** {@code objc_msgSend} returning {@code NSInteger}, e.g. {@code -[NSAlert runModal]}. */
+  private static final MethodHandle MSG_SEND_LONG_0 =
+      LINKER.downcallHandle(MSG_SEND_ADDR, FunctionDescriptor.of(JAVA_LONG, ADDRESS, ADDRESS));
+
+  /**
+   * Void {@code objc_msgSend} with one {@code BOOL} argument. Promoted to {@code int} like {@link
+   * #MSG_SEND_WKUSERSCRIPT_INIT}'s {@code forMainFrameOnly}.
+   */
+  private static final MethodHandle MSG_SEND_VOID_BOOL =
+      LINKER.downcallHandle(MSG_SEND_ADDR, FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, JAVA_INT));
+
+  /**
+   * Calls a block's {@code invoke} function pointer. Blocks have no message to send; the literal is
+   * a struct {@code {void* isa; int flags; int reserved; void (*invoke)(block, args...); ...}}, so
+   * the function sits at offset 16 and takes the block itself as its first argument.
+   */
+  private static final MethodHandle BLOCK_INVOKE_VOID =
+      LINKER.downcallHandle(FunctionDescriptor.ofVoid(ADDRESS));
+
+  private static final MethodHandle BLOCK_INVOKE_ID =
+      LINKER.downcallHandle(FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
+
+  private static final MethodHandle BLOCK_INVOKE_BOOL =
+      LINKER.downcallHandle(FunctionDescriptor.ofVoid(ADDRESS, JAVA_BYTE));
+
+  private static final long BLOCK_INVOKE_OFFSET = 16;
+
   private static MethodHandle downcall(SymbolLookup lib, String sym, FunctionDescriptor desc) {
     return LINKER.downcallHandle(
         lib.find(sym).orElseThrow(() -> new UnsatisfiedLinkError("ObjC symbol not found: " + sym)),
@@ -392,6 +428,75 @@ final class ObjC {
     } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
+  }
+
+  /** Sends a {@code BOOL}-returning zero-argument message: {@code [recv sel]}. */
+  static boolean sendBool0(MemorySegment recv, MemorySegment sel) {
+    try {
+      return (byte) MSG_SEND_BOOL_0.invokeExact(recv, sel) != 0;
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /** {@code [recv respondsToSelector:sel]}, to guard selectors newer macOS versions added. */
+  static boolean respondsTo(Arena a, MemorySegment recv, MemorySegment sel) {
+    try {
+      return (byte) MSG_SEND_BOOL_1.invokeExact(recv, sel(a, "respondsToSelector:"), sel) != 0;
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /** Sends an {@code NSInteger}-returning zero-argument message: {@code [recv sel]}. */
+  static long sendLong0(MemorySegment recv, MemorySegment sel) {
+    try {
+      return (long) MSG_SEND_LONG_0.invokeExact(recv, sel);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /** Sends a void message with one {@code BOOL} argument: {@code [recv sel value]}. */
+  static void sendVoidBool(MemorySegment recv, MemorySegment sel, boolean value) {
+    try {
+      MSG_SEND_VOID_BOOL.invokeExact(recv, sel, value ? 1 : 0);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /** Invokes a {@code void (^)(void)} block. */
+  static void invokeBlock(MemorySegment block) {
+    try {
+      BLOCK_INVOKE_VOID.invokeExact(blockFunction(block), block);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /** Invokes a {@code void (^)(id)} block. */
+  static void invokeBlock(MemorySegment block, MemorySegment arg) {
+    try {
+      BLOCK_INVOKE_ID.invokeExact(blockFunction(block), block, arg);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /** Invokes a {@code void (^)(BOOL)} block. */
+  static void invokeBlock(MemorySegment block, boolean arg) {
+    try {
+      BLOCK_INVOKE_BOOL.invokeExact(blockFunction(block), block, arg ? (byte) 1 : (byte) 0);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  private static MemorySegment blockFunction(MemorySegment block) {
+    return block
+        .reinterpret(BLOCK_INVOKE_OFFSET + ADDRESS.byteSize())
+        .get(ADDRESS, BLOCK_INVOKE_OFFSET);
   }
 
   /**

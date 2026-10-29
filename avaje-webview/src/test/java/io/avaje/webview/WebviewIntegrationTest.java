@@ -1,12 +1,14 @@
 package io.avaje.webview;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -620,6 +622,248 @@ class WebviewIntegrationTest {
       Files.deleteIfExists(tmp);
     }
     assertTrue(called.get(), "largeFileNavLoaded binding was never invoked");
+  }
+
+  // -------------------------------------------------------------------------
+  // evalResult
+  // -------------------------------------------------------------------------
+
+  /** Loads a page, evaluates {@code expression} once it is ready, and returns value or error. */
+  private static Object evalResultOnLoad(String expression) {
+    final var outcome = new AtomicReference<Object>();
+    try (var w = Webview.builder().build()) {
+      w.bind(
+          "__ready__",
+          _ -> {
+            w.evalResult(expression)
+                .whenComplete(
+                    (value, error) -> {
+                      outcome.set(error != null ? error : value);
+                      w.dispatch(w::close);
+                    });
+            return "null";
+          });
+      w.setHTML("<script>window.answer = 42; window.__ready__();</script>");
+      w.run();
+    }
+    return outcome.get();
+  }
+
+  @Test
+  void evalResultReturnsJson() {
+    assertEquals("{\"a\":[1,\"two\"],\"b\":42}", evalResultOnLoad("({ a: [1, 'two'], b: answer })"));
+  }
+
+  @Test
+  void evalResultReturnsString() {
+    assertEquals("\"h\u00e9llo \\\"q\\\"\"", evalResultOnLoad("'h\u00e9llo \"q\"'"));
+  }
+
+  @Test
+  void evalResultUndefinedIsNull() {
+    assertEquals("null", evalResultOnLoad("undefined"));
+  }
+
+  @Test
+  void evalResultAwaitsPromise() {
+    assertEquals("7", evalResultOnLoad("await new Promise(r => setTimeout(() => r(7), 10))"));
+  }
+
+  @Test
+  void evalResultThrowFails() {
+    final var error = evalResultOnLoad("(() => { throw new TypeError('boom'); })()");
+    final var cause = assertInstanceOf(JavaScriptException.class, error);
+    assertEquals("TypeError: boom", cause.getMessage());
+  }
+
+  @Test
+  void evalResultRejectFails() {
+    final var error = evalResultOnLoad("Promise.reject('nope')");
+    assertEquals("nope", assertInstanceOf(JavaScriptException.class, error).getMessage());
+  }
+
+  @Test
+  void evalResultSyntaxErrorFails() {
+    final var error = evalResultOnLoad("1 +* 2");
+    assertInstanceOf(JavaScriptException.class, error);
+  }
+
+  @Test
+  void evalResultUnserializableFails() {
+    final var error = evalResultOnLoad("(() => { const o = {}; o.self = o; return o; })()");
+    assertInstanceOf(JavaScriptException.class, error);
+  }
+
+  @Test
+  void evalResultConcurrentCallsKeepTheirResults() {
+    final var failure = new AtomicReference<Throwable>();
+    try (var w = Webview.builder().build()) {
+      w.bind(
+          "__ready__",
+          _ -> {
+            final var one = w.evalResult("await new Promise(r => setTimeout(() => r(1), 30))");
+            final var two = w.evalResult("2");
+            one.thenCombine(two, (a, b) -> a + "," + b)
+                .whenComplete(
+                    (value, error) -> {
+                      try {
+                        assertEquals("1,2", value);
+                      } catch (final Throwable t) {
+                        failure.set(t);
+                      } finally {
+                        w.dispatch(w::close);
+                      }
+                    });
+            return "null";
+          });
+      w.setHTML("<script>window.__ready__();</script>");
+      w.run();
+    }
+    rethrow(failure);
+  }
+
+  @Test
+  void evalResultBlockingOnUiThreadThrows() {
+    final var outcome = new AtomicReference<Object>();
+    try (var w = Webview.builder().build()) {
+      w.bind(
+          "__ready__",
+          _ -> {
+            try {
+              outcome.set(w.evalResult("1").thenApply(v -> v).join());
+            } catch (final Throwable t) {
+              outcome.set(t);
+            } finally {
+              w.dispatch(w::close);
+            }
+            return "null";
+          });
+      w.setHTML("<script>window.__ready__();</script>");
+      w.run();
+    }
+    assertInstanceOf(IllegalStateException.class, outcome.get());
+  }
+
+  @Test
+  void evalResultBlockingOffUiThreadWorks() throws Exception {
+    final var outcome = new AtomicReference<Object>();
+    try (var w = Webview.builder().build()) {
+      w.bind(
+          "__ready__",
+          _ -> {
+            Thread.ofVirtual()
+                .start(
+                    () -> {
+                      try {
+                        outcome.set(w.evalResult("answer").get(5, TimeUnit.SECONDS));
+                      } catch (final Throwable t) {
+                        outcome.set(t);
+                      } finally {
+                        w.close();
+                      }
+                    });
+            return "null";
+          });
+      w.setHTML("<script>window.answer = 42; window.__ready__();</script>");
+      w.run();
+    }
+    assertEquals("42", outcome.get());
+  }
+
+  // -------------------------------------------------------------------------
+  // Window events and state
+  // -------------------------------------------------------------------------
+
+  @Test
+  void pageLoadedReportsUrl() {
+    final var urls = new CopyOnWriteArrayList<String>();
+    try (var w = Webview.builder().navigate("data:text/html,<p>hi</p>").build()) {
+      w.onPageLoaded(
+          url -> {
+            urls.add(url);
+            w.close();
+          });
+      w.run();
+    }
+    assertEquals(1, urls.size());
+    assertTrue(urls.getFirst().startsWith("data:text/html"), urls.getFirst());
+  }
+
+  @Test
+  void resizeReportsContentSize() {
+    final var sizes = new CopyOnWriteArrayList<WindowSize>();
+    try (var w = Webview.builder().width(640).height(480).build()) {
+      w.onResize(
+          size -> {
+            sizes.add(size);
+            if (sizes.size() == 1) {
+              w.setSize(500, 400);
+            } else if (size.equals(new WindowSize(500, 400))) {
+              w.close();
+            }
+          });
+      w.run();
+    }
+    assertEquals(new WindowSize(640, 480), sizes.getFirst());
+    assertEquals(new WindowSize(500, 400), sizes.getLast());
+  }
+
+  @Test
+  void getSizeFromBackgroundThread() {
+    final var size = new AtomicReference<WindowSize>();
+    try (var w = Webview.builder().width(640).height(480).build()) {
+      w.onResize(
+          _ ->
+              Thread.ofVirtual()
+                  .start(
+                      () -> {
+                        size.set(w.getSize());
+                        w.close();
+                      }));
+      w.run();
+    }
+    assertEquals(new WindowSize(640, 480), size.get());
+  }
+
+  @Test
+  void hiddenWindowStillLoadsAndRunsBindings() {
+    final var called = new AtomicBoolean(false);
+    final var failure = new AtomicReference<Throwable>();
+    try (var w = Webview.builder().showOnFirstLoad(false).build()) {
+      w.bind(
+          "ping",
+          _ -> {
+            try {
+              called.set(true);
+              assertEquals(false, w.isFullscreen());
+              assertEquals(false, w.isMinimized());
+            } catch (final Throwable t) {
+              failure.set(t);
+            } finally {
+              w.close();
+            }
+            return "null";
+          });
+      w.setHTML("<script>window.ping();</script>");
+      w.run();
+    }
+    rethrow(failure);
+    assertTrue(called.get(), "hidden window never ran its page");
+  }
+
+  @Test
+  void showAndHideAfterLoad() {
+    final var loaded = new AtomicInteger();
+    try (var w = Webview.builder().showOnFirstLoad(false).build()) {
+      w.onPageLoaded(
+          _ -> {
+            loaded.incrementAndGet();
+            w.showWindow().hideWindow().showWindow();
+            w.close();
+          });
+      w.run();
+    }
+    assertEquals(1, loaded.get());
   }
 
   // -------------------------------------------------------------------------

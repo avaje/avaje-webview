@@ -28,6 +28,31 @@ final class Gtk4 {
    */
   static final FunctionDescriptor DESTROY_SIGNAL_DESC = FunctionDescriptor.ofVoid(ADDRESS, ADDRESS);
 
+  /**
+   * {@code FunctionDescriptor} for {@code "close-request"} on {@code GtkWindow}: {@code
+   * gboolean(*)(GtkWindow* window, gpointer user_data)}. Returning {@code TRUE} stops the close.
+   */
+  static final FunctionDescriptor CLOSE_REQUEST_SIGNAL_DESC =
+      FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS);
+
+  /**
+   * {@code FunctionDescriptor} for a {@code "notify::<property>"} signal: {@code void(*)(GObject*
+   * object, GParamSpec* pspec, gpointer user_data)}.
+   */
+  static final FunctionDescriptor NOTIFY_SIGNAL_DESC =
+      FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, ADDRESS);
+
+  /**
+   * {@code FunctionDescriptor} for {@code "layout"} on {@code GdkSurface}: {@code
+   * void(*)(GdkSurface* surface, gint width, gint height, gpointer user_data)}. Emitted whenever
+   * the surface gets a new size.
+   */
+  static final FunctionDescriptor LAYOUT_SIGNAL_DESC =
+      FunctionDescriptor.ofVoid(ADDRESS, JAVA_INT, JAVA_INT, ADDRESS);
+
+  /** {@code GDK_TOPLEVEL_STATE_MINIMIZED}, bit 0 of {@code GdkToplevelState}. */
+  static final int GDK_TOPLEVEL_STATE_MINIMIZED = 1;
+
   private static final Linker LINKER = Linker.nativeLinker();
 
   /** Symbol lookup rooted in {@code libgtk-4.so.1} */
@@ -126,6 +151,15 @@ final class Gtk4 {
    */
   private static final MethodHandle GTK_WINDOW_DESTROY =
       downcall("gtk_window_destroy", FunctionDescriptor.ofVoid(ADDRESS));
+
+  /**
+   * {@code gtk_window_close(GtkWindow* window) -> void}
+   *
+   * <p>Requests a close exactly as the title bar's close button does, emitting {@code
+   * "close-request"} so handlers can veto it.
+   */
+  private static final MethodHandle GTK_WINDOW_CLOSE =
+      downcall("gtk_window_close", FunctionDescriptor.ofVoid(ADDRESS));
 
   /**
    * {@code gtk_window_minimize(GtkWindow* window) -> void}
@@ -341,6 +375,55 @@ final class Gtk4 {
       downcall(
           "gtk_style_context_add_provider_for_display",
           FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, JAVA_INT));
+
+  /**
+   * {@code gtk_window_present(GtkWindow* window) -> void}
+   *
+   * <p>Shows the window, un-minimizes it, and asks the compositor to raise and focus it.
+   */
+  private static final MethodHandle GTK_WINDOW_PRESENT =
+      downcall("gtk_window_present", FunctionDescriptor.ofVoid(ADDRESS));
+
+  /** {@code gtk_window_unfullscreen(GtkWindow* window) -> void} */
+  private static final MethodHandle GTK_WINDOW_UNFULLSCREEN =
+      downcall("gtk_window_unfullscreen", FunctionDescriptor.ofVoid(ADDRESS));
+
+  /** {@code gtk_window_is_fullscreen(GtkWindow* window) -> gboolean} */
+  private static final MethodHandle GTK_WINDOW_IS_FULLSCREEN =
+      downcall("gtk_window_is_fullscreen", FunctionDescriptor.of(JAVA_INT, ADDRESS));
+
+  /** {@code gtk_widget_get_visible(GtkWidget* widget) -> gboolean} */
+  private static final MethodHandle GTK_WIDGET_GET_VISIBLE =
+      downcall("gtk_widget_get_visible", FunctionDescriptor.of(JAVA_INT, ADDRESS));
+
+  /**
+   * {@code gtk_window_is_active(GtkWindow* window) -> gboolean}
+   *
+   * <p>Whether the window is the one the user is interacting with, i.e. has keyboard focus.
+   */
+  private static final MethodHandle GTK_WINDOW_IS_ACTIVE =
+      downcall("gtk_window_is_active", FunctionDescriptor.of(JAVA_INT, ADDRESS));
+
+  /**
+   * {@code gtk_window_get_default_size(GtkWindow* window, int* width, int* height) -> void}
+   *
+   * <p>The size the window opens at, or the size it was last resized to while not maximized.
+   */
+  private static final MethodHandle GTK_WINDOW_GET_DEFAULT_SIZE =
+      downcall(
+          "gtk_window_get_default_size", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, ADDRESS));
+
+  /** {@code gtk_widget_get_width(GtkWidget* widget) -> int}, the allocated width. */
+  private static final MethodHandle GTK_WIDGET_GET_WIDTH =
+      downcall("gtk_widget_get_width", FunctionDescriptor.of(JAVA_INT, ADDRESS));
+
+  /** {@code gtk_widget_get_height(GtkWidget* widget) -> int}, the allocated height. */
+  private static final MethodHandle GTK_WIDGET_GET_HEIGHT =
+      downcall("gtk_widget_get_height", FunctionDescriptor.of(JAVA_INT, ADDRESS));
+
+  /** {@code gdk_toplevel_get_state(GdkToplevel* toplevel) -> GdkToplevelState} */
+  private static final MethodHandle GDK_TOPLEVEL_GET_STATE =
+      downcall("gdk_toplevel_get_state", FunctionDescriptor.of(JAVA_INT, ADDRESS));
 
   private static MethodHandle downcall(String sym, FunctionDescriptor desc) {
     return LINKER.downcallHandle(
@@ -724,6 +807,118 @@ final class Gtk4 {
           display, provider, GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
       // The display took its own reference, so drop this one.
       GLib.gObjectUnref(provider);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /** Requests a close of {@code window} as the user's close button would. */
+  static void gtkWindowClose(MemorySegment window) {
+    try {
+      GTK_WINDOW_CLOSE.invokeExact(window);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /** Shows, un-minimizes and raises {@code window}. */
+  static void gtkWindowPresent(MemorySegment window) {
+    try {
+      GTK_WINDOW_PRESENT.invokeExact(window);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /** Asks the window manager to take {@code window} out of fullscreen. */
+  static void gtkWindowUnfullscreen(MemorySegment window) {
+    try {
+      GTK_WINDOW_UNFULLSCREEN.invokeExact(window);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /** Returns {@code true} if {@code window} is fullscreen. */
+  static boolean gtkWindowIsFullscreen(MemorySegment window) {
+    try {
+      return (int) GTK_WINDOW_IS_FULLSCREEN.invokeExact(window) != 0;
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /** Returns {@code true} if {@code widget} has been shown. */
+  static boolean gtkWidgetGetVisible(MemorySegment widget) {
+    try {
+      return (int) GTK_WIDGET_GET_VISIBLE.invokeExact(widget) != 0;
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /** Returns {@code true} if {@code window} has keyboard focus. */
+  static boolean gtkWindowIsActive(MemorySegment window) {
+    try {
+      return (int) GTK_WINDOW_IS_ACTIVE.invokeExact(window) != 0;
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * Returns {@code window}'s default size as {@code {width, height}}.
+   *
+   * @param window a {@code GtkWindow*}
+   */
+  static int[] gtkWindowGetDefaultSize(MemorySegment window) {
+    try (var a = Arena.ofConfined()) {
+      final var w = a.allocate(JAVA_INT);
+      final var h = a.allocate(JAVA_INT);
+      GTK_WINDOW_GET_DEFAULT_SIZE.invokeExact(window, w, h);
+      return new int[] {w.get(JAVA_INT, 0), h.get(JAVA_INT, 0)};
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /** Returns the allocated width of {@code widget}, {@code 0} before its first allocation. */
+  static int gtkWidgetGetWidth(MemorySegment widget) {
+    try {
+      return (int) GTK_WIDGET_GET_WIDTH.invokeExact(widget);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /** Returns the allocated height of {@code widget}, {@code 0} before its first allocation. */
+  static int gtkWidgetGetHeight(MemorySegment widget) {
+    try {
+      return (int) GTK_WIDGET_GET_HEIGHT.invokeExact(widget);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * Returns the {@code GdkSurface*} behind {@code window}, or a zero-address segment before it is
+   * realized.
+   */
+  static MemorySegment gtkNativeGetSurface(MemorySegment window) {
+    try {
+      return (MemorySegment) GTK_NATIVE_GET_SURFACE.invokeExact(window);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * Returns the {@code GdkToplevelState} flags of a toplevel surface, such as {@link
+   * #GDK_TOPLEVEL_STATE_MINIMIZED}.
+   */
+  static int gdkToplevelGetState(MemorySegment surface) {
+    try {
+      return (int) GDK_TOPLEVEL_GET_STATE.invokeExact(surface);
     } catch (final Throwable t) {
       throw new RuntimeException(t);
     }

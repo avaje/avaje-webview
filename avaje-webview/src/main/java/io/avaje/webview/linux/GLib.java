@@ -36,6 +36,9 @@ final class GLib {
    */
   private static final int G_SIGNAL_MATCH_DATA = 1 << 4;
 
+  /** Bit 3 of {@code GSignalMatchType}, {@code G_SIGNAL_MATCH_FUNC}: match by callback pointer. */
+  private static final int G_SIGNAL_MATCH_FUNC = 1 << 3;
+
   /**
    * {@code FunctionDescriptor} for {@code gboolean(*func)(gpointer data)}.
    *
@@ -356,6 +359,25 @@ final class GLib {
                   MemorySegment.NULL,
                   MemorySegment.NULL,
                   data);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * Disconnects every handler on {@code instance} whose callback is {@code func}. Matching on the
+   * function pointer leaves handlers other code connected untouched, which matching on a {@code
+   * NULL} data pointer would not.
+   *
+   * @param instance the GObject from which to disconnect handlers
+   * @param func the callback (upcall stub) that was passed to {@link #gSignalConnect}
+   */
+  static void gSignalHandlersDisconnectByFunc(MemorySegment instance, MemorySegment func) {
+    try {
+      final var _ =
+          (int)
+              G_SIGNAL_HANDLERS_DISCONNECT_MATCHED.invokeExact(
+                  instance, G_SIGNAL_MATCH_FUNC, 0, 0, MemorySegment.NULL, func, MemorySegment.NULL);
     } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
