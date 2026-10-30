@@ -24,7 +24,32 @@ import module java.base;
 
 import module org.jspecify;
 
+import io.avaje.webview.windows.Win32WebView;
+
 final class WebviewUtil {
+
+  /** Opens a web or mail link with whatever app the operating system uses for it. */
+  static void openExternal(URI uri) {
+    final var scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
+    if (!scheme.equals("http") && !scheme.equals("https") && !scheme.equals("mailto")) {
+      throw new IllegalArgumentException("Only http, https and mailto URIs can be opened: " + uri);
+    }
+    final var os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+    if (os.contains("win")) {
+      Win32WebView.openExternal(uri.toString());
+      return;
+    }
+    final var command = os.contains("mac") ? "open" : "xdg-open";
+    try {
+      // The URI goes in as a single argument with no shell in between, so it can't add commands.
+      new ProcessBuilder(command, uri.toString())
+          .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+          .redirectError(ProcessBuilder.Redirect.DISCARD)
+          .start();
+    } catch (final IOException e) {
+      throw new UncheckedIOException("Could not run " + command + " for " + uri, e);
+    }
+  }
 
   static String getExceptionStack(@NonNull Throwable e) {
     final var sw = new StringWriter();

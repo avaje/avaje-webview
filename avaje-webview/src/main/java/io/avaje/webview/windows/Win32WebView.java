@@ -1,5 +1,6 @@
 package io.avaje.webview.windows;
 
+import static java.lang.System.Logger.Level.ERROR;
 import static java.lang.foreign.ValueLayout.ADDRESS;
 import static java.lang.foreign.ValueLayout.JAVA_INT;
 import static java.lang.foreign.ValueLayout.JAVA_LONG;
@@ -33,6 +34,8 @@ import io.avaje.webview.WindowSize;
  * stack to run on.
  */
 public final class Win32WebView extends WebviewBase {
+
+  private static final System.Logger log = System.getLogger("io.avaje.webview");
 
   private static final String EDGE_RELEASE_GUID = "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}";
   private static final String EDGE_UPDATE_KEY =
@@ -1006,6 +1009,8 @@ public final class Win32WebView extends WebviewBase {
     addWebMessageHandler();
     addPermissionHandler();
     addProcessFailedHandler();
+    addNavigationStartingHandler();
+    addNewWindowHandler();
 
     // Settings, scripts, resize and show all need IPC, so they wait for msgWndProc to run them
     // on a stack that isn't inside a WebView2 callback.
@@ -1071,6 +1076,108 @@ public final class Win32WebView extends WebviewBase {
     }
     firePageLoaded(webView2.getSource());
     return 0;
+  }
+
+  private void addNavigationStartingHandler() {
+    try {
+      final var mh =
+          MethodHandles.lookup()
+              .findVirtual(
+                  Win32WebView.class,
+                  "onNavigationStarting",
+                  MethodType.methodType(
+                      int.class, MemorySegment.class, MemorySegment.class, MemorySegment.class))
+              .bindTo(this);
+      final var handler =
+          buildComObject(
+              Linker.nativeLinker()
+                  .upcallStub(
+                      mh, FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, ADDRESS), arenaStubs));
+      webView2.addNavigationStarting(handler);
+      webView2.addFrameNavigationStarting(handler);
+    } catch (final ReflectiveOperationException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  /**
+   * Handles both NavigationStarting (main frame) and FrameNavigationStarting (iframes), which share
+   * one event argument type. A blocked navigation is cancelled through {@code put_Cancel}.
+   */
+  @SuppressWarnings("unused")
+  public int onNavigationStarting(MemorySegment self, MemorySegment sender, MemorySegment args) {
+    try {
+      // ICoreWebView2NavigationStartingEventArgs: vtable[3] get_Uri, vtable[8] put_Cancel
+      if (!fireNavigationRequested(argsUri(args))) {
+        final var putCancel =
+            Linker.nativeLinker()
+                .downcallHandle(
+                    Win32.vtableFn(args, 8), FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT));
+        final var _ = (int) putCancel.invokeExact(args, 1);
+      }
+    } catch (final Throwable t) {
+      log.log(ERROR, "NavigationStarting handler failed", t);
+    }
+    return 0;
+  }
+
+  private void addNewWindowHandler() {
+    try {
+      final var mh =
+          MethodHandles.lookup()
+              .findVirtual(
+                  Win32WebView.class,
+                  "onNewWindowRequested",
+                  MethodType.methodType(
+                      int.class, MemorySegment.class, MemorySegment.class, MemorySegment.class))
+              .bindTo(this);
+      webView2.addNewWindowRequested(
+          buildComObject(
+              Linker.nativeLinker()
+                  .upcallStub(
+                      mh, FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, ADDRESS), arenaStubs)));
+    } catch (final ReflectiveOperationException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  /**
+   * Marks every new window request handled without supplying a window, which makes WebView2 skip
+   * its own popup, then hands the URL to {@code onNewWindow}.
+   */
+  @SuppressWarnings("unused")
+  public int onNewWindowRequested(MemorySegment self, MemorySegment sender, MemorySegment args) {
+    try {
+      // ICoreWebView2NewWindowRequestedEventArgs: vtable[3] get_Uri, vtable[6] put_Handled
+      final var url = argsUri(args);
+      final var putHandled =
+          Linker.nativeLinker()
+              .downcallHandle(
+                  Win32.vtableFn(args, 6), FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT));
+      final var _ = (int) putHandled.invokeExact(args, 1);
+      fireNewWindowRequested(url);
+    } catch (final Throwable t) {
+      log.log(ERROR, "NewWindowRequested handler failed", t);
+    }
+    return 0;
+  }
+
+  /** Reads {@code get_Uri}, vtable index 3 on both navigation event argument interfaces. */
+  private static String argsUri(MemorySegment args) throws Throwable {
+    try (var a = Arena.ofConfined()) {
+      final var pUri = a.allocate(ADDRESS);
+      final var getUri =
+          Linker.nativeLinker()
+              .downcallHandle(
+                  Win32.vtableFn(args, 3), FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS));
+      final var hr = (int) getUri.invokeExact(args, pUri);
+      return Win32.takeComString(hr, pUri.get(ADDRESS, 0));
+    }
+  }
+
+  /** Opens {@code uri} with its registered application through {@code ShellExecuteW}. */
+  public static void openExternal(String uri) {
+    Win32.shellOpen(uri);
   }
 
   private void revealWindow() {

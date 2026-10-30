@@ -57,6 +57,31 @@ final class WebKit6 {
   static final FunctionDescriptor LOAD_CHANGED_DESC =
       FunctionDescriptor.ofVoid(ADDRESS, JAVA_INT, ADDRESS);
 
+  /** {@code WebKitPolicyDecisionType} for following a link, a redirect, or a form post. */
+  static final int WEBKIT_POLICY_DECISION_NAVIGATION = 0;
+
+  /** {@code WebKitPolicyDecisionType} for {@code target="_blank"} links. */
+  static final int WEBKIT_POLICY_DECISION_NEW_WINDOW = 1;
+
+  /**
+   * {@code FunctionDescriptor} for the {@code "create"} signal.
+   *
+   * <p>C signature: {@code GtkWidget*(*)(WebKitWebView* web_view, WebKitNavigationAction* action,
+   * gpointer user_data)}. Return {@code NULL} to skip making the new web view.
+   */
+  static final FunctionDescriptor CREATE_DESC =
+      FunctionDescriptor.of(ADDRESS, ADDRESS, ADDRESS, ADDRESS);
+
+  /**
+   * {@code FunctionDescriptor} for the {@code "decide-policy"} signal.
+   *
+   * <p>C signature: {@code gboolean(*)(WebKitWebView* web_view, WebKitPolicyDecision* decision,
+   * WebKitPolicyDecisionType type, gpointer user_data)}. Returning {@code TRUE} means the handler
+   * has made the decision. {@code FALSE} leaves it to WebKit's default.
+   */
+  static final FunctionDescriptor DECIDE_POLICY_DESC =
+      FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, JAVA_INT, ADDRESS);
+
   private static final Linker LINKER = Linker.nativeLinker();
 
   /** Lookup for {@code libwebkitgtk-6.0.so.4} */
@@ -436,6 +461,69 @@ final class WebKit6 {
   static MemorySegment webkitWebViewGetUri(MemorySegment wv) {
     try {
       return (MemorySegment) WEBKIT_WEB_VIEW_GET_URI.invokeExact(wv);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * {@code webkit_navigation_policy_decision_get_navigation_action(WebKitNavigationPolicyDecision*
+   * decision) -> WebKitNavigationAction*}, borrowed from the decision.
+   */
+  private static final MethodHandle WEBKIT_NAVIGATION_POLICY_DECISION_GET_NAVIGATION_ACTION =
+      downcall(
+          "webkit_navigation_policy_decision_get_navigation_action",
+          FunctionDescriptor.of(ADDRESS, ADDRESS));
+
+  /**
+   * {@code webkit_navigation_action_get_request(WebKitNavigationAction* action) ->
+   * WebKitURIRequest*}, borrowed from the action.
+   */
+  private static final MethodHandle WEBKIT_NAVIGATION_ACTION_GET_REQUEST =
+      downcall("webkit_navigation_action_get_request", FunctionDescriptor.of(ADDRESS, ADDRESS));
+
+  /** {@code webkit_uri_request_get_uri(WebKitURIRequest* request) -> const gchar*} */
+  private static final MethodHandle WEBKIT_URI_REQUEST_GET_URI =
+      downcall("webkit_uri_request_get_uri", FunctionDescriptor.of(ADDRESS, ADDRESS));
+
+  /** {@code webkit_policy_decision_ignore(WebKitPolicyDecision* decision) -> void} */
+  private static final MethodHandle WEBKIT_POLICY_DECISION_IGNORE =
+      downcall("webkit_policy_decision_ignore", FunctionDescriptor.ofVoid(ADDRESS));
+
+  /**
+   * Returns the URI a navigation policy decision is about, or {@code ""} if WebKit gave none.
+   *
+   * @param decision a {@code WebKitNavigationPolicyDecision*} from {@code "decide-policy"}
+   */
+  static String webkitNavigationDecisionUri(MemorySegment decision) {
+    try {
+      return webkitNavigationActionUri(
+          (MemorySegment) WEBKIT_NAVIGATION_POLICY_DECISION_GET_NAVIGATION_ACTION.invokeExact(
+              decision));
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * Returns the URL a navigation action wants to load, or {@code ""} if it has none.
+   *
+   * @param action a borrowed {@code WebKitNavigationAction*}, like the one from {@code "create"}
+   */
+  static String webkitNavigationActionUri(MemorySegment action) {
+    try {
+      final var request = (MemorySegment) WEBKIT_NAVIGATION_ACTION_GET_REQUEST.invokeExact(action);
+      final var uri = (MemorySegment) WEBKIT_URI_REQUEST_GET_URI.invokeExact(request);
+      return uri.address() == 0L ? "" : uri.reinterpret(Long.MAX_VALUE).getString(0);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /** Cancels the navigation or new window a {@code "decide-policy"} decision is about. */
+  static void webkitPolicyDecisionIgnore(MemorySegment decision) {
+    try {
+      WEBKIT_POLICY_DECISION_IGNORE.invokeExact(decision);
     } catch (final Throwable t) {
       throw new RuntimeException(t);
     }

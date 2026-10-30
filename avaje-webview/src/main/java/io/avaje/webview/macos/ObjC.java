@@ -307,6 +307,9 @@ final class ObjC {
   private static final MethodHandle BLOCK_INVOKE_BOOL =
       LINKER.downcallHandle(FunctionDescriptor.ofVoid(ADDRESS, JAVA_BYTE));
 
+  private static final MethodHandle BLOCK_INVOKE_LONG =
+      LINKER.downcallHandle(FunctionDescriptor.ofVoid(ADDRESS, JAVA_LONG));
+
   private static final long BLOCK_INVOKE_OFFSET = 16;
 
   private static MethodHandle downcall(SymbolLookup lib, String sym, FunctionDescriptor desc) {
@@ -488,6 +491,15 @@ final class ObjC {
   static void invokeBlock(MemorySegment block, boolean arg) {
     try {
       BLOCK_INVOKE_BOOL.invokeExact(blockFunction(block), block, arg ? (byte) 1 : (byte) 0);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /** Invokes a {@code void (^)(NSInteger)} block, such as a {@code WKNavigationActionPolicy} one. */
+  static void invokeBlock(MemorySegment block, long arg) {
+    try {
+      BLOCK_INVOKE_LONG.invokeExact(blockFunction(block), block, arg);
     } catch (final Throwable t) {
       throw new RuntimeException(t);
     }

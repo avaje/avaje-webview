@@ -5,6 +5,8 @@ import static java.lang.foreign.ValueLayout.JAVA_INT;
 import static java.lang.foreign.ValueLayout.JAVA_LONG;
 import static java.lang.foreign.ValueLayout.JAVA_SHORT;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.Linker;
@@ -38,6 +40,8 @@ final class Win32 {
   private static final SymbolLookup ADVAPI32 =
       SymbolLookup.libraryLookup("advapi32", Arena.global());
   private static final SymbolLookup OLE32 = SymbolLookup.libraryLookup("ole32", Arena.global());
+  private static final SymbolLookup SHELL32 =
+      SymbolLookup.libraryLookup("shell32", Arena.global());
 
   // Window style / message constants
   static final int WS_EX_APPWINDOW = 0x00040000;
@@ -524,6 +528,16 @@ final class Win32 {
   static final MethodHandle CoTaskMemFree =
       downcall(OLE32, "CoTaskMemFree", FunctionDescriptor.ofVoid(ADDRESS));
 
+  /**
+   * {@code ShellExecuteW(hwnd, lpOperation, lpFile, lpParameters, lpDirectory, nShowCmd) ->
+   * HINSTANCE}. The result is not a real handle: values above 32 mean success.
+   */
+  static final MethodHandle ShellExecuteW =
+      downcall(
+          SHELL32,
+          "ShellExecuteW",
+          FunctionDescriptor.of(ADDRESS, ADDRESS, ADDRESS, ADDRESS, ADDRESS, ADDRESS, JAVA_INT));
+
   private static MethodHandle downcall(SymbolLookup lib, String sym, FunctionDescriptor desc) {
     return LINKER.downcallHandle(
         lib.find(sym).orElseThrow(() -> new UnsatisfiedLinkError("Symbol not found: " + sym)),
@@ -922,6 +936,49 @@ final class Win32 {
           (MemorySegment) SetThreadDpiAwarenessContext.invokeExact(MemorySegment.ofAddress(-4L));
     } catch (final Throwable ignored) {
     }
+  }
+
+  /**
+   * Opens {@code target} with its registered application, the way double-clicking it in Explorer
+   * would.
+   *
+   * @throws UncheckedIOException if Windows reports that it couldn't
+   */
+  static void shellOpen(String target) {
+    try (var a = Arena.ofConfined()) {
+      final var result =
+          (MemorySegment)
+              ShellExecuteW.invokeExact(
+                  MemorySegment.NULL,
+                  a.allocateFrom("open", StandardCharsets.UTF_16LE),
+                  a.allocateFrom(target, StandardCharsets.UTF_16LE),
+                  MemorySegment.NULL,
+                  MemorySegment.NULL,
+                  SW_SHOW);
+      if (result.address() <= 32) {
+        throw new UncheckedIOException(
+            new IOException(
+                "ShellExecuteW failed with code " + result.address() + " for " + target));
+      }
+    } catch (final UncheckedIOException e) {
+      throw e;
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * Reads a {@code LPWSTR} out-parameter WebView2 allocated, then frees it.
+   *
+   * @return the string, or {@code ""} when the call failed or produced no string
+   */
+  static String takeComString(int hr, MemorySegment str) {
+    if (hr != 0 || str.address() == 0) {
+      return "";
+    }
+    final var result = str.reinterpret(Long.MAX_VALUE).getString(0, StandardCharsets.UTF_16LE);
+    coTaskMemFree(str);
+    return result;
   }
 
   /**

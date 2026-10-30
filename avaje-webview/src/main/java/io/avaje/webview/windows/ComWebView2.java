@@ -21,6 +21,9 @@ final class ComWebView2 {
   private final MethodHandle addWebMessageRcvd;
   private final MethodHandle addPermissionReq;
   private final MethodHandle addNavCompleted;
+  private final MethodHandle addNavStarting;
+  private final MethodHandle addFrameNavStarting;
+  private final MethodHandle addNewWindowReq;
   private final MethodHandle removeNavCompleted;
   private final MethodHandle addScriptOnDoc;
   private final MethodHandle removeScript;
@@ -43,8 +46,14 @@ final class ComWebView2 {
     navigateToString = Win32.resolve(ptr, 6, FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS));
     addPermissionReq =
         Win32.resolve(ptr, 23, FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, ADDRESS));
+    addNavStarting =
+        Win32.resolve(ptr, 7, FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, ADDRESS));
     addNavCompleted =
         Win32.resolve(ptr, 15, FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, ADDRESS));
+    addFrameNavStarting =
+        Win32.resolve(ptr, 17, FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, ADDRESS));
+    addNewWindowReq =
+        Win32.resolve(ptr, 44, FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, ADDRESS));
     removeNavCompleted =
         Win32.resolve(ptr, 16, FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_LONG));
     addScriptOnDoc =
@@ -81,14 +90,7 @@ final class ComWebView2 {
     try (var a = Arena.ofConfined()) {
       final var pUri = a.allocate(ADDRESS);
       final var hr = (int) getSource.invokeExact(ptr, pUri);
-      final var uri = pUri.get(ADDRESS, 0);
-      if (hr != 0 || uri.address() == 0) {
-        return "";
-      }
-      // WebView2 allocates the string with CoTaskMemAlloc and hands ownership to the caller.
-      final var result = uri.reinterpret(Long.MAX_VALUE).getString(0, StandardCharsets.UTF_16LE);
-      Win32.coTaskMemFree(uri);
-      return result;
+      return Win32.takeComString(hr, pUri.get(ADDRESS, 0));
     } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
@@ -159,6 +161,51 @@ final class ComWebView2 {
       final var pToken = a.allocate(JAVA_LONG);
       final var _ = (int) addNavCompleted.invokeExact(ptr, handler, pToken);
       return pToken.get(JAVA_LONG, 0);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * Calls {@code ICoreWebView2::add_NavigationStarting}, raised before each main frame navigation.
+   *
+   * @param handler COM object implementing {@code ICoreWebView2NavigationStartingEventHandler}
+   */
+  void addNavigationStarting(MemorySegment handler) {
+    try (var a = Arena.ofConfined()) {
+      final var pToken = a.allocate(JAVA_LONG);
+      final var _ = (int) addNavStarting.invokeExact(ptr, handler, pToken);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * Calls {@code ICoreWebView2::add_FrameNavigationStarting}, raised before each iframe
+   * navigation. Its event arguments are the same {@code ICoreWebView2NavigationStartingEventArgs}
+   * as {@link #addNavigationStarting}.
+   *
+   * @param handler COM object implementing {@code ICoreWebView2NavigationStartingEventHandler}
+   */
+  void addFrameNavigationStarting(MemorySegment handler) {
+    try (var a = Arena.ofConfined()) {
+      final var pToken = a.allocate(JAVA_LONG);
+      final var _ = (int) addFrameNavStarting.invokeExact(ptr, handler, pToken);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * Calls {@code ICoreWebView2::add_NewWindowRequested}, raised for {@code target="_blank"} links
+   * and {@code window.open}.
+   *
+   * @param handler COM object implementing {@code ICoreWebView2NewWindowRequestedEventHandler}
+   */
+  void addNewWindowRequested(MemorySegment handler) {
+    try (var a = Arena.ofConfined()) {
+      final var pToken = a.allocate(JAVA_LONG);
+      final var _ = (int) addNewWindowReq.invokeExact(ptr, handler, pToken);
     } catch (final Throwable t) {
       throw new RuntimeException(t);
     }
