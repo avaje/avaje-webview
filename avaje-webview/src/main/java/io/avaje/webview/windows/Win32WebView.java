@@ -260,6 +260,24 @@ public final class Win32WebView extends WebviewBase {
   }
 
   @Override
+  protected String getPageUrlImpl() {
+    return webView2.getSource();
+  }
+
+  @Override
+  protected void setUserAgentImpl(String userAgent) {
+    final var settings = webView2.getSettings();
+    if (settings == null) {
+      return;
+    }
+    try {
+      settings.putUserAgent(userAgent);
+    } finally {
+      settings.release();
+    }
+  }
+
+  @Override
   protected void setTitleImpl(String title) {
     Win32.setWindowText(hwnd, title);
   }

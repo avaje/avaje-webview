@@ -238,6 +238,27 @@ public final class GtkWebView extends WebviewBase {
   }
 
   @Override
+  protected String getPageUrlImpl() {
+    return closed ? "" : currentUrl(webView);
+  }
+
+  private static String currentUrl(MemorySegment wv) {
+    final var uri = WebKit6.webkitWebViewGetUri(wv);
+    return uri.address() == 0L ? "" : uri.reinterpret(Long.MAX_VALUE).getString(0);
+  }
+
+  @Override
+  protected void setUserAgentImpl(String userAgent) {
+    if (closed) {
+      return;
+    }
+    try (var a = Arena.ofConfined()) {
+      WebKit6.webkitSettingsSetUserAgent(
+          WebKit6.webkitWebViewGetSettings(webView), a.allocateFrom(userAgent));
+    }
+  }
+
+  @Override
   protected void setTitleImpl(String title) {
     if (closed) {
       return;
@@ -556,8 +577,7 @@ public final class GtkWebView extends WebviewBase {
   public void onLoadChanged(MemorySegment wv, int loadEvent, MemorySegment data) {
     if (loadEvent == WebKit6.WEBKIT_LOAD_FINISHED) {
       attachContent(initialWidth, initialHeight);
-      final var uri = WebKit6.webkitWebViewGetUri(wv);
-      firePageLoaded(uri.address() == 0L ? "" : uri.reinterpret(Long.MAX_VALUE).getString(0));
+      firePageLoaded(currentUrl(wv));
     }
   }
 

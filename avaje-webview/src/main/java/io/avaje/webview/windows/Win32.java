@@ -1,6 +1,7 @@
 package io.avaje.webview.windows;
 
 import static java.lang.foreign.ValueLayout.ADDRESS;
+import static java.lang.foreign.ValueLayout.JAVA_BYTE;
 import static java.lang.foreign.ValueLayout.JAVA_INT;
 import static java.lang.foreign.ValueLayout.JAVA_LONG;
 import static java.lang.foreign.ValueLayout.JAVA_SHORT;
@@ -15,7 +16,10 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.StructLayout;
 import java.lang.foreign.SymbolLookup;
 import java.lang.invoke.MethodHandle;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 
 /**
  * Panama FFM downcall handles and helpers for {@code user32}, {@code kernel32}, {@code dwmapi},
@@ -1014,6 +1018,23 @@ final class Win32 {
             .get(ADDRESS, 0)
             .reinterpret((idx + 1) * ADDRESS.byteSize());
     return vtable.getAtIndex(ADDRESS, idx);
+  }
+
+  /**
+   * Lays out a {@code GUID}: the first three groups are little-endian integers, and the last eight
+   * bytes are stored as written.
+   */
+  static MemorySegment guid(Arena a, String text) {
+    final var uuid = UUID.fromString(text);
+    final var bytes = ByteBuffer.allocate(16);
+    bytes.order(ByteOrder.LITTLE_ENDIAN);
+    final var high = uuid.getMostSignificantBits();
+    bytes.putInt((int) (high >>> 32));
+    bytes.putShort((short) (high >>> 16));
+    bytes.putShort((short) high);
+    bytes.order(ByteOrder.BIG_ENDIAN);
+    bytes.putLong(uuid.getLeastSignificantBits());
+    return a.allocateFrom(JAVA_BYTE, bytes.array());
   }
 
   private Win32() {}

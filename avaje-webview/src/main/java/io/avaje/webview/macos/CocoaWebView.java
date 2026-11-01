@@ -281,6 +281,21 @@ public final class CocoaWebView extends WebviewBase {
   }
 
   @Override
+  protected String getPageUrlImpl() {
+    return closed ? "" : MacOSHelper.currentUrl(wkWebView);
+  }
+
+  @Override
+  protected void setUserAgentImpl(String userAgent) {
+    if (closed) {
+      return;
+    }
+    try (var a = Arena.ofConfined()) {
+      sendVoid1(wkWebView, sel(a, "setCustomUserAgent:"), nsString(a, userAgent));
+    }
+  }
+
+  @Override
   protected void setTitleImpl(String title) {
     if (closed) {
       return;

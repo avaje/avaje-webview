@@ -251,6 +251,23 @@ public abstract sealed class WebviewBase implements Webview
   }
 
   @Override
+  public String getPageUrl() {
+    return callOnUIThread(this::getPageUrlImpl);
+  }
+
+  @Override
+  public void setUserAgent(@NonNull String userAgent) {
+    dispatchImpl(
+        () -> {
+          try {
+            setUserAgentImpl(userAgent);
+          } catch (final RuntimeException e) {
+            log.log(ERROR, "Could not set the user agent", e);
+          }
+        });
+  }
+
+  @Override
   public void setTitle(@NonNull String title) {
     dispatchImpl(() -> setTitleImpl(title));
   }
@@ -636,6 +653,10 @@ public abstract sealed class WebviewBase implements Webview
   }
 
   protected abstract void navigateImpl(String url);
+
+  protected abstract String getPageUrlImpl();
+
+  protected abstract void setUserAgentImpl(String userAgent);
 
   protected abstract void setTitleImpl(String title);
 
