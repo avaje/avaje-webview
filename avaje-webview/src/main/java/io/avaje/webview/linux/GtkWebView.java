@@ -1,5 +1,7 @@
 package io.avaje.webview.linux;
 
+import static java.lang.System.Logger.Level.ERROR;
+
 import java.io.File;
 import java.lang.foreign.Arena;
 import java.lang.foreign.FunctionDescriptor;
@@ -30,6 +32,8 @@ import io.avaje.webview.WindowSize;
  * CountDownLatch.
  */
 public final class GtkWebView extends WebviewBase {
+
+  private static final System.Logger log = System.getLogger("io.avaje.webview");
 
   // JS bridge: window.webkit.messageHandlers.__webview__.postMessage(json)
   private static final String HANDLER_NAME = "__webview__";
@@ -95,6 +99,8 @@ public final class GtkWebView extends WebviewBase {
   private MemorySegment destroyStub; // "destroy" signal on GtkWindow
   private MemorySegment msgStub; // "script-message-received" signal on WebKitUserContentManager
   private MemorySegment loadChangedStub; // "load-changed" signal on WebKitWebView
+  private MemorySegment decidePolicyStub; // "decide-policy" signal on WebKitWebView
+  private MemorySegment createStub; // "create" signal on WebKitWebView
   private MemorySegment closeRequestStub; // "close-request" signal on GtkWindow
   private MemorySegment activeStub; // "notify::is-active" signal on GtkWindow
   private MemorySegment realizeStub; // "realize" signal on GtkWindow
@@ -201,6 +207,7 @@ public final class GtkWebView extends WebviewBase {
       // stubs those signals point at are freed once callbackArena closes. Unhook them first.
       GLib.gSignalHandlersDisconnectByFunc(ucManager, msgStub);
       GLib.gSignalHandlersDisconnectByFunc(webView, loadChangedStub);
+      GLib.gSignalHandlersDisconnectByFunc(webView, decidePolicyStub);
       // Balances the g_object_ref_sink in initWindowAndWebView. gtk_window_set_child() doesn't
       // take ownership, it holds its own ref through the widget hierarchy, which gtk_window_destroy
       // releases. The ref from the sink is ours, and without this the WebKitWebView leaks.
@@ -555,6 +562,48 @@ public final class GtkWebView extends WebviewBase {
   }
 
   /**
+   * called before every navigation and new window request. Hands both to the {@code onNavigate} and
+   * {@code onNewWindow} plumbing in {@code WebviewBase}, and leaves response decisions to WebKit.
+   *
+   * @return 1 when this handler made the decision, 0 to let WebKit decide
+   */
+  @SuppressWarnings("unused")
+  public int onDecidePolicy(
+      MemorySegment wv, MemorySegment decision, int type, MemorySegment data) {
+    try {
+      if (type == WebKit6.WEBKIT_POLICY_DECISION_NEW_WINDOW) {
+        WebKit6.webkitPolicyDecisionIgnore(decision);
+        fireNewWindowRequested(WebKit6.webkitNavigationDecisionUri(decision));
+        return 1;
+      }
+      if (type == WebKit6.WEBKIT_POLICY_DECISION_NAVIGATION
+          && !fireNavigationRequested(WebKit6.webkitNavigationDecisionUri(decision))) {
+        WebKit6.webkitPolicyDecisionIgnore(decision);
+        return 1;
+      }
+    } catch (final Throwable t) {
+      log.log(ERROR, "decide-policy handler failed", t);
+    }
+    return 0;
+  }
+
+  /**
+   * Called when the page runs {@code window.open}. Passes the URL to the {@code onNewWindow}
+   * listeners and never opens the popup.
+   *
+   * @return always {@code NULL}, so WebKit opens nothing
+   */
+  @SuppressWarnings("unused")
+  public MemorySegment onCreate(MemorySegment wv, MemorySegment action, MemorySegment data) {
+    try {
+      fireNewWindowRequested(WebKit6.webkitNavigationActionUri(action));
+    } catch (final Throwable t) {
+      log.log(ERROR, "create handler failed", t);
+    }
+    return MemorySegment.NULL;
+  }
+
+  /**
    * NVIDIA GPUs on X11 can crash WebKitGTK's DMABuf renderer, so set
    * WEBKIT_DISABLE_DMABUF_RENDERER=1 before GTK starts unless it is already set.
    *
@@ -635,6 +684,35 @@ public final class GtkWebView extends WebviewBase {
                       void.class, MemorySegment.class, int.class, MemorySegment.class))
               .bindTo(this);
       loadChangedStub = linker.upcallStub(loadMh, WebKit6.LOAD_CHANGED_DESC, callbackArena);
+
+      // "decide-policy": gboolean(*)(WebKitWebView*, WebKitPolicyDecision*, type, gpointer)
+      final var policyMh =
+          lookup
+              .findVirtual(
+                  GtkWebView.class,
+                  "onDecidePolicy",
+                  MethodType.methodType(
+                      int.class,
+                      MemorySegment.class,
+                      MemorySegment.class,
+                      int.class,
+                      MemorySegment.class))
+              .bindTo(this);
+      decidePolicyStub = linker.upcallStub(policyMh, WebKit6.DECIDE_POLICY_DESC, callbackArena);
+
+      // "create": GtkWidget*(*)(WebKitWebView*, WebKitNavigationAction*, gpointer)
+      final var createMh =
+          lookup
+              .findVirtual(
+                  GtkWebView.class,
+                  "onCreate",
+                  MethodType.methodType(
+                      MemorySegment.class,
+                      MemorySegment.class,
+                      MemorySegment.class,
+                      MemorySegment.class))
+              .bindTo(this);
+      createStub = linker.upcallStub(createMh, WebKit6.CREATE_DESC, callbackArena);
 
       // "close-request": gboolean(*)(GtkWindow*, gpointer)
       final var closeMh =
@@ -735,6 +813,8 @@ public final class GtkWebView extends WebviewBase {
     }
 
     GLib.gSignalConnect(webView, "load-changed", loadChangedStub, MemorySegment.NULL);
+    GLib.gSignalConnect(webView, "decide-policy", decidePolicyStub, MemorySegment.NULL);
+    GLib.gSignalConnect(webView, "create", createStub, MemorySegment.NULL);
     setupJsBridge(POST_FN);
   }
 

@@ -195,6 +195,23 @@ webview.onCloseRequested(() -> {
 });
 ```
 
+`onNavigate` runs before the page goes somewhere else. (a link click, a script changing `location`, redirects, etc.). Return `false` to stay put. A common use is keeping your app's own pages in the window and sending everything else to the browser:
+
+```java
+webview.onNavigate(url -> {
+  if (url.startsWith("https://myapp.example/")) {
+    return true;
+  }
+  Webview.openExternal(URI.create(url));
+  return false;
+});
+```
+
+Iframes are checked too. Navigations started in Java with `navigate` or `setHTML` are not.
+
+```java
+webview.onNewWindow(url -> System.out.println("page wanted a window for " + url));
+```
 ## Java-JavaScript Bridge
 
 ### Executing JavaScript from Java

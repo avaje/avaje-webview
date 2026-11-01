@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -935,5 +936,131 @@ class WebviewIntegrationTest {
     rethrow(failure);
     assertTrue(w1Pinged.get(), "window 1 ping was not called");
     assertTrue(w2Pinged.get(), "window 2 ping was not called");
+  }
+
+  // -------------------------------------------------------------------------
+  // Navigation control
+  // -------------------------------------------------------------------------
+
+  /** Closes {@code w} from a background thread after {@code millis}, leaving time for events. */
+  private static void closeLater(Webview w, long millis) {
+    Thread.ofPlatform()
+        .start(
+            () -> {
+              try {
+                Thread.sleep(millis);
+              } catch (final InterruptedException e) {
+                return;
+              }
+              w.close();
+            });
+  }
+
+  @Test
+  void navigationCheckSkipsLoadsStartedFromJava() {
+    final var checked = new CopyOnWriteArrayList<String>();
+    final var loads = new AtomicInteger();
+    try (var w = Webview.builder().html("<p>first</p>").build()) {
+      w.onNavigate(
+          url -> {
+            checked.add(url);
+            return false;
+          });
+      w.onPageLoaded(
+          _ -> {
+            if (loads.incrementAndGet() == 1) {
+              w.navigate("data:text/html,<p>second</p>");
+            } else {
+              w.close();
+            }
+          });
+      w.run();
+    }
+    assertEquals(2, loads.get());
+    assertEquals(List.of(), checked);
+  }
+
+  @Test
+  void navigationCheckCanBlockPageNavigation() {
+    final var checked = new CopyOnWriteArrayList<String>();
+    final var loads = new AtomicInteger();
+    try (var w =
+        Webview.builder()
+            .html(
+                """
+                <script>
+                  window.addEventListener('load', () => {
+                    location.href = 'https://blocked.invalid/';
+                  });
+                </script>
+                """)
+            .build()) {
+      w.onNavigate(
+          url -> {
+            checked.add(url);
+            closeLater(w, 500);
+            return false;
+          });
+      w.onPageLoaded(_ -> loads.incrementAndGet());
+      w.run();
+    }
+    assertEquals(List.of("https://blocked.invalid/"), checked);
+    assertEquals(1, loads.get());
+  }
+
+  @Test
+  void navigationCheckCanAllowPageNavigation() {
+    final var checked = new CopyOnWriteArrayList<String>();
+    final var loaded = new CopyOnWriteArrayList<String>();
+    try (var w =
+        Webview.builder()
+            .html(
+                """
+                <script>
+                  window.addEventListener('load', () => {
+                    location.href = 'about:blank';
+                  });
+                </script>
+                """)
+            .build()) {
+      w.onNavigate(
+          url -> {
+            checked.add(url);
+            return true;
+          });
+      w.onPageLoaded(
+          url -> {
+            loaded.add(url);
+            if (loaded.size() == 2) {
+              w.close();
+            }
+          });
+      w.run();
+    }
+    assertEquals(List.of("about:blank"), checked);
+    assertEquals("about:blank", loaded.getLast());
+  }
+
+  @Test
+  void navigationCheckCoversIframes() {
+    final var checked = new CopyOnWriteArrayList<String>();
+    final var loads = new AtomicInteger();
+    try (var w =
+        Webview.builder().html("<iframe src='https://frame.invalid/'></iframe>").build()) {
+      w.onNavigate(
+          url -> {
+            checked.add(url);
+            return false;
+          });
+      w.onPageLoaded(
+          _ -> {
+            loads.incrementAndGet();
+            closeLater(w, 1000);
+          });
+      w.run();
+    }
+    // Blocking the iframe leaves the page itself alone.
+    assertEquals(List.of("https://frame.invalid/"), checked);
+    assertEquals(1, loads.get());
   }
 }

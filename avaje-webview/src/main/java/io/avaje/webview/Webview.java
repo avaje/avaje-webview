@@ -42,6 +42,18 @@ public interface Webview extends Closeable, Runnable {
   }
 
   /**
+   * Opens {@code uri} in the user's default browser, or in their mail client for a {@code mailto:}
+   * link.
+   *
+   * @param uri an {@code http}, {@code https} or {@code mailto} URI
+   * @throws IllegalArgumentException for any other kind of URI
+   * @throws UncheckedIOException if the operating system couldn't be asked to open it
+   */
+  static void openExternal(@NonNull URI uri) {
+    WebviewUtil.openExternal(uri);
+  }
+
+  /**
    * Returns the native window handle/pointer.
    *
    * <p>Direct access to native memory. Only worth reaching for when integrating with another
@@ -369,6 +381,33 @@ public interface Webview extends Closeable, Runnable {
    * @param listener receives the URL of the loaded page
    */
   void onPageLoaded(@NonNull Consumer<String> listener);
+
+  /**
+   * Adds a check that runs before the page navigates, whether the user clicked a link, a script
+   * changed {@code location}, a form was submitted, or a server redirected. Return {@code false} to
+   * cancel the navigation and stay on the current page. The check runs on the UI thread, so it
+   * needs to return quickly.
+   *
+   * <p>Iframes are checked too, so an allowlist needs to include anything the page embeds.
+   *
+   * <p>Navigations started with {@link #navigate(String)} or {@link #setHTML(String)} do not trigger
+   * this check.
+   *
+   * @param allow returns {@code true} to let the navigation go ahead based on the provided url
+   */
+  void onNavigate(@NonNull Predicate<String> allow);
+
+  /**
+   * Adds a listener that's called when the page asks for a new window, through a {@code
+   * target="_blank"} link or {@code window.open}. The webview never opens a popup window itself.
+   *
+   * <p>Without any listener, links open in the default browser or mail client. Adding a listener
+   * replaces that default, so you can open the URL in another {@code Webview}, in this one, or not
+   * at all. Runs on the UI thread.
+   *
+   * @param listener receives the URL the page wanted to open
+   */
+  void onNewWindow(@NonNull Consumer<String> listener);
 
   /** Interface for configuring and instantiating {@link Webview} instances. */
   public interface Builder {

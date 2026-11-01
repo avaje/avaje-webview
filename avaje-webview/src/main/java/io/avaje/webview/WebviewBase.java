@@ -171,6 +171,10 @@ public abstract sealed class WebviewBase implements Webview
   private final List<Consumer<WindowSize>> resizeListeners = new CopyOnWriteArrayList<>();
   private final List<Consumer<Boolean>> focusListeners = new CopyOnWriteArrayList<>();
   private final List<Consumer<String>> pageLoadedListeners = new CopyOnWriteArrayList<>();
+  private final List<Predicate<String>> navigationChecks = new CopyOnWriteArrayList<>();
+  private final List<Consumer<String>> newWindowListeners = new CopyOnWriteArrayList<>();
+
+  private boolean javaNavigationPending;
 
   // Last values handed to listeners.
   private WindowSize lastSize;
@@ -231,6 +235,7 @@ public abstract sealed class WebviewBase implements Webview
     dispatchImpl(
         () -> {
           syncBindScript();
+          javaNavigationPending = true;
           setHtmlImpl(html != null ? html : "");
         });
   }
@@ -240,6 +245,7 @@ public abstract sealed class WebviewBase implements Webview
     dispatchImpl(
         () -> {
           syncBindScript();
+          javaNavigationPending = true;
           navigateImpl(url == null ? "about:blank" : url);
         });
   }
@@ -445,6 +451,59 @@ public abstract sealed class WebviewBase implements Webview
   @Override
   public void onPageLoaded(@NonNull Consumer<String> listener) {
     pageLoadedListeners.add(listener);
+  }
+
+  @Override
+  public void onNavigate(@NonNull Predicate<String> allow) {
+    navigationChecks.add(allow);
+  }
+
+  @Override
+  public void onNewWindow(@NonNull Consumer<String> listener) {
+    newWindowListeners.add(listener);
+  }
+
+  /**
+   * Asks every {@link #onNavigate} check whether the page or one of its iframes may navigate to
+   * {@code url}. Loads started by {@link #navigate} or {@link #setHTML} are always allowed. A throwing
+   * check is logged and counts as allowing the navigation.
+   *
+   * @return {@code false} if any check blocked the navigation
+   */
+  protected final boolean fireNavigationRequested(String url) {
+    if (javaNavigationPending) {
+      javaNavigationPending = false;
+      return true;
+    }
+    for (final var check : navigationChecks) {
+      try {
+        if (!check.test(url)) {
+          return false;
+        }
+      } catch (final Throwable t) {
+        log.log(ERROR, "onNavigate check failed", t);
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Reports a {@code target="_blank"} link or {@code window.open} call. The caller always blocks
+   * the in-app popup. With no {@link #onNewWindow} listener, web and mail links open in the
+   * default browser instead.
+   */
+  protected final void fireNewWindowRequested(String url) {
+    if (!newWindowListeners.isEmpty()) {
+      deliver(newWindowListeners, url);
+      return;
+    }
+    try {
+      WebviewUtil.openExternal(new URI(url));
+    } catch (final IllegalArgumentException e) {
+      log.log(DEBUG, "Ignoring new window for {0}", url);
+    } catch (final Throwable t) {
+      log.log(WARNING, "Could not open " + url + " in the default browser", t);
+    }
   }
 
   /**

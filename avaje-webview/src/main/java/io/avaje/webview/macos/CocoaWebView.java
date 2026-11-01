@@ -653,6 +653,55 @@ public final class CocoaWebView extends WebviewBase {
     }
   }
 
+  /** {@code WKNavigationActionPolicyCancel} and {@code WKNavigationActionPolicyAllow}. */
+  private static final long NAVIGATION_CANCEL = 0;
+
+  private static final long NAVIGATION_ALLOW = 1;
+
+  /**
+   * {@code webView:decidePolicyForNavigationAction:decisionHandler:}, asked before every navigation
+   * in the page or its iframes.
+   */
+  @SuppressWarnings("unused")
+  public void onDecidePolicy(
+      MemorySegment self,
+      MemorySegment cmd,
+      MemorySegment wv,
+      MemorySegment navigationAction,
+      MemorySegment decisionHandler) {
+    var policy = NAVIGATION_ALLOW;
+    try {
+      if (MacOSHelper.hasTargetFrame(navigationAction)
+          && !fireNavigationRequested(MacOSHelper.navigationUrl(navigationAction))) {
+        policy = NAVIGATION_CANCEL;
+      }
+    } catch (final Throwable t) {
+      log.log(ERROR, "Navigation policy handler failed", t);
+    }
+    ObjC.invokeBlock(decisionHandler, policy);
+  }
+
+  /**
+   * {@code webView:createWebViewWithConfiguration:forNavigationAction:windowFeatures:}, asked for
+   * {@code target="_blank"} links and {@code window.open}. Returning nil stops WebKit opening
+   * anything, and the URL goes to {@code onNewWindow} instead.
+   */
+  @SuppressWarnings("unused")
+  public MemorySegment onCreateWebView(
+      MemorySegment self,
+      MemorySegment cmd,
+      MemorySegment wv,
+      MemorySegment configuration,
+      MemorySegment navigationAction,
+      MemorySegment windowFeatures) {
+    try {
+      fireNewWindowRequested(MacOSHelper.navigationUrl(navigationAction));
+    } catch (final Throwable t) {
+      log.log(ERROR, "New window handler failed", t);
+    }
+    return MemorySegment.NULL;
+  }
+
   /**
    * {@code windowShouldClose:}, asked when the user clicks the close button or presses Cmd+W.
    * {@link #close()} sends {@code close} rather than {@code performClose:}, so it never comes here
@@ -1250,7 +1299,8 @@ public final class CocoaWebView extends WebviewBase {
 
   /**
    * Synthesizes a {@code WKNavigationDelegate} that shows the window once the first navigation
-   * finishes or fails, and reports every finished navigation to {@link #onPageLoaded} listeners.
+   * finishes or fails, reports every finished navigation to {@link #onPageLoaded} listeners, and
+   * runs {@link #onNavigate} checks before each navigation.
    */
   private MemorySegment createNavigationDelegate(Arena a) {
     try {
@@ -1322,6 +1372,9 @@ public final class CocoaWebView extends WebviewBase {
                     cls, sel(a, failSelector), failStub, a.allocateFrom("v@:@@@"));
       }
 
+      addUIMethod(
+          a, cls, "webView:decidePolicyForNavigationAction:decisionHandler:", "onDecidePolicy", 3);
+
       REGISTER_CLASS_PAIR.invokeExact(cls);
       return (MemorySegment) CLASS_CREATE_INSTANCE.invokeExact(cls, 0L);
     } catch (final Throwable t) {
@@ -1365,6 +1418,43 @@ public final class CocoaWebView extends WebviewBase {
               + "completionHandler:",
           "onRunPromptPanel",
           5);
+
+      final var createMh =
+          MethodHandles.lookup()
+              .findVirtual(
+                  CocoaWebView.class,
+                  "onCreateWebView",
+                  MethodType.methodType(
+                      MemorySegment.class,
+                      MemorySegment.class,
+                      MemorySegment.class,
+                      MemorySegment.class,
+                      MemorySegment.class,
+                      MemorySegment.class,
+                      MemorySegment.class))
+              .bindTo(this);
+      final var createStub =
+          Linker.nativeLinker()
+              .upcallStub(
+                  createMh,
+                  FunctionDescriptor.of(
+                      ValueLayout.ADDRESS,
+                      ValueLayout.ADDRESS, // self
+                      ValueLayout.ADDRESS, // cmd
+                      ValueLayout.ADDRESS, // WKWebView*
+                      ValueLayout.ADDRESS, // WKWebViewConfiguration*
+                      ValueLayout.ADDRESS, // WKNavigationAction*
+                      ValueLayout.ADDRESS), // WKWindowFeatures*
+                  callbackArena);
+      final var _ =
+          (byte)
+              CLASS_ADD_METHOD.invokeExact(
+                  cls,
+                  sel(
+                      a,
+                      "webView:createWebViewWithConfiguration:forNavigationAction:windowFeatures:"),
+                  createStub,
+                  a.allocateFrom("@@:@@@@"));
 
       REGISTER_CLASS_PAIR.invokeExact(cls);
       return (MemorySegment) CLASS_CREATE_INSTANCE.invokeExact(cls, 0L);

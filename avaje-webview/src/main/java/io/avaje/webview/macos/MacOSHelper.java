@@ -379,6 +379,25 @@ final class MacOSHelper {
     }
   }
 
+  /** The URL a {@code WKNavigationAction} wants to load, from {@code action.request.URL}. */
+  static String navigationUrl(MemorySegment navigationAction) {
+    try (var a = Arena.ofConfined()) {
+      final var request = send0(navigationAction, sel(a, "request"));
+      final var url = request.address() == 0 ? request : send0(request, sel(a, "URL"));
+      return url.address() == 0 ? "" : fromNSString(a, send0(url, sel(a, "absoluteString")));
+    }
+  }
+
+  /**
+   * Whether a {@code WKNavigationAction} loads into an existing frame. It has no target frame when
+   * it would open a new window, as for a {@code target="_blank"} link.
+   */
+  static boolean hasTargetFrame(MemorySegment navigationAction) {
+    try (var a = Arena.ofConfined()) {
+      return send0(navigationAction, sel(a, "targetFrame")).address() != 0;
+    }
+  }
+
   static void setIcon(Path iconPath) {
     try (var a = Arena.ofConfined()) {
       final var app = send0(ObjC.getClass(a, "NSApplication"), sel(a, "sharedApplication"));
