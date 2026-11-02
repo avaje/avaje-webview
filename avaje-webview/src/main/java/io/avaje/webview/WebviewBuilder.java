@@ -16,6 +16,7 @@ final class WebviewBuilder implements Builder {
   private int height = 600;
   private String html;
   private String url;
+  private String userAgent;
   private boolean borderless;
   private boolean outline;
   private MemorySegment parent = MemorySegment.NULL;
@@ -74,6 +75,12 @@ final class WebviewBuilder implements Builder {
   @Override
   public WebviewBuilder navigate(String url) {
     this.url = url;
+    return this;
+  }
+
+  @Override
+  public WebviewBuilder userAgent(String userAgent) {
+    this.userAgent = userAgent;
     return this;
   }
 
@@ -162,6 +169,9 @@ final class WebviewBuilder implements Builder {
     }
     if (title != null) {
       view.setTitle(title);
+    }
+    if (userAgent != null) {
+      view.setUserAgent(userAgent);
     }
     if (url != null) {
       view.navigate(url);

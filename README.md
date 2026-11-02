@@ -1,7 +1,7 @@
 ![Supported JVM Versions](https://img.shields.io/badge/JVM-25+-brightgreen.svg?&logo=openjdk)
 [![Discord](https://img.shields.io/discord/1074074312421683250?color=%237289da&label=discord)](https://discord.gg/Qcqf9R27BR)
 [![Build](https://github.com/avaje/avaje-webview/actions/workflows/build.yml/badge.svg)](https://github.com/avaje/avaje-webview/actions/workflows/build.yml)
-[![License](https://img.shields.io/badge/license-MIT-blue)](https://github.com/avaje/avaje-webview/blob/master/LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue)](https://github.com/avaje/avaje-webview/blob/main/LICENSE)
 [![Maven Central](https://img.shields.io/maven-central/v/io.avaje.webview/avaje-webview.svg?label=Maven%20Central)](https://mvnrepository.com/artifact/io.avaje.webview/avaje-webview)
 [![javadoc](https://javadoc.io/badge2/io.avaje.webview/avaje-webview/javadoc.svg?color=purple)](https://javadoc.io/doc/io.avaje.webview/avaje-webview)
 
@@ -19,7 +19,7 @@ This is an enhanced fork of https://github.com/webview/webview_java with some [m
 |----------|--------|-------------|
 | **Linux** | WebKitGTK 6.0 | `libgtk-4`, `libwebkitgtk-6.0`, `libjavascriptcoregtk-6.0` must be installed |
 | **macOS** | WKWebView | Built into macOS |
-| **Windows** | WebView2 (Edge) | Microsoft Edge must be installed (pre-installed on Windows 10+) |
+| **Windows** | WebView2 (Edge) | Microsoft Edge or the WebView2 Runtime must be installed (Edge is pre-installed on Windows 10+) |
 
 Linux install example (Debian/Ubuntu):
 ```sh
@@ -78,17 +78,17 @@ Webview webview = Webview.builder()
     .width(1200)
     .height(800)
     .enableDeveloperTools(true) // Enable right-click > Inspect
-    .resizable(false)           // Lock to width/height, no user resize
+    .resizable(false)           // Lock to width/height, skips the next option and min/maxSize
     .maximizable(false)         // Hide/disable the maximize button (ignored on Linux)
     .maximize(true)             // Start maximized (ignored if fullscreen(true))
     .fullscreen(true)           // Start fullscreen, takes precedence over maximize
     .minSize(600, 400)          // Minimum size the user can resize to
-    .maxSize(1920, 1080)        // Maximum size the user can resize to
+    .maxSize(1920, 1080)        // Maximum size the user can resize to (ignored on Linux)
     .build();
 
 // Set window constraints after creation
 webview.setMinSize(600, 400);
-webview.setMaxSize(1920, 1080);
+webview.setMaxSize(1920, 1080); // Ignored on Linux
 
 // Or lock to a fixed size
 webview.setFixedSize(800, 600);
@@ -122,7 +122,7 @@ Webview webview = Webview.builder()
 
 - **Windows**: only the title bar area is removed; left/right/bottom borders and the DWM shadow remain.
 - **macOS**: uses a transparent, hidden title bar so the window shadow/border are retained.
-- **Linux**: the outline flag has no effect.
+- **Linux**: the title bar is replaced with an empty one, so the window stays decorated and keeps its GTK border and shadow.
 
 ### Transparent Windows
 
@@ -195,7 +195,7 @@ webview.onCloseRequested(() -> {
 });
 ```
 
-`onNavigate` runs before the page goes somewhere else. (a link click, a script changing `location`, redirects, etc.). Return `false` to stay put. A common use is keeping your app's own pages in the window and sending everything else to the browser:
+`onNavigate` runs before the page goes somewhere else (a link click, a script changing `location`, redirects, etc.). Return `false` to stay put. A common use is keeping your app's own pages in the window and sending everything else to the browser:
 
 ```java
 webview.onNavigate(url -> {
@@ -221,8 +221,8 @@ Webview webview = Webview.builder()
     .html("<html><body><h1 id='title'>Original</h1></body></html>")
     .build();
 
-// Execute JavaScript in the webview
-webview.eval("document.getElementById('title').textContent = 'Updated!';");
+// Execute JavaScript in the webview once the page has loaded
+webview.onPageLoaded(_ -> webview.eval("document.getElementById('title').textContent = 'Updated!';"));
 
 webview.run();
 ```
@@ -274,7 +274,7 @@ Webview webview = Webview.builder()
     """)
     .build();
 
-// Bind Java method to JavaScript — args arrive as a JSON array string
+// Bind Java method to JavaScript, args arrive as a JSON array string
 webview.bind("greet", (String jsonArgs) -> {
     return "\"Hello, " + jsonArgs + "!\""; // return value must be valid JSON
 });
@@ -283,12 +283,16 @@ webview.run();
 ```
 
 Binding callbacks receive arguments as a JSON array string and must return a valid JSON string.
-The JavaScript side receives the return value as the resolved Promise value.
+The JavaScript side receives the return value as the resolved Promise value. These examples use
+[avaje-jsonb](https://github.com/avaje/avaje-jsonb), but any JSON library works.
 
 ### Complex Data Exchange
 
 ```java
+@Json
 record User(String name, int age) {}
+
+@Json
 record UserRequest(String action, String userId) {}
 
 Webview webview = Webview.builder()
@@ -308,7 +312,7 @@ webview.bind("fetchUser", (String jsonArgs) -> {
     return Jsonb.instance().toJson(user);
 });
 
-webview.eval("getUser();");
+webview.onPageLoaded(_ -> webview.eval("getUser();"));
 webview.run();
 ```
 
@@ -318,11 +322,10 @@ Multiple windows are supported on all platforms. Additional windows can be creat
 thread once the first window's event loop is running.
 
 ```java
-try (var w1 = Webview.create(false)) {
+try (var w1 = Webview.builder().build()) {
     w1.bind("openSecond", _ -> {
         Thread.ofPlatform().start(() -> {
-            try (var w2 = Webview.create(false)) {
-                w2.setHTML("<h1>Window 2</h1>");
+            try (var w2 = Webview.builder().html("<h1>Window 2</h1>").build()) {
                 w2.run();
             }
         });
@@ -360,7 +363,7 @@ framework to see webview JS console output.
 - Builder pattern replaces constructors
 - **Multi-window** support on macOS and Linux
 - Extended window API: `setIcon`, `maximizeWindow`, `fullscreen`, `setDarkAppearance`, `setFixedSize`, `setMinSize`, `setMaxSize`
-- Automatic **console redirection** (JS console -> Java logger)
+- Optional **console redirection** (JS console -> Java logger)
 - Remove dependency on `co.casterlabs.commons:platform`
 - Remove dependency on `co.casterlabs.commons:io`
 - Remove Lombok and Jetbrains annotations; replaced with JSpecify (`@NonNull`, `@Nullable`)

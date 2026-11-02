@@ -1,14 +1,14 @@
 ```xml
 <dependency>
-    <groupId>io.avaje.experimental</groupId>
+    <groupId>io.avaje.webview</groupId>
     <artifactId>avaje-webview</artifactId>
-    <version>0.5</version>
+    <version>0.30</version>
 </dependency>
 
 <dependency>
     <groupId>io.avaje</groupId>
     <artifactId>avaje-jex</artifactId>
-    <version>3.3</version>
+    <version>3.6</version>
 </dependency>
 ```
 
@@ -26,7 +26,7 @@ static void main(String[] args) {
     try {
         Webview webview = Webview.builder()
                 .title("Hi Jex")
-                .url("http://localhost:" + port)
+                .navigate("http://localhost:" + port)
                 .build();
 
         webview.run();

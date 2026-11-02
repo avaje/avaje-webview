@@ -772,6 +772,100 @@ class WebviewIntegrationTest {
   }
 
   // -------------------------------------------------------------------------
+  // getUrl and user agent
+  // -------------------------------------------------------------------------
+
+  @Test
+  void getUrlReturnsLoadedPage() {
+    final var url = new AtomicReference<String>();
+    try (var w = Webview.builder().navigate("data:text/html,<p>hi</p>").build()) {
+      w.onPageLoaded(
+          _ -> {
+            url.set(w.getPageUrl());
+            w.close();
+          });
+      w.run();
+    }
+    assertTrue(url.get().startsWith("data:text/html"), url.get());
+  }
+
+  @Test
+  void getUrlFromBackgroundThread() {
+    final var url = new AtomicReference<String>();
+    try (var w = Webview.builder().navigate("about:blank").build()) {
+      w.onPageLoaded(
+          _ ->
+              Thread.ofVirtual()
+                  .start(
+                      () -> {
+                        url.set(w.getPageUrl());
+                        w.close();
+                      }));
+      w.run();
+    }
+    assertEquals("about:blank", url.get());
+  }
+
+  @Test
+  void getUrlAfterSetHtml() {
+    final var url = new AtomicReference<String>();
+    try (var w = Webview.builder().html("<p>hi</p>").build()) {
+      w.onPageLoaded(
+          _ -> {
+            url.set(w.getPageUrl());
+            w.close();
+          });
+      w.run();
+    }
+    assertEquals("about:blank", url.get());
+  }
+
+  @Test
+  void builderUserAgentAppliesToFirstPage() {
+    assertEquals("\"builder-agent/1.0\"", userAgentOf(Webview.builder().userAgent("builder-agent/1.0")));
+  }
+
+  private static String userAgentOf(Webview.Builder builder) {
+    final var agent = new AtomicReference<Object>();
+    try (var w = builder.html("<p>hi</p>").build()) {
+      w.onPageLoaded(
+          _ ->
+              w.evalResult("navigator.userAgent")
+                  .whenComplete(
+                      (value, error) -> {
+                        agent.set(error != null ? error : value);
+                        w.close();
+                      }));
+      w.run();
+    }
+    return String.valueOf(agent.get());
+  }
+
+  @Test
+  void setUserAgentAppliesToNextPage() {
+    final var agent = new AtomicReference<Object>();
+    final var loads = new AtomicInteger();
+    try (var w = Webview.builder().build()) {
+      w.onPageLoaded(
+          _ -> {
+            if (loads.incrementAndGet() == 1) {
+              w.setUserAgent("runtime-agent/2.0");
+              w.setHTML("<p>second</p>");
+              return;
+            }
+            w.evalResult("navigator.userAgent")
+                .whenComplete(
+                    (value, error) -> {
+                      agent.set(error != null ? error : value);
+                      w.close();
+                    });
+          });
+      w.run();
+    }
+    assertEquals("\"runtime-agent/2.0\"", String.valueOf(agent.get()));
+  }
+
+  // -------------------------------------------------------------------------
   // Window events and state
   // -------------------------------------------------------------------------
 

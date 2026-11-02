@@ -78,6 +78,22 @@ public interface Webview extends Closeable, Runnable {
   void navigate(@Nullable String url);
 
   /**
+   * Returns the URL of the current page.
+   *
+   * @implNote Content from {@link #setHTML(String)} appears as {@code "about:blank"} for it.
+   * @return the URL, or an empty string if nothing has loaded yet
+   */
+  String getPageUrl();
+
+  /**
+   * Sets the {@code User-Agent} that the page's requests send. Applies from the next page load.
+   *
+   * @param userAgent the full user agent string
+   * @see Builder#userAgent(String)
+   */
+  void setUserAgent(@NonNull String userAgent);
+
+  /**
    * Sets the title of the native window.
    *
    * @param title the window title
@@ -475,6 +491,16 @@ public interface Webview extends Closeable, Runnable {
      * @return this builder
      */
     Builder navigate(String url);
+
+    /**
+     * Sets the {@code User-Agent} used from the first page load onwards. Defaults to the one the
+     * platform's engine provides.
+     *
+     * @param userAgent the full user agent string
+     * @return this builder
+     * @see Webview#setUserAgent(String)
+     */
+    Builder userAgent(String userAgent);
 
     /**
      * Creates the window without native OS decorations (title bar, borders, and minimize/maximize/

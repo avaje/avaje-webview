@@ -232,6 +232,14 @@ final class WebKit6 {
           FunctionDescriptor.ofVoid(ADDRESS, JAVA_INT));
 
   /**
+   * {@code webkit_settings_set_user_agent(WebKitSettings* s, const gchar* user_agent) -> void}
+   *
+   * <p>Sets the {@code User-Agent} for later page loads.
+   */
+  private static final MethodHandle WEBKIT_SETTINGS_SET_USER_AGENT =
+      downcall("webkit_settings_set_user_agent", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
+
+  /**
    * {@code webkit_user_content_manager_register_script_message_handler( WebKitUserContentManager*
    * ucm, const gchar* name, const gchar* world_name) -> gboolean}
    *
@@ -571,6 +579,20 @@ final class WebKit6 {
   static void webkitSettingsSetDevExtras(MemorySegment settings, boolean enable) {
     try {
       WEBKIT_SETTINGS_SET_DEV_EXTRAS.invokeExact(settings, enable ? 1 : 0);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * Sets the {@code User-Agent} for later page loads.
+   *
+   * @param settings a borrowed {@code WebKitSettings*}
+   * @param userAgent null-terminated user agent string
+   */
+  static void webkitSettingsSetUserAgent(MemorySegment settings, MemorySegment userAgent) {
+    try {
+      WEBKIT_SETTINGS_SET_USER_AGENT.invokeExact(settings, userAgent);
     } catch (final Throwable t) {
       throw new RuntimeException(t);
     }

@@ -1,4 +1,4 @@
-## html jex boostrap 
+## htmx jex bootstrap
 
 Example uses:
 - Webview 
@@ -14,13 +14,12 @@ mvn clean package -Pnative
 ```
 
 ## Run it
-Specify `data.dir` as a system property.
-
 ```shell
 ./target/htmx-jex-bootstrap
 ```
 
 Override the source data directory that contains the "knowledge base" (templates, docs, snippets etc)
+with the `data.dir` system property, which defaults to `data`.
 ```shell
 ./target/htmx-jex-bootstrap -Ddata.dir=data
 ```
