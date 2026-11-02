@@ -57,7 +57,7 @@ void main() {
       .build();
 
   // Bindings run on the UI thread, where getUrl() answers straight away.
-  webview.bind("currentUrl", _ -> "\"" + webview.getUrl() + "\"");
+  webview.bind("currentUrl", _ -> "\"" + webview.getPageUrl() + "\"");
 
   // A new user agent applies from the next load, so reload the page to see it.
   webview.bind("useAnotherAgent", _ -> {

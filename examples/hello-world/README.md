@@ -1,8 +1,8 @@
 ```xml
 <dependency>
-    <groupId>io.avaje.experimental</groupId>
+    <groupId>io.avaje.webview</groupId>
     <artifactId>avaje-webview</artifactId>
-    <version>0.5</version>
+    <version>0.30</version>
 </dependency>
 ```
 
