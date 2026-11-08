@@ -390,6 +390,21 @@ final class Win32 {
           "AdjustWindowRectExForDpi",
           FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT, JAVA_INT, JAVA_INT, JAVA_INT));
 
+  /** No capture restriction. */
+  static final int WDA_NONE = 0x00;
+
+  /** Captures exclude the window */
+  static final int WDA_EXCLUDEFROMCAPTURE = 0x11;
+
+  /**
+   * {@code SetWindowDisplayAffinity(hWnd, dwAffinity) -> BOOL}
+   *
+   * <p>controls whether screen capture can see the window's contents.
+   */
+  static final MethodHandle SetWindowDisplayAffinity =
+      downcall(
+          USER32, "SetWindowDisplayAffinity", FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT));
+
   /**
    * {@code SetWindowTextW(hWnd, lpString) -> BOOL}
    *
@@ -615,6 +630,19 @@ final class Win32 {
   static void setForegroundWindow(MemorySegment hwnd) {
     try {
       final var _ = (int) SetForegroundWindow.invokeExact(hwnd);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /**
+   * Sets the display affinity of {@code hwnd}.
+   *
+   * @return {@code true} if Windows accepted the affinity
+   */
+  static boolean setWindowDisplayAffinity(MemorySegment hwnd, int affinity) {
+    try {
+      return (int) SetWindowDisplayAffinity.invokeExact(hwnd, affinity) != 0;
     } catch (final Throwable t) {
       throw new RuntimeException(t);
     }

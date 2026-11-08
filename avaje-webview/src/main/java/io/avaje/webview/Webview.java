@@ -101,6 +101,15 @@ public interface Webview extends Closeable, Runnable {
   void setTitle(@NonNull String title);
 
   /**
+   * Hides the window's contents from screen capture, so screenshots, recordings, and screen shares see a blank area instead.
+   *
+   * @implNote Does nothing on linux.
+   * @param enabled {@code true} to hide the window from capture, {@code false} to allow it again
+   * @see Builder#contentProtection(boolean)
+   */
+  void setContentProtection(boolean enabled);
+
+  /**
    * Sets the minimum window dimensions.
    *
    * @param width the minimum width in pixels
@@ -501,6 +510,16 @@ public interface Webview extends Closeable, Runnable {
      * @see Webview#setUserAgent(String)
      */
     Builder userAgent(String userAgent);
+
+    /**
+     * Hides the window's contents from screen capture from the moment it opens. Defaults to {@code
+     * false}.
+     *
+     * @param contentProtection {@code true} to hide the window from capture
+     * @return this builder
+     * @see Webview#setContentProtection(boolean)
+     */
+    Builder contentProtection(boolean contentProtection);
 
     /**
      * Creates the window without native OS decorations (title bar, borders, and minimize/maximize/

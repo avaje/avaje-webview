@@ -73,6 +73,13 @@ public final class CocoaWebView extends WebviewBase {
   private static final long NS_CLOSABLE = 2L;
   private static final long NS_MINIATURIZABLE = 4L;
   private static final long NS_RESIZABLE = 8L;
+
+  /** {@code NSWindowSharingNone}: screen capture cannot read the window. */
+  private static final long NS_WINDOW_SHARING_NONE = 0L;
+
+  /** {@code NSWindowSharingReadOnly}: capture can read the window. */
+  private static final long NS_WINDOW_SHARING_READ_ONLY = 1L;
+
   private static final long NS_STANDARD_WINDOW_MASK =
       NS_TITLED | NS_CLOSABLE | NS_MINIATURIZABLE | NS_RESIZABLE;
   // NSWindowStyleMaskFullSizeContentView: content view extends under the title bar
@@ -292,6 +299,19 @@ public final class CocoaWebView extends WebviewBase {
     }
     try (var a = Arena.ofConfined()) {
       sendVoid1(wkWebView, sel(a, "setCustomUserAgent:"), nsString(a, userAgent));
+    }
+  }
+
+  @Override
+  protected void setContentProtectionImpl(boolean enabled) {
+    if (closed) {
+      return;
+    }
+    try (var a = Arena.ofConfined()) {
+      ObjC.sendVoidLong(
+          nsWindow,
+          sel(a, "setSharingType:"),
+          enabled ? NS_WINDOW_SHARING_NONE : NS_WINDOW_SHARING_READ_ONLY);
     }
   }
 
