@@ -259,6 +259,11 @@ public final class GtkWebView extends WebviewBase {
   }
 
   @Override
+  protected void setContentProtectionImpl(boolean enabled) {
+    // Neither X11 nor Wayland lets a client hide its window from screen capture.
+  }
+
+  @Override
   protected void setTitleImpl(String title) {
     if (closed) {
       return;

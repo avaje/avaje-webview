@@ -278,6 +278,14 @@ public final class Win32WebView extends WebviewBase {
   }
 
   @Override
+  protected void setContentProtectionImpl(boolean enabled) {
+    final int affinity = enabled ? Win32.WDA_EXCLUDEFROMCAPTURE : Win32.WDA_NONE;
+    if (!Win32.setWindowDisplayAffinity(hwnd, affinity)) {
+      throw new IllegalStateException("SetWindowDisplayAffinity failed");
+    }
+  }
+
+  @Override
   protected void setTitleImpl(String title) {
     Win32.setWindowText(hwnd, title);
   }

@@ -17,6 +17,7 @@ final class WebviewBuilder implements Builder {
   private String html;
   private String url;
   private String userAgent;
+  private boolean contentProtection;
   private boolean borderless;
   private boolean outline;
   private MemorySegment parent = MemorySegment.NULL;
@@ -81,6 +82,12 @@ final class WebviewBuilder implements Builder {
   @Override
   public WebviewBuilder userAgent(String userAgent) {
     this.userAgent = userAgent;
+    return this;
+  }
+
+  @Override
+  public WebviewBuilder contentProtection(boolean contentProtection) {
+    this.contentProtection = contentProtection;
     return this;
   }
 
@@ -172,6 +179,9 @@ final class WebviewBuilder implements Builder {
     }
     if (userAgent != null) {
       view.setUserAgent(userAgent);
+    }
+    if (contentProtection) {
+      view.setContentProtection(true);
     }
     if (url != null) {
       view.navigate(url);

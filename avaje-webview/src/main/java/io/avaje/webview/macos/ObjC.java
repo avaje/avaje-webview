@@ -293,6 +293,10 @@ final class ObjC {
   private static final MethodHandle MSG_SEND_VOID_BOOL =
       LINKER.downcallHandle(MSG_SEND_ADDR, FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, JAVA_INT));
 
+  /** Void {@code objc_msgSend} with one {@code NSInteger} or {@code NSUInteger} argument. */
+  private static final MethodHandle MSG_SEND_VOID_LONG =
+      LINKER.downcallHandle(MSG_SEND_ADDR, FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, JAVA_LONG));
+
   /**
    * Calls a block's {@code invoke} function pointer. Blocks have no message to send; the literal is
    * a struct {@code {void* isa; int flags; int reserved; void (*invoke)(block, args...); ...}}, so
@@ -464,6 +468,15 @@ final class ObjC {
   static void sendVoidBool(MemorySegment recv, MemorySegment sel, boolean value) {
     try {
       MSG_SEND_VOID_BOOL.invokeExact(recv, sel, value ? 1 : 0);
+    } catch (final Throwable t) {
+      throw new RuntimeException(t);
+    }
+  }
+
+  /** Sends a void message with one {@code NSInteger} argument: {@code [recv sel value]}. */
+  static void sendVoidLong(MemorySegment recv, MemorySegment sel, long value) {
+    try {
+      MSG_SEND_VOID_LONG.invokeExact(recv, sel, value);
     } catch (final Throwable t) {
       throw new RuntimeException(t);
     }

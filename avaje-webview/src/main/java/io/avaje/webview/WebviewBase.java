@@ -268,6 +268,18 @@ public abstract sealed class WebviewBase implements Webview
   }
 
   @Override
+  public void setContentProtection(boolean enabled) {
+    dispatchImpl(
+        () -> {
+          try {
+            setContentProtectionImpl(enabled);
+          } catch (final RuntimeException e) {
+            log.log(ERROR, "Could not change content protection", e);
+          }
+        });
+  }
+
+  @Override
   public void setTitle(@NonNull String title) {
     dispatchImpl(() -> setTitleImpl(title));
   }
@@ -659,6 +671,8 @@ public abstract sealed class WebviewBase implements Webview
   protected abstract void setUserAgentImpl(String userAgent);
 
   protected abstract void setTitleImpl(String title);
+
+  protected abstract void setContentProtectionImpl(boolean enabled);
 
   protected abstract void setSizeImpl(int width, int height);
 
